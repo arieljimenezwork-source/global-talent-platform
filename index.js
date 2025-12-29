@@ -2986,37 +2986,48 @@ app.patch("/candidatos/:id", async (req, res) => {
     res.status(500).send("Error al actualizar.");
   }
 });
-// INICIO DEL SERVIDOR (ESTO DEBE ESTAR UNA SOLA VEZ AL FINAL)
+// ==========================================
+// 🚀 INICIO DEL SERVIDOR (CON BUCLE AUTOMÁTICO)
+// ==========================================
 app.listen(PORT, "0.0.0.0", async () => {
-    console.log(`✅ Servidor activo en http://0.0.0.0:${PORT}`);
-    console.log("🔎 Inicializando Firebase...");
+  console.log(`✅ Servidor activo en http://0.0.0.0:${PORT}`);
+  console.log("🔎 Inicializando Firebase...");
 
-    // Validación de entorno
-    const resolved = process.env.FIREBASE_STORAGE_BUCKET;
-    if (!resolved) {
-      console.error("❌ Falta FIREBASE_STORAGE_BUCKET en el archivo .env");
-      return;
-    }
+  // Validación de entorno
+  const resolved = process.env.FIREBASE_STORAGE_BUCKET;
+  if (!resolved) {
+    console.error("❌ Falta FIREBASE_STORAGE_BUCKET en el archivo .env");
+    return;
+  }
 
-    // Inicialización global (asegurate que admin esté importado arriba)
-    try {
-        firestore = admin.firestore();
-        bucket = admin.storage().bucket();
-        console.log(`🪣 Bucket en uso: ${bucket.name}`);
+  // Inicialización global
+  try {
+      firestore = admin.firestore();
+      bucket = admin.storage().bucket();
+      console.log(`🪣 Bucket en uso: ${bucket.name}`);
 
-        // Verificamos conexión
-        STORAGE_READY = await storageProbe();
-        
-        if (!STORAGE_READY) {
-          console.warn("⚠️ Storage no respondió correctamente, pero el servidor seguirá activo.");
-        } else {
-          console.log("✅ Storage OK — sistema operativo");
-        }
-        
-    } catch (error) {
-        console.error("❌ Error fatal inicializando servicios de Firebase:", error);
-    }
-    console.log("🔌 Iniciando servicio de lectura de correos...");
-    analizarCorreos(); 
+      // Verificamos conexión
+      STORAGE_READY = await storageProbe();
+      
+      if (!STORAGE_READY) {
+        console.warn("⚠️ Storage no respondió correctamente, pero el servidor seguirá activo.");
+      } else {
+        console.log("✅ Storage OK — sistema operativo");
+      }
+      
+  } catch (error) {
+      console.error("❌ Error fatal inicializando servicios de Firebase:", error);
+  }
+
+  // 🔥 LA CORRECCIÓN: CICLO INFINITO 🔥
+  console.log("🔌 Iniciando servicio de lectura de correos (Ciclo Automático)...");
+  
+  // 1. Ejecutar inmediatamente al arrancar para no esperar
+  analizarCorreos(); 
+  
+  // 2. Programar repetición cada 60 segundos (60000 ms)
+  setInterval(() => {
+      console.log("⏰ Ciclo programado: Buscando nuevos correos...");
+      analizarCorreos();
+  }, 60000); 
 });
-
