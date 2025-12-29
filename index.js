@@ -3016,4 +3016,7 @@ app.listen(PORT, "0.0.0.0", async () => {
     } catch (error) {
         console.error("❌ Error fatal inicializando servicios de Firebase:", error);
     }
+    console.log("🔌 Iniciando servicio de lectura de correos...");
+    analizarCorreos(); 
 });
+
