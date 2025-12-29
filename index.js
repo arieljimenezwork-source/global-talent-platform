@@ -2851,7 +2851,7 @@ app.post("/webhook/zoho", async (req, res) => {
       email: emailRaw,
       telefono: data.Telefono || "",
       puesto: data.Puesto_Solicitado || "General",
-      
+      video_url: data.Video_Link || "",
       // Guardamos las respuestas para que la IA las lea DESPUÉS (cuando llegue el mail)
       respuestas_filtro: {
         salario: data.Acepta_Salario,
