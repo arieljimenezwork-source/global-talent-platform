@@ -1311,9 +1311,10 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
 function CandidateDetail({ candidate, onBack, onUpdate }) {
             const [noteInput, setNoteInput] = useState(candidate.notes || "");
             
-            // 1. ESTADO PARA EDICIÓN DE CV
-            const [isEditingCv, setIsEditingCv] = useState(false);
+            // 1. ESTADO PARA EDICIÓN DE LINKS (AHORA SON DOS: CV Y VIDEO)
+            const [isEditing, setIsEditing] = useState(false);
             const [newCvLink, setNewCvLink] = useState(candidate.cv_url || "");
+            const [newVideoLink, setNewVideoLink] = useState(candidate.video_url || ""); // <--- NUEVO
 
             // 2. ESTADO PARA RESPONSABLE (Selector local simple)
             const [responsable, setResponsable] = useState(candidate.assignedTo || "Admin");
@@ -1327,10 +1328,13 @@ function CandidateDetail({ candidate, onBack, onUpdate }) {
                 ? candidate.respuestas_filtro.herramientas.split(',').map(s => s.trim()) 
                 : ['Sin datos técnicos'];
 
-            // Función para guardar el Link manual
-            const saveCvLink = () => {
-                onUpdate(candidate.id, { cv_url: newCvLink });
-                setIsEditingCv(false);
+            // Función para guardar LOS LINKS (CV y Video)
+            const saveLinks = () => {
+                onUpdate(candidate.id, { 
+                    cv_url: newCvLink,
+                    video_url: newVideoLink // <--- SE GUARDA EL VIDEO TAMBIÉN
+                });
+                setIsEditing(false);
             };
 
             // Función para Aprobar asignando responsable
@@ -1420,17 +1424,19 @@ function CandidateDetail({ candidate, onBack, onUpdate }) {
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Material</h3>
                                     {/* Botón Lápiz para Editar */}
-                                    <button onClick={() => setIsEditingCv(!isEditingCv)} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
-                                        {isEditingCv ? '✕ Cancelar' : '✏️ Editar Link'}
+                                    <button onClick={() => setIsEditing(!isEditing)} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                                        {isEditing ? '✕ Cancelar' : '✏️ Editar Links'}
                                     </button>
                                 </div>
 
                                 <div className="space-y-3">
-                                    {/* EDITOR DE LINK */}
-                                    {isEditingCv && (
-                                        <div className="p-3 bg-slate-950 rounded-lg border border-blue-500/30 mb-2 animate-in fade-in">
-                                            <label className="text-[10px] text-blue-400 font-bold uppercase mb-1 block">Pegar Link de Drive:</label>
-                                            <div className="flex gap-2">
+                                    {/* EDITOR DE LINK (AHORA MUESTRA AMBOS) */}
+                                    {isEditing && (
+                                        <div className="p-3 bg-slate-950 rounded-lg border border-blue-500/30 mb-2 animate-in fade-in space-y-3">
+                                            
+                                            {/* INPUT CV */}
+                                            <div>
+                                                <label className="text-[10px] text-blue-400 font-bold uppercase mb-1 block">Link CV (PDF):</label>
                                                 <input 
                                                     type="text" 
                                                     value={newCvLink}
@@ -1438,8 +1444,23 @@ function CandidateDetail({ candidate, onBack, onUpdate }) {
                                                     placeholder="https://drive.google.com/..."
                                                     className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white outline-none focus:border-blue-500"
                                                 />
-                                                <button onClick={saveCvLink} className="bg-emerald-600 text-white px-3 rounded text-xs font-bold">💾</button>
                                             </div>
+
+                                            {/* INPUT VIDEO (NUEVO) */}
+                                            <div>
+                                                <label className="text-[10px] text-purple-400 font-bold uppercase mb-1 block">Link Video:</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={newVideoLink}
+                                                    onChange={(e) => setNewVideoLink(e.target.value)}
+                                                    placeholder="https://loom.com/..."
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white outline-none focus:border-purple-500"
+                                                />
+                                            </div>
+
+                                            <button onClick={saveLinks} className="w-full bg-emerald-600 text-white py-1.5 rounded text-xs font-bold hover:bg-emerald-500">
+                                                💾 GUARDAR CAMBIOS
+                                            </button>
                                         </div>
                                     )}
 
