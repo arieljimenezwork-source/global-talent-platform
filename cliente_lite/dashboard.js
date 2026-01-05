@@ -152,6 +152,121 @@
             trash: candidates.filter(c => c.stage === 'trash').length,
             total: candidates.filter(c => c.stage !== 'trash').length
         };
+        
+        // Calcular métricas rápidas
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        
+        const parseFirebaseDate = (dateValue) => {
+            if (!dateValue) return null;
+            if (typeof dateValue === 'object' && dateValue._seconds) {
+                return new Date(dateValue._seconds * 1000);
+            }
+            if (typeof dateValue === 'string') {
+                return new Date(dateValue);
+            }
+            return new Date(dateValue);
+        };
+        
+        const candidatosHoy = candidates.filter(c => {
+            const fecha = parseFirebaseDate(c.fecha || c.creado_en);
+            if (!fecha) return false;
+            return fecha >= hoy;
+        }).length;
+        
+        const tasaExplorarAGestion = stats.new > 0 
+            ? Math.round((stats.interview / stats.new) * 100) 
+            : 0;
+        
+        const tasaGestionAInforme = stats.interview > 0 
+            ? Math.round((stats.ready / stats.interview) * 100) 
+            : 0;
+        
+        // Entrevistas pendientes a programar (stage_2 sin meet_link)
+        const entrevistasPendientes = candidates.filter(c => 
+            c.stage === 'stage_2' && !c.meet_link
+        ).length;
+        
+        // Candidatos listos para informes (stage_3 sin informe_final_data)
+        const listosParaInformes = candidates.filter(c => 
+            c.stage === 'stage_3' && !c.informe_final_data
+        ).length;
+        
+        // Cantidad de Form 2 recibido
+        const form2Recibidos = candidates.filter(c => 
+            c.respuestas_form2 || c.process_step_2_form === 'received'
+        ).length;
+        
+        // Tiempo promedio en cada etapa (en días)
+        const calcularTiempoPromedio = (stage) => {
+            const candidatosEnStage = candidates.filter(c => c.stage === stage);
+            if (candidatosEnStage.length === 0) return 0;
+            
+            const ahora = new Date();
+            const tiempos = candidatosEnStage.map(c => {
+                // Buscar en el historial cuándo entró a este stage
+                const historial = c.history || c.historial_movimientos || [];
+                
+                // Buscar eventos relacionados con el cambio a este stage
+                let fechaEntrada = null;
+                if (historial.length > 0) {
+                    // Buscar el último evento que indica entrada a este stage
+                    const eventosRelevantes = historial.filter(h => {
+                        if (!h.event || !h.date) return false;
+                        const eventLower = h.event.toLowerCase();
+                        return (
+                            (stage === 'stage_1' && (eventLower.includes('ingreso') || eventLower.includes('pipeline'))) ||
+                            (stage === 'stage_2' && (eventLower.includes('gestión') || eventLower.includes('aprobado') || eventLower.includes('gestion'))) ||
+                            (stage === 'stage_3' && (eventLower.includes('informe') || eventLower.includes('listo')))
+                        );
+                    });
+                    
+                    if (eventosRelevantes.length > 0) {
+                        // Tomar el más reciente
+                        const ultimoEvento = eventosRelevantes[eventosRelevantes.length - 1];
+                        fechaEntrada = parseFirebaseDate(ultimoEvento.date);
+                    }
+                }
+                
+                // Si no encontramos en historial, usar fecha de creación como fallback
+                if (!fechaEntrada) {
+                    fechaEntrada = parseFirebaseDate(c.fecha || c.creado_en);
+                }
+                
+                if (fechaEntrada) {
+                    const diffMs = ahora - fechaEntrada;
+                    const dias = diffMs / (1000 * 60 * 60 * 24);
+                    return dias > 0 ? dias : 0; // Solo días positivos
+                }
+                
+                return 0;
+            }).filter(t => t > 0);
+            
+            if (tiempos.length === 0) return 0;
+            return Math.round(tiempos.reduce((a, b) => a + b, 0) / tiempos.length);
+        };
+        
+        const tiempoPromedioStage1 = calcularTiempoPromedio('stage_1');
+        const tiempoPromedioStage2 = calcularTiempoPromedio('stage_2');
+        const tiempoPromedioStage3 = calcularTiempoPromedio('stage_3');
+        
+        // Estado para monitorear webhooks
+        const [webhookStatus, setWebhookStatus] = useState({
+            zoho_form1: { status: "verde", razon: "Cargando..." },
+            zoho_form2: { status: "verde", razon: "Cargando..." }
+        });
+        
+        useEffect(() => {
+            const cargarEstado = async () => {
+                const estado = await api.webhooks.getStatus();
+                setWebhookStatus(estado);
+            };
+            
+            cargarEstado(); // Cargar inmediatamente
+            const intervalo = setInterval(cargarEstado, 300000); // Cada 5 minutos  (300000 ms)
+            
+            return () => clearInterval(intervalo); // Limpiar al desmontar
+        }, []);
 
         return (
             <div className="animate-in fade-in duration-500 max-w-7xl mx-auto">
@@ -200,35 +315,125 @@
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-                    <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><Activity size={16}/> Actividad Reciente</h3>
-                    <div className="space-y-3">
-                        {candidates.slice(0, 3).map(c => (
-                            <div key={c.id} className="flex items-center gap-3 p-2.5 bg-slate-950/50 rounded-lg border border-slate-800/50">
-                                <div className={`w-1.5 h-1.5 rounded-full ${c.stage === 'stage_3' ? 'bg-emerald-500' : 'bg-blue-500'}`}></div>
-                                <p className="text-xs text-slate-300">
-                                    <span className="font-bold text-white">{c.nombre}</span> <span className="text-slate-500">en</span> <span className="text-slate-400">{c.stage === 'stage_1' ? 'Explorar' : c.stage === 'stage_2' ? 'Gestión' : 'Informe'}</span>
-                                </p>
-                                <span className="ml-auto text-[10px] text-slate-600">{formatDate(c.fecha)}</span>
-                            </div>
-                        ))}
+                    <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><Activity size={16}/> Métricas Rápidas</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                        {/* Candidatos Procesados Hoy */}
+                        <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
+                            <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Procesados Hoy</p>
+                            <p className="text-2xl font-bold text-white">{candidatosHoy}</p>
+                        </div>
+                        
+                        {/* Tasa Explorar → Gestión */}
+                        <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
+                            <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Explorar → Gestión</p>
+                            <p className="text-2xl font-bold text-blue-400">{tasaExplorarAGestion}%</p>
+                            <p className="text-[9px] text-slate-600 mt-0.5">{stats.interview} de {stats.new}</p>
+                        </div>
+                        
+                        {/* Tasa Gestión → Informe */}
+                        <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
+                            <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Gestión → Informe</p>
+                            <p className="text-2xl font-bold text-emerald-400">{tasaGestionAInforme}%</p>
+                            <p className="text-[9px] text-slate-600 mt-0.5">{stats.ready} de {stats.interview}</p>
+                        </div>
+                        
+                        {/* Entrevistas Pendientes */}
+                        <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
+                            <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Entrevistas Pendientes</p>
+                            <p className="text-2xl font-bold text-amber-400">{entrevistasPendientes}</p>
+                            <p className="text-[9px] text-slate-600 mt-0.5">sin programar</p>
+                        </div>
+                        
+                        {/* Candidatos Listos para Informes */}
+                        <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
+                            <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Listos para Informes</p>
+                            <p className="text-2xl font-bold text-purple-400">{listosParaInformes}</p>
+                            <p className="text-[9px] text-slate-600 mt-0.5">pendientes</p>
+                        </div>
+                        
+                        {/* Form 2 Recibido */}
+                        <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
+                            <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Form 2 Recibido</p>
+                            <p className="text-2xl font-bold text-cyan-400">{form2Recibidos}</p>
+                            <p className="text-[9px] text-slate-600 mt-0.5">completados</p>
+                        </div>
+                        
+                        {/* Tiempo Promedio Stage 1 */}
+                        <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
+                            <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Tiempo Prom. Explorar</p>
+                            <p className="text-2xl font-bold text-slate-300">{tiempoPromedioStage1}</p>
+                            <p className="text-[9px] text-slate-600 mt-0.5">días</p>
+                        </div>
+                        
+                        {/* Tiempo Promedio Stage 2 */}
+                        <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
+                            <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Tiempo Prom. Gestión</p>
+                            <p className="text-2xl font-bold text-slate-300">{tiempoPromedioStage2}</p>
+                            <p className="text-[9px] text-slate-600 mt-0.5">días</p>
+                        </div>
                     </div>
                 </div>
                 
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
                         <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><Globe size={16}/> Integraciones</h3>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center text-green-500"><Globe size={16}/></div>
-                                <div>
-                                    <p className="text-xs font-bold text-white">Zoho Forms</p>
-                                    <p className="text-[10px] text-green-400">Online</p>
+                        <div className="grid grid-cols-1 gap-3">
+                            {/* Card Zoho Form 1 - Estado dinámico */}
+                            <div className={`p-3 bg-slate-950 rounded-lg border flex items-center gap-3 ${
+                                webhookStatus.zoho_form1?.status === "verde" 
+                                    ? "border-green-500/50" 
+                                    : "border-red-500/50"
+                            }`}>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                    webhookStatus.zoho_form1?.status === "verde"
+                                        ? "bg-green-500/10 text-green-500"
+                                        : "bg-red-500/10 text-red-500"
+                                }`}>
+                                    <Globe size={16}/>
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-xs font-bold text-white">Zoho Forms (Form 1)</p>
+                                    <p className={`text-[10px] ${
+                                        webhookStatus.zoho_form1?.status === "verde"
+                                            ? "text-green-400"
+                                            : "text-red-400"
+                                    }`}>
+                                        {webhookStatus.zoho_form1?.status === "verde" ? "Online" : "Error"}
+                                    </p>
+                                    {webhookStatus.zoho_form1?.razon && (
+                                        <p className="text-[9px] text-slate-500 mt-0.5">
+                                            {webhookStatus.zoho_form1.razon}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
-                            <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500"><Calendar size={16}/></div>
-                                <div>
-                                    <p className="text-xs font-bold text-white">Google Meet</p>
-                                    <p className="text-[10px] text-blue-400">Online</p>
+                            
+                            {/* Card Zoho Form 2 - Estado dinámico */}
+                            <div className={`p-3 bg-slate-950 rounded-lg border flex items-center gap-3 ${
+                                webhookStatus.zoho_form2?.status === "verde" 
+                                    ? "border-green-500/50" 
+                                    : "border-red-500/50"
+                            }`}>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                    webhookStatus.zoho_form2?.status === "verde"
+                                        ? "bg-green-500/10 text-green-500"
+                                        : "bg-red-500/10 text-red-500"
+                                }`}>
+                                    <Globe size={16}/>
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-xs font-bold text-white">Zoho Forms (Form 2)</p>
+                                    <p className={`text-[10px] ${
+                                        webhookStatus.zoho_form2?.status === "verde"
+                                            ? "text-green-400"
+                                            : "text-red-400"
+                                    }`}>
+                                        {webhookStatus.zoho_form2?.status === "verde" ? "Online" : "Error"}
+                                    </p>
+                                    {webhookStatus.zoho_form2?.razon && (
+                                        <p className="text-[9px] text-slate-500 mt-0.5">
+                                            {webhookStatus.zoho_form2.razon}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1354,7 +1559,7 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                 ) : (
                     <div className="grid gap-3">
                         {pipelineCandidates.map(c => (
-                            <div key={c.id} className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between hover:bg-slate-800/50 transition-colors cursor-pointer group" onClick={() => handleOpenCandidate(c)}>
+                            <div key={c.id} className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between hover:bg-slate-800/50 transition-colors group">
                                 <div className="flex items-center gap-4">
                                     <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs">
                                         {c.nombre.substring(0,2).toUpperCase()}
@@ -1365,8 +1570,21 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    {c.informe_final_data && <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">Informe Listo</span>}
-                                    <ChevronRight className="text-slate-600 group-hover:text-white"/>
+                                    {c.informe_final_data ? (
+                                        <button 
+                                            onClick={() => handleOpenCandidate(c)}
+                                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
+                                        >
+                                            <Eye size={14}/> Ver Informe
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            onClick={() => handleOpenCandidate(c)}
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
+                                        >
+                                            <FileText size={14}/> Generar Informe
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -1751,9 +1969,17 @@ Equipo de Selección | Global Talent Connections`
                                     <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform"><FileText size={20}/></div>
                                     <div><h4 className="text-sm font-bold text-white">Curriculum Vitae</h4><p className="text-xs text-blue-400 group-hover:underline">{candidate.cv_url && candidate.cv_url.length > 5 ? "Ver Documento" : "Link no disponible"}</p></div>
                                 </a>
-                                <a href={candidate.video_url || "#"} target="_blank" className={`flex items-center gap-4 p-4 rounded-xl border border-slate-800 bg-slate-950 transition-all group ${!candidate.video_url ? 'opacity-50 cursor-not-allowed' : 'hover:border-purple-500/50 hover:bg-slate-900 cursor-pointer'}`}>
+                                <a href={candidate.video_url && candidate.video_url.startsWith('http') ? candidate.video_url : "#"} target="_blank" className={`flex items-center gap-4 p-4 rounded-xl border border-slate-800 bg-slate-950 transition-all group ${!candidate.video_url || !candidate.video_url.startsWith('http') ? 'opacity-50 cursor-not-allowed' : 'hover:border-purple-500/50 hover:bg-slate-900 cursor-pointer'}`}>
                                     <div className="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform"><Video size={20}/></div>
-                                    <div><h4 className="text-sm font-bold text-white">Video Presentación</h4><p className="text-xs text-purple-400 group-hover:underline">{candidate.video_url ? 'Abrir Link Externo' : 'No disponible'}</p></div>
+                                    <div>
+                                        <h4 className="text-sm font-bold text-white">Video Presentación</h4>
+                                        <p className="text-xs text-purple-400 group-hover:underline">
+                                            {!candidate.video_url ? 'No disponible' : 
+                                             candidate.video_url.startsWith('http') ? 'Abrir Link Externo' : 
+                                             candidate.video_tipo === 'archivo' ? 'Video subido (ver en Zoho)' : 
+                                             'Link no válido'}
+                                        </p>
+                                    </div>
                                 </a>
                             </div>
                         </Card>

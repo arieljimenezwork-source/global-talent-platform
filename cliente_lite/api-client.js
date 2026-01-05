@@ -99,6 +99,21 @@ const api = {
                 const res = await fetch(`${API_URL}/manual-upload`, { method: 'POST', body: formData });
                 if (!res.ok) throw new Error("Error en el servidor");
                 return await res.json();
+            },
+            webhooks: {
+                getStatus: async () => {
+                    try {
+                        const res = await fetch(`${API_URL}/webhooks/status`);
+                        if (!res.ok) throw new Error("Error en servidor");
+                        return await res.json();
+                    } catch (e) {
+                        console.error("Error obteniendo estado de webhooks:", e);
+                        return { 
+                            zoho_form1: { status: "rojo", razon: "Error de conexión" },
+                            zoho_form2: { status: "rojo", razon: "Error de conexión" }
+                        };
+                    }
+                }
             }
         };
 

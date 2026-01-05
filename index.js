@@ -952,13 +952,54 @@ async function analizarCorreos() {
         continue;
       }
 
-      // 6. SUBIR A STORAGE (Arregla el Link)
+      // 6. BUSCAR VIDEO ADJUNTO (si existe)
+      const videoAttachment = parsed.attachments.find(a => {
+        const contentType = (a.contentType || "").toLowerCase();
+        const filename = (a.filename || "").toLowerCase();
+        return contentType.startsWith("video/") || 
+               filename.endsWith(".mp4") || 
+               filename.endsWith(".mov") || 
+               filename.endsWith(".avi") || 
+               filename.endsWith(".mkv") ||
+               filename.endsWith(".webm");
+      });
+      
+      let videoUrl = null;
+      if (videoAttachment) {
+        console.log(`🎥 Video encontrado: ${videoAttachment.filename} (${(videoAttachment.size / 1024 / 1024).toFixed(2)} MB)`);
+        try {
+          // Subir video a Storage
+          const videoExtension = videoAttachment.filename.split('.').pop() || 'mp4';
+          const videoFileName = `CVs_staging/videos/${safeId}_video.${videoExtension}`;
+          const videoBucketFile = bucket.file(videoFileName);
+          
+          await videoBucketFile.save(videoAttachment.content, { 
+            metadata: { 
+              contentType: videoAttachment.contentType || "video/mp4" 
+            } 
+          });
+          
+          // Generar link firmado (válido por mucho tiempo)
+          const [signedVideoUrl] = await videoBucketFile.getSignedUrl({ 
+            action: 'read', 
+            expires: '01-01-2035' 
+          });
+          
+          videoUrl = signedVideoUrl;
+          console.log(`✅ Video subido correctamente: ${videoFileName}`);
+        } catch (error) {
+          console.error("❌ Error subiendo video:", error.message);
+          // No bloqueamos el proceso si falla el video
+        }
+      }
+
+      // 7. SUBIR PDF A STORAGE (Arregla el Link)
       const bucketFile = bucket.file(`CVs_staging/files/${safeId}_CV.pdf`);
       await bucketFile.save(pdfAttachment.content, { metadata: { contentType: "application/pdf" } });
       const [publicCvUrl] = await bucketFile.getSignedUrl({ action: 'read', expires: '01-01-2035' });
-      console.log("📤 Link generado correctamente.");
+      console.log("📤 Link CV generado correctamente.");
 
-      // 7. RECUPERAR DATOS DEL WEBHOOK
+      // 8. RECUPERAR DATOS DEL WEBHOOK
       const docRef = firestore.collection("CVs_staging").doc(safeId);
       const docSnap = await docRef.get();
       
@@ -966,50 +1007,89 @@ async function analizarCorreos() {
       if (docSnap.exists) datosZoho = docSnap.data();
       else {
           // Fallback por si el mail llega antes que el webhook
-          await docRef.set({ id: safeId, email: candidatoEmail, nombre: "Candidato (Mail)", origen: "mail_first" }, { merge: true });
+          await docRef.set({ 
+              id: safeId, 
+              email: candidatoEmail, 
+              nombre: "Candidato (Mail)", 
+              origen: "mail_first",
+              historial_movimientos: [
+                  {
+                      date: new Date().toISOString(),
+                      event: 'Ingreso por Zoho',
+                      detail: 'Candidato recibido desde formulario web (email llegó antes que webhook)',
+                      usuario: 'Sistema (Email)'
+                  }
+              ]
+          }, { merge: true });
       }
 
-      // 8. LEER TEXTO DEL PDF (CRÍTICO: Aquí leemos el CV real)
+      // 9. LEER TEXTO DEL PDF (CRÍTICO: Aquí leemos el CV real)
       let pdfText = "";
       try {
           const pdfData = await pdfParse(pdfAttachment.content);
           pdfText = pdfData.text.slice(0, 20000); // Leemos hasta 20k caracteres
       } catch (e) { console.error("Error leyendo PDF:", e.message); }
 
-      // 9. IA CALIBRADA (Cruce de Datos: Formulario vs PDF)
-      console.log("🤖 Calibrando Score (Formulario vs PDF)...");
-      const prompt = `
-        ACTÚA COMO: Reclutador Senior.
-        TAREA: Calibrar Score cruzando respuestas del formulario con el CV real.
-
-        1. RESPUESTAS FORMULARIO (Zoho):
-        ${JSON.stringify(datosZoho.respuestas_filtro || "Vacio")}
-
-        2. CV REAL (PDF):
-        ${pdfText || "Sin texto"}
-
-        REGLAS DE CALIBRACIÓN:
-        - Si el formulario es vago pero el CV es fuerte -> Score 70-80.
-        - Si el formulario miente (dice experto y el CV no lo muestra) -> Score 0-40.
-        - Si rechaza Salario/Monitoreo en el formulario -> Score 0.
-        - Si ambos son fuertes -> Score 90-100.
-
-        SALIDA JSON: { "score": number, "motivos": "string", "alertas": ["string"] }
-      `;
-
-      let analisisIA = { score: 50, motivos: "Pendiente", alertas: [] };
-      try {
-          const result = await model.generateContent(prompt);
-          const responseText = result.response.text().replace(/```json/g, "").replace(/```/g, "").trim();
-          const jsonString = responseText.substring(responseText.indexOf('{'), responseText.lastIndexOf('}') + 1);
-          analisisIA = JSON.parse(jsonString);
-      } catch (e) { 
-          console.error("Error IA:", e.message); 
+      // 10. GENERAR RESEÑAS (CV y Video si existe)
+      console.log("📝 Generando reseña del CV...");
+      const reseñaCV = await generarResenaCV(pdfText, datosZoho.puesto || "General");
+      
+      let reseñaVideo = null;
+      let videoError = null;
+      let videoLinkPublico = null;
+      
+      // Si hay video (del email o del webhook), procesarlo
+      const videoUrlParaAnalizar = videoUrl || datosZoho.video_url;
+      if (videoUrlParaAnalizar) {
+        const origenVideo = videoUrl ? "adjunto en email (subido a Storage)" : "link del webhook";
+        console.log(`🎥 Procesando video y generando reseña... (Origen: ${origenVideo})`);
+        const resultadoVideo = await generarResenaVideo(videoUrlParaAnalizar, datosZoho.puesto || "General");
+        
+        if (resultadoVideo.reseña) {
+          reseñaVideo = resultadoVideo.reseña;
+          console.log("✅ Reseña del video generada correctamente");
+        } else {
+          videoError = resultadoVideo.error;
+          videoLinkPublico = resultadoVideo.linkPublico;
+          console.log(`⚠️ ${videoError}`);
+        }
       }
 
-      // 10. ACTUALIZAR BASE DE DATOS (Master Update)
+      // 11. IA CALIBRADA (Cruce de Datos: Formulario + CV + Video)
+      console.log("🤖 Calibrando Score (Formulario + CV + Video)...");
+      
+      // Preparar datos del formulario para el análisis
+      const datosFormulario = JSON.stringify(datosZoho.respuestas_filtro || "Vacio");
+      
+      // Llamar a la función mejorada que acepta reseñas
+      let analisisIA = { score: 50, motivos: "Pendiente", alertas: [] };
+      try {
+          analisisIA = await verificaConocimientosMinimos(
+            datosZoho.puesto || "General",
+            datosFormulario, // Respuestas del formulario
+            "", // declaraciones (vacío por ahora)
+            reseñaCV, // Reseña del CV
+            reseñaVideo // Reseña del video (puede ser null)
+          );
+          
+          // Limitar score inicial a máximo 80 (antes de la entrevista)
+          analisisIA.score = Math.min(analisisIA.score, 80);
+          
+          // Si hay error con el video, agregar alerta
+          if (videoError) {
+            if (!Array.isArray(analisisIA.alertas)) {
+              analisisIA.alertas = [];
+            }
+            analisisIA.alertas.push(`Video no procesado: ${videoError}`);
+          }
+      } catch (e) { 
+          console.error("Error IA:", e.message);
+          // Si falla el análisis, mantener las reseñas generadas
+      }
+
+      // 12. ACTUALIZAR BASE DE DATOS (Master Update)
       // Usamos .set con { merge: true } para asegurarnos de crear el 'stage' si no existe
-      await docRef.set({
+      const updateData = {
         cv_url: publicCvUrl,
         tiene_pdf: true,
         ia_score: analisisIA.score,
@@ -1021,8 +1101,27 @@ async function analizarCorreos() {
         stage: datosZoho.stage || 'stage_1', 
         status_interno: datosZoho.status_interno || 'new',
         
+        // Reseñas generadas por IA
+        reseña_cv: reseñaCV,
+        reseña_video: reseñaVideo || null,
+        video_error: videoError || null, // Error si el video no se pudo procesar
+        video_link_publico: videoLinkPublico, // Si el link es público o no
+        
         actualizado_en: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true }); // 'merge: true' cuida de no borrar el nombre ni el email
+      };
+      
+      // Si encontramos un video adjunto, actualizamos el video_url
+      // Solo si no existe ya un video_url del webhook (el link pegado tiene prioridad)
+      if (videoUrl && !datosZoho.video_url) {
+        updateData.video_url = videoUrl;
+        updateData.video_tipo = "archivo";
+        console.log(`✅ Video URL actualizado desde email: ${videoUrl.substring(0, 50)}...`);
+      } else if (videoUrl && datosZoho.video_url) {
+        // Si ya había un video_url del webhook (link pegado), lo mantenemos
+        console.log(`ℹ️ Video URL ya existe desde webhook, manteniendo: ${datosZoho.video_url.substring(0, 50)}...`);
+      }
+      
+      await docRef.set(updateData, { merge: true }); // 'merge: true' cuida de no borrar el nombre ni el email
 
     console.log(`✅ [OK] ${safeId} actualizado. Score Final: ${analisisIA.score}`);
     await processedRef.set({ uid, status: "success", safeId, fecha: admin.firestore.FieldValue.serverTimestamp() });
@@ -1030,7 +1129,16 @@ async function analizarCorreos() {
 } catch (error) {
   console.error("❌ Error en analizarCorreos:", error);
 } finally {
-  if (client) await client.logout();
+  if (client) {
+    try {
+      await client.logout();
+    } catch (logoutError) {
+      // Si la conexión ya se cerró, ignoramos el error de logout
+      if (logoutError.code !== 'NoConnection' && logoutError.code !== 'ClosedAfterConnectTLS') {
+        console.error("⚠️ Error al cerrar conexión IMAP:", logoutError.message);
+      }
+    }
+  }
 }
 }
 
@@ -1115,10 +1223,24 @@ let candidatos = snap.docs.map(doc => {
     ia_score: data.ia_score || 0,
     ia_motivos: data.ia_motivos || data.motivo || "Análisis pendiente...", 
     ia_alertas: data.ia_alertas || [],
-    video_url: data.video_url || null, 
+    video_url: data.video_url || null,
+    video_tipo: data.video_tipo || null, // Tipo de video: "link" | "archivo" | "ninguno"
     respuestas_filtro: data.respuestas_filtro || {},
     motivo: data.motivo || "", 
-    notes: data.notes || ""    
+    notes: data.notes || "",
+    
+    // Datos de gestión de entrevista y formularios
+    meet_link: data.meet_link || null,
+    informe_final_data: data.informe_final_data || null,
+    respuestas_form2: data.respuestas_form2 || null,
+    process_step_2_form: data.process_step_2_form || null,
+    interview_transcript: data.transcripcion_entrevista || data.interview_transcript || null, // Mapeo para compatibilidad
+    
+    // Reseñas generadas por IA
+    reseña_cv: data.reseña_cv || null,
+    reseña_video: data.reseña_video || null,
+    video_error: data.video_error || null, // Error si el video no se pudo procesar
+    video_link_publico: data.video_link_publico || null // Si el link es público o no
   };
 })
 // --- FIN BLOQUE REEMPLAZADO ---
@@ -1211,14 +1333,31 @@ app.post("/candidatos/:id/resumen", async (req, res) => {
 
     // Si no hay informe, lo generamos usando los datos de Firestore
     const textoCV = manualData?.textoCV || data.texto_extraido || "";
-    const notas = manualData?.notas || data.motivo || "";
+    
+    // Recolectar TODOS los datos del pipeline para el informe
+    const notasStage1 = data.motivo || data.notes || "";
+    const respuestasForm1 = data.respuestas_filtro || {};
+    const respuestasForm2 = data.respuestas_form2?.data || {};
+    const transcripcion = data.transcripcion_entrevista || "";
+    const analisisPostEntrevista = data.ia_motivos || "";
+    const alertasPostEntrevista = data.ia_alertas || [];
+    
+    // Combinar toda la información en un texto para la IA
+    const notasCompletas = `
+${notasStage1 ? `NOTAS INICIALES (Stage 1):\n${notasStage1}\n\n` : ''}
+${Object.keys(respuestasForm1).length > 0 ? `RESPUESTAS FORMULARIO 1 (Zoho):\n${JSON.stringify(respuestasForm1, null, 2)}\n\n` : ''}
+${transcripcion ? `TRANSCRIPCIÓN DE ENTREVISTA:\n${transcripcion}\n\n` : ''}
+${Object.keys(respuestasForm2).length > 0 ? `RESPUESTAS FORMULARIO 2 (Zoho - Validación Técnica):\n${JSON.stringify(respuestasForm2, null, 2)}\n\n` : ''}
+${analisisPostEntrevista ? `ANÁLISIS POST-ENTREVISTA:\n${analisisPostEntrevista}\n\n` : ''}
+${alertasPostEntrevista.length > 0 ? `ALERTAS DETECTADAS:\n${alertasPostEntrevista.join(', ')}\n` : ''}
+    `.trim();
 
     const informeGenerado = await generarDatosParaInforme(
         textoCV,
         data.puesto || data.oferta || "Candidato",
-        notas,
-        data.respuestas_form_2 || {},
-        data.analisis_ia || "",
+        notasCompletas, // Usar las notas combinadas de todo el pipeline
+        respuestasForm2, // Form 2 como objeto separado (por si la función lo necesita)
+        analisisPostEntrevista, // Análisis post-entrevista
         responsable || "Admin"
     );
 
@@ -1226,7 +1365,15 @@ app.post("/candidatos/:id/resumen", async (req, res) => {
         // Guardamos el informe en Firestore para que ya quede entrelazado
         await docRef.update({ 
             informe_final_data: informeGenerado,
-            report_generated: true 
+            report_generated: true,
+            
+            // HISTORIAL: Informe generado
+            historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+                date: new Date().toISOString(),
+                event: 'Informe Generado',
+                detail: `Informe final generado por: ${responsable || "Admin"}`,
+                usuario: responsable || "Admin"
+            })
         });
         return res.json(informeGenerado);
     } else {
@@ -2741,20 +2888,182 @@ async function extractAudioMono16k(videoPath) {
     // Retornamos null para que el código siga sin transcripción.
     return null; 
 }
+
+// ==========================================
+// 🎥 FUNCIONES DE ANÁLISIS DE VIDEO Y CV
+// ==========================================
+
+// Función para verificar si un link de video es público y accesible
+async function verificarLinkVideoPublico(videoUrl) {
+  try {
+    // Hacemos un HEAD request para verificar sin descargar el archivo completo
+    const response = await axios.head(videoUrl, {
+      timeout: 5000,
+      maxRedirects: 5,
+      validateStatus: (status) => status < 400 // Acepta 2xx y 3xx
+    });
+    
+    // Verificamos que el Content-Type sea de video
+    const contentType = response.headers['content-type'] || '';
+    const esVideo = contentType.startsWith('video/') || 
+                     videoUrl.includes('drive.google.com') || 
+                     videoUrl.includes('youtube.com') ||
+                     videoUrl.includes('youtu.be');
+    
+    return {
+      esPublico: true,
+      esVideo: esVideo,
+      contentType: contentType
+    };
+  } catch (error) {
+    // Si falla, probablemente el link es privado o no accesible
+    return {
+      esPublico: false,
+      esVideo: false,
+      error: error.message
+    };
+  }
+}
+
+// Función para generar reseña del CV
+async function generarResenaCV(textoCV, puesto) {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    
+    const prompt = `
+      ACTÚA COMO: Reclutador Senior de Global Talent Connections.
+      TAREA: Generar una reseña profesional y concisa del CV del candidato.
+      
+      CV DEL CANDIDATO (para el puesto de "${puesto}"):
+      ${textoCV.slice(0, 15000)}
+      
+      GENERA UNA RESEÑA que incluya:
+      1. Experiencia relevante (años, roles principales)
+      2. Habilidades técnicas destacadas
+      3. Fortalezas del perfil
+      4. Posibles debilidades o gaps
+      
+      Formato: Párrafo de 3-5 líneas, profesional y objetivo.
+      NO incluyas score ni recomendaciones, solo la reseña descriptiva.
+    `;
+    
+    const result = await model.generateContent(prompt);
+    const reseña = result.response.text().trim();
+    
+    return reseña;
+  } catch (error) {
+    console.error("❌ Error generando reseña del CV:", error.message);
+    return "Error al generar reseña del CV. Revisar manualmente.";
+  }
+}
+
+// Función para procesar video y generar reseña
+async function generarResenaVideo(videoUrl, puesto) {
+  try {
+    // Primero verificamos si el link es público
+    const verificacion = await verificarLinkVideoPublico(videoUrl);
+    
+    if (!verificacion.esPublico) {
+      return {
+        reseña: null,
+        error: "El link del video no es público o no es accesible. El candidato debe compartir el link como público.",
+        linkPublico: false
+      };
+    }
+    
+    if (!verificacion.esVideo && !videoUrl.includes('drive.google.com') && !videoUrl.includes('youtube.com')) {
+      return {
+        reseña: null,
+        error: "El link no parece ser un video válido.",
+        linkPublico: true
+      };
+    }
+    
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    
+    const prompt = `
+      ACTÚA COMO: Reclutador Senior de Global Talent Connections.
+      TAREA: Analizar el video de presentación del candidato y generar una reseña profesional.
+      
+      CONTEXTO: Candidato postulando para el puesto de "${puesto}".
+      
+      ANALIZA EL VIDEO y genera una reseña que incluya:
+      1. Comunicación verbal (claridad, fluidez, profesionalismo)
+      2. Presentación personal (imagen, actitud)
+      3. Contenido del mensaje (qué dice sobre su experiencia/motivación)
+      4. Nivel de inglés (si habla en inglés)
+      5. Impresión general
+      
+      Formato: Párrafo de 3-5 líneas, profesional y objetivo.
+      NO incluyas score ni recomendaciones, solo la reseña descriptiva.
+    `;
+    
+    // Gemini puede procesar video desde URL directamente
+    // Nota: Gemini 2.5 Flash acepta videos desde URLs públicas
+    // Usamos la sintaxis de partes múltiples: texto + video
+    const parts = [
+      { text: prompt },
+      { 
+        fileData: {
+          fileUri: videoUrl,
+          mimeType: "video/mp4"
+        }
+      }
+    ];
+    
+    const result = await model.generateContent(parts);
+    
+    const reseña = result.response.text().trim();
+    
+    return {
+      reseña: reseña,
+      error: null,
+      linkPublico: true
+    };
+  } catch (error) {
+    console.error("❌ Error procesando video:", error.message);
+    
+    // Si el error es de acceso, probablemente el link es privado
+    if (error.message.includes('403') || error.message.includes('permission') || error.message.includes('access')) {
+      return {
+        reseña: null,
+        error: "El link del video no es público o no es accesible. El candidato debe compartir el link como público.",
+        linkPublico: false
+      };
+    }
+    
+    return {
+      reseña: null,
+      error: `Error al procesar video: ${error.message}`,
+      linkPublico: null
+    };
+  }
+}
+
 // ==========================================
 // 🧠 CEREBRO IA: CLASIFICADOR VIVIANA/GLADYMAR/SANDRA (FINAL CON FLAGS)
 // ==========================================
-async function verificaConocimientosMinimos(puesto, textoCandidato, declaraciones = "") {
+async function verificaConocimientosMinimos(puesto, textoCandidato, declaraciones = "", reseñaCV = null, reseñaVideo = null) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); 
+
+    // Construir el prompt con las reseñas si están disponibles
+    let fuentesInfo = `[DATOS TÉCNICOS Y RESPUESTAS DEL FORMULARIO]:\n${textoCandidato.slice(0, 15000)}`;
+    
+    if (reseñaCV) {
+      fuentesInfo += `\n\n[RESEÑA DEL CV (Análisis Profesional)]:\n${reseñaCV}`;
+    }
+    
+    if (reseñaVideo) {
+      fuentesInfo += `\n\n[RESEÑA DEL VIDEO DE PRESENTACIÓN (Análisis Profesional)]:\n${reseñaVideo}`;
+    }
 
     const prompt = `
       ACTÚA COMO: Reclutador Senior de Global Talent Connections (Criterio Unificado).
       TU OBJETIVO: Evaluar a este candidato para el puesto de "${puesto}" y asignar Score + Alertas.
       
       === FUENTES DE INFORMACIÓN ===
-      [DATOS TÉCNICOS Y RESPUESTAS DEL FORMULARIO]:
-      ${textoCandidato.slice(0, 15000)}
+      ${fuentesInfo}
 
       === 🛑 REGLAS DE ORO (FILTROS DE MUERTE SÚBITA) ===
       Si detectas estos casos, el Score debe ser < 40 y DEBES AGREGAR LA ALERTA (Flag) correspondiente:
@@ -2815,6 +3124,7 @@ async function verificaConocimientosMinimos(puesto, textoCandidato, declaracione
 app.post("/webhook/zoho", upload.none(), async (req, res) => {
   try {
     console.log("📨 [Webhook] Datos recibidos de Zoho.");
+    await registrarEstadoWebhook("zoho_form1", true); // Registro de ejecución exitosa
     
     // 1. Detección Inteligente del Payload (Por si llega encapsulado)
     let data = req.body;
@@ -2822,6 +3132,19 @@ app.post("/webhook/zoho", upload.none(), async (req, res) => {
         try { data = JSON.parse(data.payload); } catch(e) {}
     } else if (typeof data === 'string') {
         try { data = JSON.parse(data); } catch(e) {}
+    }
+    
+    // 🔍 LOG PARA DEBUG: Ver todos los campos relacionados con video
+    const camposVideo = Object.keys(data).filter(k => 
+        k.toLowerCase().includes('video') || 
+        k.toLowerCase().includes('file') ||
+        k.toLowerCase().includes('attachment')
+    );
+    if (camposVideo.length > 0) {
+        console.log("🎥 Campos relacionados con video encontrados:", camposVideo);
+        camposVideo.forEach(campo => {
+            console.log(`   ${campo}:`, typeof data[campo] === 'object' ? JSON.stringify(data[campo]).substring(0, 100) : data[campo]);
+        });
     }
 
     // 2. SANITIZACIÓN ID
@@ -2835,6 +3158,41 @@ app.post("/webhook/zoho", upload.none(), async (req, res) => {
     const nowISO = new Date().toISOString();
 
     // 4. OBJETO BASE (CON SEGURIDAD ANTI-CRASH || "")
+    
+    // 🔥 DETECCIÓN INTELIGENTE DE VIDEO
+    // Zoho puede enviar video de dos formas:
+    // 1. Link directo (Video_Link): "https://drive.google.com/..."
+    // 2. Archivo subido: Puede venir como Video_File, Video_Attachment, Video_URL, etc.
+    let videoUrl = "";
+    let videoTipo = "ninguno"; // "link" | "archivo" | "ninguno"
+    
+    // Prioridad 1: Link directo (campo Video_Link)
+    if (data.Video_Link && data.Video_Link.trim() && data.Video_Link.startsWith('http')) {
+      videoUrl = data.Video_Link.trim();
+      videoTipo = "link";
+    }
+    // Prioridad 2: Otros campos posibles de Zoho para video subido
+    else if (data.Video_File || data.Video_Attachment || data.Video_URL || data.Video) {
+      // Si es un link de Zoho para descargar el archivo
+      const videoField = data.Video_File || data.Video_Attachment || data.Video_URL || data.Video;
+      if (typeof videoField === 'string' && videoField.startsWith('http')) {
+        videoUrl = videoField;
+        videoTipo = "archivo";
+      } else if (typeof videoField === 'object' && videoField.url) {
+        videoUrl = videoField.url;
+        videoTipo = "archivo";
+      } else {
+        // Si es un objeto con más info, guardamos la info completa para procesar después
+        videoUrl = JSON.stringify(videoField);
+        videoTipo = "archivo";
+      }
+    }
+    
+    // Log para debugging
+    if (videoUrl) {
+      console.log(`🎥 Video detectado (${videoTipo}): ${videoUrl.substring(0, 50)}...`);
+    }
+    
     const candidato = {
       id: safeId,
       nombre: `${data.Nombre_Completo || ""} ${data.Apellido || ""}`.trim(),
@@ -2842,8 +3200,9 @@ app.post("/webhook/zoho", upload.none(), async (req, res) => {
       telefono: data.Telefono || "",
       puesto: data.Puesto_Solicitado || "General",
       
-      // Video Link (Seguro)
-      video_url: data.Video_Link || "", 
+      // Video Link (Mejorado para manejar links y archivos)
+      video_url: videoUrl,
+      video_tipo: videoTipo, // Guardamos el tipo para referencia 
       
       respuestas_filtro: {
         // Aquí aplicamos la seguridad para que no explote Firestore si falta algo
@@ -2873,9 +3232,9 @@ app.post("/webhook/zoho", upload.none(), async (req, res) => {
       historial_movimientos: [
         {
             date: nowISO,
-            event: 'Ingreso al Pipeline',
-            detail: 'Origen: Formulario Web (Zoho)',
-            usuario: 'Sistema'
+            event: 'Ingreso por Zoho',
+            detail: 'Candidato recibido desde formulario web (Zoho Form 1)',
+            usuario: 'Sistema (Zoho)'
         }
       ]
     };
@@ -2884,13 +3243,45 @@ app.post("/webhook/zoho", upload.none(), async (req, res) => {
     await firestore.collection("CVs_staging").doc(safeId).set(candidato, { merge: true });
 
     console.log(`✅ [Webhook] Candidato ${safeId} guardado correctamente.`);
+    await registrarEstadoWebhook("zoho_form1", true); // Confirmación final de éxito
     res.status(200).send("OK");
 
   } catch (error) {
     console.error("❌ Error Webhook:", error);
+    await registrarEstadoWebhook("zoho_form1", false, error.message); // Registro de error
     res.status(500).send("Error interno: " + error.message);
   }
 });
+// ==========================================
+// 📊 HELPER: REGISTRAR ESTADO DE WEBHOOK
+// ==========================================
+async function registrarEstadoWebhook(webhookName, exito, error = null) {
+  try {
+    const ahora = new Date().toISOString();
+    const estadoDoc = {
+      webhook: webhookName, // "zoho_form1" o "zoho_form2"
+      ultima_ejecucion: ahora,
+      exito: exito,
+      error: error || null,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    // Guardamos en una colección separada para no mezclar con candidatos
+    await firestore.collection("webhook_status").doc(webhookName).set(estadoDoc, { merge: true });
+    
+    // También guardamos en un historial para tener registro de errores recientes
+    if (!exito) {
+      await firestore.collection("webhook_status").doc(webhookName)
+        .collection("errores_recientes").add({
+          fecha: ahora,
+          error: error,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+    }
+  } catch (e) {
+    console.error(`Error guardando estado de ${webhookName}:`, e);
+  }
+}
 // ==========================================================================
 // 📥 NUEVA FUNCIÓN: CARGA MANUAL CON CLASIFICACIÓN (Persistente)
 // ==========================================================================
@@ -2941,6 +3332,8 @@ app.post("/candidatos/ingreso-manual", upload.single('cv'), async (req, res) => 
       );
 
       // 5. Guardar en Firestore (La Verdad Única - Fuente 80)
+      const nombreUsuario = req.body.usuario_accion || req.body.responsable || "Admin";
+      
       const nuevoCandidato = {
           id: safeId,
           nombre: nombre || "Candidato Manual",
@@ -2962,7 +3355,21 @@ app.post("/candidatos/ingreso-manual", upload.single('cv'), async (req, res) => 
           // Metadatos
           origen: "carga_manual",
           creado_en: admin.firestore.FieldValue.serverTimestamp(),
-          actualizado_en: admin.firestore.FieldValue.serverTimestamp()
+          actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
+          
+          // ETIQUETAS DE ESTADO
+          stage: 'stage_1',
+          status_interno: 'new',
+          
+          // HISTORIAL INICIAL
+          historial_movimientos: [
+            {
+                date: new Date().toISOString(),
+                event: 'Ingreso Manual',
+                detail: `Candidato cargado manualmente por: ${nombreUsuario}`,
+                usuario: nombreUsuario
+            }
+          ]
       };
 
       // Escribimos en la colección maestra (MAIN_COLLECTION definida en Fuente 29)
@@ -2977,6 +3384,256 @@ app.post("/candidatos/ingreso-manual", upload.single('cv'), async (req, res) => 
   } catch (error) {
       console.error("❌ Error en carga manual:", error);
       res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// 📊 ENDPOINT: ESTADO DE WEBHOOKS (ANTES DE STATIC PARA QUE NO SE INTERCEPTE)
+// ==========================================
+app.get("/webhooks/status", async (req, res) => {
+  try {
+    const ahora = new Date();
+    const hace24Horas = new Date(ahora.getTime() - 24 * 60 * 60 * 1000);
+    const hace48Horas = new Date(ahora.getTime() - 48 * 60 * 60 * 1000);
+    
+    const webhooks = ["zoho_form1", "zoho_form2"];
+    const estados = {};
+    
+    for (const webhookName of webhooks) {
+      const docRef = firestore.collection("webhook_status").doc(webhookName);
+      const doc = await docRef.get();
+      
+      if (!doc.exists) {
+        // Si nunca se ejecutó, está rojo
+        estados[webhookName] = {
+          status: "rojo",
+          razon: "Nunca se ha ejecutado",
+          ultima_ejecucion: null
+        };
+        continue;
+      }
+      
+      const data = doc.data();
+      const ultimaEjecucion = data.ultima_ejecucion ? new Date(data.ultima_ejecucion) : null;
+      
+      // Contar errores recientes (últimas 24 horas)
+      const erroresRef = docRef.collection("errores_recientes");
+      const erroresSnap = await erroresRef
+        .where("fecha", ">=", hace24Horas.toISOString())
+        .get();
+      const cantidadErrores = erroresSnap.size;
+      
+      // LÓGICA: Verde o Rojo
+      let status = "verde";
+      let razon = "Funcionando correctamente";
+      
+      if (!ultimaEjecucion) {
+        status = "rojo";
+        razon = "Sin registro de ejecución";
+      } else if (ultimaEjecucion < hace48Horas) {
+        status = "rojo";
+        razon = `Última ejecución hace más de 48 horas (${Math.round((ahora - ultimaEjecucion) / (1000 * 60 * 60))} horas)`;
+      } else if (cantidadErrores >= 3) {
+        status = "rojo";
+        razon = `${cantidadErrores} errores en las últimas 24 horas`;
+      } else if (!data.exito) {
+        status = "rojo";
+        razon = data.error || "Última ejecución falló";
+      } else if (ultimaEjecucion < hace24Horas) {
+        status = "amarillo"; // Opcional: estado intermedio
+        razon = `Última ejecución hace ${Math.round((ahora - ultimaEjecucion) / (1000 * 60 * 60))} horas`;
+      }
+      
+      estados[webhookName] = {
+        status: status,
+        razon: razon,
+        ultima_ejecucion: ultimaEjecucion ? ultimaEjecucion.toISOString() : null,
+        cantidad_errores_24h: cantidadErrores
+      };
+    }
+    
+    res.json(estados);
+  } catch (error) {
+    console.error("Error obteniendo estado de webhooks:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// 🧪 ENDPOINT DE PRUEBA: CANDIDATO COMPLETO PARA TESTING
+// ==========================================
+// Handler GET para mostrar instrucciones si acceden desde navegador
+app.get("/test/candidato-completo", (req, res) => {
+  res.json({
+    mensaje: "Este endpoint requiere método POST",
+    instrucciones: [
+      "Desde terminal: curl -X POST http://localhost:3001/test/candidato-completo",
+      "O usa un cliente REST como Postman/Insomnia",
+      "O ejecuta: fetch('/test/candidato-completo', {method: 'POST'}) desde la consola del navegador"
+    ]
+  });
+});
+
+app.post("/test/candidato-completo", async (req, res) => {
+  try {
+    console.log("🧪 Creando candidato de prueba completo...");
+    
+    // Generar ID único para el candidato de prueba
+    const testId = `test_candidato_${Date.now()}`;
+    const nowISO = new Date().toISOString();
+    
+    // Texto de CV de ejemplo (simulado)
+    const textoCVEjemplo = `
+    PERFIL PROFESIONAL
+    Desarrollador Full Stack con 5 años de experiencia en React, Node.js y bases de datos.
+    
+    EXPERIENCIA LABORAL
+    - Desarrollador Senior en TechCorp (2020-2024)
+      * Desarrollo de aplicaciones web con React y TypeScript
+      * Implementación de APIs REST con Node.js y Express
+      * Gestión de bases de datos MongoDB y PostgreSQL
+      * Liderazgo de equipo de 3 desarrolladores
+    
+    HABILIDADES TÉCNICAS
+    - Frontend: React, TypeScript, HTML5, CSS3, Tailwind CSS
+    - Backend: Node.js, Express, REST APIs
+    - Bases de Datos: MongoDB, PostgreSQL, MySQL
+    - Herramientas: Git, Docker, AWS
+    
+    EDUCACIÓN
+    - Ingeniería en Sistemas, Universidad Nacional (2015-2019)
+    `;
+    
+    // Transcripción de entrevista de ejemplo
+    const transcripcionEjemplo = `
+    ENTREVISTADOR: Hola, gracias por venir. Cuéntame sobre tu experiencia con React.
+    
+    CANDIDATO: Tengo 5 años trabajando con React. He desarrollado aplicaciones complejas con hooks, 
+    context API, y últimamente estoy usando Next.js para proyectos más grandes. También tengo 
+    experiencia con TypeScript que me ayuda mucho con el tipado.
+    
+    ENTREVISTADOR: ¿Cómo manejas el estado en aplicaciones grandes?
+    
+    CANDIDATO: Depende del caso. Para estado local uso useState, para estado compartido uso Context 
+    o Redux cuando es necesario. En proyectos recientes he usado Zustand que es más ligero.
+    
+    ENTREVISTADOR: ¿Tienes experiencia con bases de datos?
+    
+    CANDIDATO: Sí, he trabajado con MongoDB en proyectos NoSQL y PostgreSQL para datos relacionales. 
+    También he diseñado esquemas y optimizado queries.
+    
+    ENTREVISTADOR: ¿Cuál es tu nivel de inglés?
+    
+    CANDIDATO: Tengo nivel B2, puedo comunicarme bien en inglés técnico y participar en reuniones 
+    con equipos internacionales.
+    `;
+    
+    // Respuestas Form 1 (simuladas)
+    const respuestasForm1 = {
+      salario: "Sí, acepta el rango salarial",
+      monitoreo: "Sí, acepta monitoreo",
+      disponibilidad: "Tiempo completo, horario flexible",
+      herramientas: "React, Node.js, MongoDB, PostgreSQL, TypeScript",
+      logro_destacado: "Lideré el desarrollo de una plataforma que aumentó las ventas en 40%"
+    };
+    
+    // Respuestas Form 2 (simuladas)
+    const respuestasForm2 = {
+      experiencia_react: "5 años",
+      proyectos_complejos: "Sí, he desarrollado aplicaciones con más de 50 componentes",
+      manejo_estado: "useState, Context API, Redux, Zustand",
+      nivel_ingles: "B2 - Intermedio-Avanzado",
+      disponibilidad_horaria: "Tiempo completo, horario flexible"
+    };
+    
+    // Análisis inicial de IA (simulado)
+    const analisisInicial = await verificaConocimientosMinimos(
+      "Desarrollador Full Stack",
+      textoCVEjemplo
+    );
+    
+    // Crear candidato completo en stage_1
+    const candidatoCompleto = {
+      id: testId,
+      nombre: "Juan Pérez (TEST)",
+      email: `test_${Date.now()}@example.com`,
+      puesto: "Desarrollador Full Stack",
+      telefono: "+54 11 1234-5678",
+      
+      // CV y texto
+      texto_extraido: textoCVEjemplo,
+      cv_url: "", // Sin CV real para prueba
+      tiene_pdf: false,
+      
+      // Respuestas de formularios
+      respuestas_filtro: respuestasForm1,
+      respuestas_form2: {
+        data: respuestasForm2,
+        fecha_recepcion: nowISO
+      },
+      process_step_2_form: "received",
+      
+      // Datos de IA
+      ia_score: Math.min(analisisInicial.score || 75, 80), // Máximo 80 en stage_1
+      ia_motivos: analisisInicial.motivos || "Candidato con experiencia sólida en tecnologías requeridas",
+      ia_alertas: analisisInicial.alertas || [],
+      ia_status: "processed",
+      
+      // Estado inicial
+      stage: 'stage_1',
+      status_interno: 'new',
+      assignedTo: null,
+      
+      // Datos de entrevista (para cuando pase a stage_2)
+      meet_link: "https://meet.google.com/test-abc-defg-hij",
+      transcripcion_entrevista: transcripcionEjemplo, // Guardamos con este nombre (se mapea a interview_transcript en /buscar)
+      interview_transcript: transcripcionEjemplo, // También guardamos con el nombre que espera el frontend
+      
+      // Metadatos
+      origen: "test_completo",
+      creado_en: admin.firestore.FieldValue.serverTimestamp(),
+      actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
+      
+      // Historial inicial
+      historial_movimientos: [
+        {
+          date: nowISO,
+          event: 'Ingreso al Pipeline',
+          detail: 'Candidato de prueba creado automáticamente',
+          usuario: 'Sistema'
+        }
+      ]
+    };
+    
+    // Guardar en Firestore
+    await firestore.collection("CVs_staging").doc(testId).set(candidatoCompleto);
+    
+    console.log(`✅ Candidato de prueba creado: ${testId}`);
+    
+    res.json({
+      ok: true,
+      id: testId,
+      mensaje: "Candidato de prueba creado exitosamente",
+      datos: {
+        nombre: candidatoCompleto.nombre,
+        email: candidatoCompleto.email,
+        stage: candidatoCompleto.stage,
+        score: candidatoCompleto.ia_score,
+        tiene_form2: true,
+        tiene_transcripcion: true
+      },
+      pasos_siguientes: [
+        "1. Ve al dashboard y busca el candidato en 'Explorar' (stage_1)",
+        "2. Aprueba el candidato a 'Gestión' (stage_2)",
+        "3. Verifica que tenga meet_link y transcripción",
+        "4. Analiza la entrevista con el botón 'Analizar con IA'",
+        "5. Mueve a 'Informe' (stage_3) y genera el informe final"
+      ]
+    });
+    
+  } catch (error) {
+    console.error("❌ Error creando candidato de prueba:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -3088,35 +3745,87 @@ app.patch("/candidatos/:id", async (req, res) => {
       actualizado_en: new Date().toISOString()
     };
 
-    // 🕵️‍♂️ DETECTIVE DE HISTORIAL: Si cambió el stage, status o assignedTo, lo anotamos.
-    if (updates.stage || updates.status_interno || updates.assignedTo) {
-        
-        let detalleEvento = `Actualización: ${updates.status_interno || 'General'}`;
-        let tituloEvento = 'Actualización de Estado';
-
-        // Personalizamos el mensaje según lo que pasó
-        if (updates.stage === 'stage_2') {
-            tituloEvento = 'Aprobado a Gestión';
-            detalleEvento = updates.assignedTo ? `Asignado a: ${updates.assignedTo}` : 'Aprobado sin asignación';
-        } else if (updates.stage === 'trash') {
-            tituloEvento = 'Movido a Papelera';
-            detalleEvento = 'Descartado manualmente';
-          } else if (updates.stage === 'stage_1') {
-            tituloEvento = 'Restaurado';
-            detalleEvento = 'Recuperado de Papelera a Exploración';
-        } else if (updates.stage === 'stage_3') {
-            tituloEvento = 'Listo para Informe';
-            detalleEvento = 'Proceso de entrevista finalizado';
-        }
-
-        const nuevoEvento = {
+    // 🕵️‍♂️ DETECTIVE DE HISTORIAL: Trackear todos los eventos importantes
+    const nombreAccion = updates.usuario_accion || updates.assignedTo || 'Sistema';
+    let nuevoEvento = null;
+    
+    // 1. TRACKING DE STATUS_INTERNO (eventos específicos)
+    if (updates.status_interno === 'viewed') {
+        nuevoEvento = {
             date: new Date().toISOString(),
-            event: tituloEvento,
-            detail: detalleEvento,
-            usuario: updates.assignedTo || 'Sistema' 
+            event: 'Visto',
+            detail: `Visto por: ${nombreAccion}`,
+            usuario: nombreAccion
         };
+    } 
+    else if (updates.status_interno === 'interview_scheduled') {
+        nuevoEvento = {
+            date: new Date().toISOString(),
+            event: 'Link de Entrevista Enviada',
+            detail: `Invitación de Meet/Zoom enviada por: ${nombreAccion}`,
+            usuario: nombreAccion
+        };
+    }
+    else if (updates.status_interno === 'pending_form2') {
+        nuevoEvento = {
+            date: new Date().toISOString(),
+            event: 'Link de Formulario Enviado',
+            detail: `Evaluación técnica (Form 2) enviada por: ${nombreAccion}`,
+            usuario: nombreAccion
+        };
+    }
+    // 2. TRACKING DE CAMBIOS DE STAGE
+    else if (updates.stage === 'stage_2') {
+        // Siempre mostrar quién lo aprobó, y si además se asigna, mencionarlo
+        let detalle = `Aprobado por: ${nombreAccion}`;
+        if (updates.assignedTo) {
+            detalle += `. Asignado a: ${updates.assignedTo}`;
+        }
+        
+        nuevoEvento = {
+            date: new Date().toISOString(),
+            event: 'Aprobado a Gestión',
+            detail: detalle,
+            usuario: nombreAccion
+        };
+    } 
+    else if (updates.stage === 'trash') {
+        nuevoEvento = {
+            date: new Date().toISOString(),
+            event: 'Movido a Papelera',
+            detail: 'Descartado manualmente',
+            usuario: nombreAccion
+        };
+    } 
+    else if (updates.stage === 'stage_1' && docSnap.data().stage === 'trash') {
+        // Solo trackear "Restaurado" si venía de papelera
+        nuevoEvento = {
+            date: new Date().toISOString(),
+            event: 'Restaurado',
+            detail: 'Recuperado de Papelera a Exploración',
+            usuario: nombreAccion
+        };
+    } 
+    else if (updates.stage === 'stage_3') {
+        nuevoEvento = {
+            date: new Date().toISOString(),
+            event: 'Aprobado Informe',
+            detail: 'Candidato aprobado para informe final',
+            usuario: nombreAccion
+        };
+    }
+    // 3. TRACKING DE ASIGNACIÓN (solo si cambia assignedTo sin cambiar stage)
+    else if (updates.assignedTo && !updates.stage) {
+        nuevoEvento = {
+            date: new Date().toISOString(),
+            event: 'Asignado a Responsable',
+            detail: `Asignado a: ${updates.assignedTo}`,
+            usuario: nombreAccion
+        };
+    }
 
-        // Usamos arrayUnion para agregar al historial sin borrar lo anterior
+    // Si hay evento para agregar, lo guardamos
+    if (nuevoEvento) {
         finalUpdate.historial_movimientos = admin.firestore.FieldValue.arrayUnion(nuevoEvento);
     }
 
@@ -3189,8 +3898,17 @@ app.post("/candidatos/:id/analizar-entrevista", async (req, res) => {
         ia_score: analisis.score,
         ia_motivos: analisis.motivos,
         ia_alertas: analisis.alertas || [],
-        interview_analyzed: true, 
-        actualizado_en: new Date().toISOString()
+        interview_analyzed: true,
+        transcripcion_entrevista: transcript, // Guardar transcripción para el informe final
+        actualizado_en: new Date().toISOString(),
+        
+        // HISTORIAL: Transcripción analizada
+        historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+            date: new Date().toISOString(),
+            event: 'Transcripción Analizada',
+            detail: `Análisis post-entrevista completado. Nuevo score: ${analisis.score}/100`,
+            usuario: req.body.responsable || 'Sistema'
+        })
     });
 
     res.json({ ok: true, ...analisis });
@@ -3207,10 +3925,10 @@ app.post("/webhook-form2", async (req, res) => {
   try {
     const data = req.body;
     console.log("📩 [Webhook Form 2] Datos recibidos:", JSON.stringify(data));
+    await registrarEstadoWebhook("zoho_form2", true); // Registro de ejecución exitosa
 
-    // 1. Validar Email (Es la llave que configuramos en Zoho)
-    // Buscamos 'email' (minuscula) porque así lo pusiste en el mapping
-    const emailCandidate = data.email || data.Email; 
+    // 1. Normalizar Email (Es la llave que configuramos en Zoho)
+    const emailCandidate = (data.email || data.Email || "").trim().toLowerCase();
     
     if (!emailCandidate) {
         console.error("❌ Form 2 recibido SIN email. Imposible asociar.");
@@ -3240,14 +3958,24 @@ app.post("/webhook-form2", async (req, res) => {
             fecha_recepcion: new Date().toISOString(),
             data: data // Aquí va todo el paquete limpio que configuraste
         },
-        actualizado_en: new Date().toISOString()
+        actualizado_en: new Date().toISOString(),
+        
+        // HISTORIAL: Respuestas del Zoho 2 recibido
+        historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+            date: new Date().toISOString(),
+            event: 'Respuestas del Zoho 2 Recibido',
+            detail: 'El candidato completó la validación técnica (Zoho Form 2)',
+            usuario: 'Sistema (Zoho)'
+        })
     });
 
     console.log(`✅ [Webhook Form 2] Respuestas guardadas para: ${emailCandidate}`);
+    await registrarEstadoWebhook("zoho_form2", true); // Confirmación final de éxito
     res.status(200).send("Recibido y procesado exitosamente.");
 
   } catch (error) {
     console.error("❌ Error procesando Webhook Form 2:", error);
+    await registrarEstadoWebhook("zoho_form2", false, error.message); // Registro de error
     res.status(500).send("Error interno del servidor");
   }
 });
