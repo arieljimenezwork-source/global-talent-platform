@@ -3201,6 +3201,57 @@ app.post("/candidatos/:id/analizar-entrevista", async (req, res) => {
   }
 });
 // ==========================================
+// 🎣 WEBHOOK ZOHO FORM 2: VALIDACIÓN TÉCNICA (CONECTADO)
+// ==========================================
+app.post("/webhook-form2", async (req, res) => {
+  try {
+    const data = req.body;
+    console.log("📩 [Webhook Form 2] Datos recibidos:", JSON.stringify(data));
+
+    // 1. Validar Email (Es la llave que configuramos en Zoho)
+    // Buscamos 'email' (minuscula) porque así lo pusiste en el mapping
+    const emailCandidate = data.email || data.Email; 
+    
+    if (!emailCandidate) {
+        console.error("❌ Form 2 recibido SIN email. Imposible asociar.");
+        return res.status(400).send("Falta el campo email para identificar al candidato.");
+    }
+
+    // 2. Buscar al candidato en la base de datos (CVs_staging)
+    const snapshot = await firestore.collection(MAIN_COLLECTION)
+        .where('email', '==', emailCandidate)
+        .limit(1)
+        .get();
+
+    if (snapshot.empty) {
+        console.warn(`⚠️ Webhook recibido pero no encontré candidato con email: ${emailCandidate}`);
+        // Respondemos 200 a Zoho para que no se quede reintentando infinitamente
+        return res.status(200).send("Candidato no encontrado en DB.");
+    }
+
+    const doc = snapshot.docs[0];
+    
+    // 3. Guardar las respuestas
+    // Guardamos todo el objeto 'data' porque ya hiciste el trabajo duro de mapear
+    // los nombres bonitos (herramienta_1, nivel_1, etc.) en Zoho.
+    await doc.ref.update({
+        process_step_2_form: 'received',  // 🔥 Enciende el semáforo VERDE
+        respuestas_form2: {
+            fecha_recepcion: new Date().toISOString(),
+            data: data // Aquí va todo el paquete limpio que configuraste
+        },
+        actualizado_en: new Date().toISOString()
+    });
+
+    console.log(`✅ [Webhook Form 2] Respuestas guardadas para: ${emailCandidate}`);
+    res.status(200).send("Recibido y procesado exitosamente.");
+
+  } catch (error) {
+    console.error("❌ Error procesando Webhook Form 2:", error);
+    res.status(500).send("Error interno del servidor");
+  }
+});
+// ==========================================
 // 🚀 INICIO DEL SERVIDOR (CON BUCLE AUTOMÁTICO)
 // ==========================================
 app.listen(PORT, "0.0.0.0", async () => {
