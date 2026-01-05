@@ -979,10 +979,11 @@ async function analizarCorreos() {
             } 
           });
           
-          // Generar link firmado (válido por mucho tiempo)
+          // Generar link firmado (válido por mucho tiempo) - Configurado para abrir inline (no descargar)
           const [signedVideoUrl] = await videoBucketFile.getSignedUrl({ 
             action: 'read', 
-            expires: '01-01-2035' 
+            expires: '01-01-2035',
+            responseDisposition: 'inline' // 👈 Esto hace que se abra en el navegador en vez de descargar
           });
           
           videoUrl = signedVideoUrl;
@@ -1235,6 +1236,7 @@ let candidatos = snap.docs.map(doc => {
     respuestas_form2: data.respuestas_form2 || null,
     process_step_2_form: data.process_step_2_form || null,
     interview_transcript: data.transcripcion_entrevista || data.interview_transcript || null, // Mapeo para compatibilidad
+    transcripcion_entrevista: data.transcripcion_entrevista || null, // Campo original para verificar si está analizada
     
     // Reseñas generadas por IA
     reseña_cv: data.reseña_cv || null,

@@ -1613,6 +1613,17 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     const [form2Status, setForm2Status] = useState(candidate.process_step_2_form || "pending"); // pending, sent, received
     const [finalResult, setFinalResult] = useState(candidate.process_step_3_result || null); // qualified, disqualified
 
+    // 🔥 SINCRONIZAR ESTADOS CUANDO CANDIDATE CAMBIA (para que persistan después de F5)
+    React.useEffect(() => {
+        if (candidate.meet_link) {
+            setMeetLink(candidate.meet_link);
+        }
+        // Solo actualizar transcript si NO está analizada (para no sobrescribir el estado "ANALIZADA")
+        if (candidate.interview_transcript && !candidate.transcripcion_entrevista) {
+            setTranscript(candidate.interview_transcript);
+        }
+    }, [candidate.meet_link, candidate.interview_transcript, candidate.transcripcion_entrevista]);
+
     // Recuperar alertas y skills
     const flags = candidate.ia_alertas || candidate.alerts || [];
     const hardSkills = candidate.respuestas_filtro?.herramientas 
@@ -1659,10 +1670,12 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
             const data = await res.json();
             
             // Actualizamos la vista visualmente al instante
+            // El backend ya guarda la transcripción en transcripcion_entrevista
             onUpdate(candidate.id, { 
                 ia_score: data.score, 
                 ia_motivos: data.motivos,
-                ia_alertas: data.alertas
+                ia_alertas: data.alertas,
+                transcripcion_entrevista: transcript // Guardar también en el frontend para que se muestre como "ANALIZADA"
             });
             
             alert(`✅ Análisis completado.\nNuevo Score: ${data.score}/100`);
@@ -1689,8 +1702,9 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     
     // 1. Guardar Link Meet (al salir del campo)
     const saveMeetLink = () => {
-        if (meetLink !== candidate.meet_link) {
-            onUpdate(candidate.id, { meet_link: meetLink });
+        const linkToSave = meetLink || candidate.meet_link;
+        if (linkToSave && linkToSave !== candidate.meet_link) {
+            onUpdate(candidate.id, { meet_link: linkToSave });
         }
     };
 
@@ -1708,8 +1722,9 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
 
   // 1. ABRIR GMAIL PARA LA ENTREVISTA (MEET)
   const handleOpenMail = () => {
-    // Validación: No dejamos enviar si no hay link cargado en el input
-    if (!meetLink) return alert("⚠️ Primero pega el link de la reunión en el campo de texto para incluirlo en el correo.");
+    // Usar el link guardado o el del estado local
+    const linkToUse = candidate.meet_link || meetLink;
+    if (!linkToUse) return alert("⚠️ Primero pega el link de la reunión en el campo de texto para incluirlo en el correo.");
     
     const recipient = candidate.email;
     // Asunto Dinámico
@@ -1724,7 +1739,7 @@ Espero que estés teniendo un excelente día.
 Nos complace informarte que hemos revisado tu perfil y nos encantaría conocerte mejor. Por ello, te confirmamos los detalles para tu entrevista con nuestro equipo de selección:
 
 
-📍 Link de conexión (Google Meet): ${meetLink}
+📍 Link de conexión (Google Meet): ${linkToUse}
 📅 Fecha y Hora: [Insertar Fecha y Hora]
 
 
@@ -2011,6 +2026,41 @@ Equipo de Selección | Global Talent Connections`
                             </div>
                         </Card>
 
+                        {/* 🔥 SECCIÓN DE RESEÑAS (CV Y VIDEO) 🔥 */}
+                        {(candidate.reseña_cv || candidate.reseña_video) && (
+                            <Card className="p-6 bg-slate-900 border-slate-800">
+                                <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                    <FileText className="text-cyan-400" size={18} /> Reseñas Generadas por IA
+                                </h2>
+                                <div className="space-y-4">
+                                    {candidate.reseña_cv && (
+                                        <div className="bg-slate-950/50 rounded-lg p-4 border border-slate-800">
+                                            <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                <FileText size={14} /> Reseña del CV
+                                            </h3>
+                                            <p className="text-sm text-slate-300 leading-relaxed">{candidate.reseña_cv}</p>
+                                        </div>
+                                    )}
+                                    {candidate.reseña_video && (
+                                        <div className="bg-slate-950/50 rounded-lg p-4 border border-slate-800">
+                                            <h3 className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                <Video size={14} /> Reseña del Video de Presentación
+                                            </h3>
+                                            <p className="text-sm text-slate-300 leading-relaxed">{candidate.reseña_video}</p>
+                                        </div>
+                                    )}
+                                    {candidate.video_error && (
+                                        <div className="bg-amber-900/20 rounded-lg p-4 border border-amber-500/30">
+                                            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-2">
+                                                ⚠️ Alerta de Video
+                                            </h3>
+                                            <p className="text-sm text-amber-300">{candidate.video_error}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </Card>
+                        )}
+
                         {/* 🔥 SECCIÓN DE GESTIÓN (SOLO SI ESTÁ EN ETAPA 2) 🔥 */}
                         {candidate.stage === 'stage_2' && (
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
@@ -2031,8 +2081,8 @@ Equipo de Selección | Global Talent Connections`
            <input
                type="text"
                placeholder="Pegar link de reunión aquí..."
-               className={`w-full pl-10 pr-4 py-2.5 bg-slate-900 border rounded-lg text-sm text-white focus:outline-none transition-all placeholder-slate-600 ${meetLink && meetLink === candidate.meet_link ? 'border-emerald-500/50 text-emerald-400' : 'border-slate-700 focus:border-blue-500'}`}
-               value={meetLink}
+               className={`w-full pl-10 pr-4 py-2.5 bg-slate-900 border rounded-lg text-sm text-white focus:outline-none transition-all placeholder-slate-600 ${candidate.meet_link ? 'border-emerald-500/50 text-emerald-400' : 'border-slate-700 focus:border-blue-500'}`}
+               value={candidate.meet_link || meetLink}
                onChange={(e) => setMeetLink(e.target.value)}
            />
        </div>
@@ -2040,18 +2090,18 @@ Equipo de Selección | Global Talent Connections`
        {/* BOTÓN 1: REGISTRAR (DISKETTE) */}
        <button
            onClick={saveMeetLink}
-           className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${meetLink === candidate.meet_link && meetLink ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+           className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${candidate.meet_link ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white'}`}
            title="Guardar link en la base de datos"
        >
-           {meetLink === candidate.meet_link && meetLink ? <><CheckCircle size={14}/> GUARDADO</> : <><Save size={14}/> REGISTRAR</>}
+           {candidate.meet_link ? <><CheckCircle size={14}/> GUARDADO</> : <><Save size={14}/> REGISTRAR</>}
        </button>
 
 
        {/* BOTÓN 2: ENVIAR MAIL (SOBRE) */}
        <button
            onClick={handleOpenMail}
-           disabled={!meetLink}
-           className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${!meetLink ? 'bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-lg'}`}
+           disabled={!candidate.meet_link && !meetLink}
+           className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${!candidate.meet_link && !meetLink ? 'bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-lg'}`}
            title="Abrir correo con invitación"
        >
            <Mail size={14}/> ENVIAR MAIL
@@ -2066,25 +2116,39 @@ Equipo de Selección | Global Talent Connections`
                                            <label className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
                                                <MessageSquare size={12}/> Transcripción / Notas
                                            </label>
-                                          
-                                           {/* BOTÓN MÁGICO DE ANÁLISIS */}
-                                           <button
-                                               onClick={handleAnalyzeInterview}
-                                               disabled={isAnalyzing || !transcript}
-                                               className="text-[10px] bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded border border-purple-400 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-900/20"
-                                           >
-                                               {isAnalyzing ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>}
-                                               {isAnalyzing ? "Analizando..." : "ANALIZAR ENTREVISTA"}
-                                           </button>
+                                           
+                                           {/* BOTÓN MÁGICO DE ANÁLISIS - Solo mostrar si NO está analizada */}
+                                           {!candidate.transcripcion_entrevista && (
+                                               <button
+                                                   onClick={handleAnalyzeInterview}
+                                                   disabled={isAnalyzing || !transcript}
+                                                   className="text-[10px] bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded border border-purple-400 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-900/20"
+                                               >
+                                                   {isAnalyzing ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>}
+                                                   {isAnalyzing ? "Analizando..." : "ANALIZAR ENTREVISTA"}
+                                               </button>
+                                           )}
                                        </div>
-                                      
-                                       <textarea
-                                           className="w-full h-32 bg-slate-900 border border-slate-800 rounded-lg p-4 text-sm text-slate-300 focus:border-purple-500 outline-none resize-none placeholder-slate-600 leading-relaxed custom-scrollbar"
-                                           placeholder="Pega aquí la transcripción o toma notas. Luego presiona 'Analizar' para actualizar el Score."
-                                           value={transcript}
-                                           onChange={(e) => setTranscript(e.target.value)}
-                                           onBlur={saveTranscript}
-                                       ></textarea>
+                                       
+                                       {/* Si ya está analizada, mostrar mensaje fijo */}
+                                       {candidate.transcripcion_entrevista ? (
+                                           <div className="w-full h-32 bg-emerald-900/20 border border-emerald-500/50 rounded-lg p-4 flex items-center justify-center">
+                                               <div className="text-center">
+                                                   <div className="text-emerald-400 text-sm font-bold mb-1 flex items-center justify-center gap-2">
+                                                       <CheckCircle size={16}/> TRANSCRIPCIÓN ANALIZADA
+                                                   </div>
+                                                   <p className="text-xs text-emerald-300/70">La transcripción fue procesada y el score fue actualizado.</p>
+                                               </div>
+                                           </div>
+                                       ) : (
+                                           <textarea
+                                               className="w-full h-32 bg-slate-900 border border-slate-800 rounded-lg p-4 text-sm text-slate-300 focus:border-purple-500 outline-none resize-none placeholder-slate-600 leading-relaxed custom-scrollbar"
+                                               placeholder="Pega aquí la transcripción o toma notas. Luego presiona 'Analizar' para actualizar el Score."
+                                               value={transcript}
+                                               onChange={(e) => setTranscript(e.target.value)}
+                                               onBlur={saveTranscript}
+                                           ></textarea>
+                                       )}
                                    </div>
                                </div>
 
