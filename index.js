@@ -1360,7 +1360,7 @@ ${alertasPostEntrevista.length > 0 ? `ALERTAS DETECTADAS:\n${alertasPostEntrevis
         notasCompletas, // Usar las notas combinadas de todo el pipeline
         respuestasForm2, // Form 2 como objeto separado (por si la función lo necesita)
         analisisPostEntrevista, // Análisis post-entrevista
-        responsable || "Admin"
+        responsable || data.assignedTo || "Admin"
     );
 
     if (informeGenerado) {
@@ -1373,8 +1373,8 @@ ${alertasPostEntrevista.length > 0 ? `ALERTAS DETECTADAS:\n${alertasPostEntrevis
             historial_movimientos: admin.firestore.FieldValue.arrayUnion({
                 date: new Date().toISOString(),
                 event: 'Informe Generado',
-                detail: `Informe final generado por: ${responsable || "Admin"}`,
-                usuario: responsable || "Admin"
+                detail: `Informe final generado por: ${responsable || data.assignedTo || "Admin"}`,
+                usuario: responsable || data.assignedTo || "Admin"
             })
         });
         return res.json(informeGenerado);
@@ -3769,6 +3769,15 @@ app.patch("/candidatos/:id", async (req, res) => {
         };
     }
     else if (updates.status_interno === 'pending_form2') {
+        nuevoEvento = {
+            date: new Date().toISOString(),
+            event: 'Link de Formulario Enviado',
+            detail: `Evaluación técnica (Form 2) enviada por: ${nombreAccion}`,
+            usuario: nombreAccion
+        };
+    }
+    // 1.5. TRACKING DE PROCESS_STEP_2_FORM (nuevo sistema)
+    else if (updates.process_step_2_form === 'sent' && docSnap.data().process_step_2_form !== 'sent') {
         nuevoEvento = {
             date: new Date().toISOString(),
             event: 'Link de Formulario Enviado',

@@ -50,7 +50,14 @@ const api = {
                         history: c.history || c.historial_movimientos || [], 
                         
                         notes: c.motivo || c.notes || '', 
-                        informe_final_data: c.informe_final_data || null
+                        informe_final_data: c.informe_final_data || null,
+                        
+                        // 🔥 GESTIÓN DE ENTREVISTA (para que persistan después de refrescar)
+                        meet_link: c.meet_link || null,
+                        interview_transcript: c.interview_transcript || null,
+                        transcripcion_entrevista: c.transcripcion_entrevista || null,
+                        process_step_2_form: c.process_step_2_form || null,
+                        process_step_3_result: c.process_step_3_result || null
                     }));
                     } catch (error) {
                         console.error("Error cargando:", error);

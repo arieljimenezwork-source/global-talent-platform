@@ -865,7 +865,7 @@ function TrashView({ candidates, onUpdate }) {
                                         <button 
                                             onClick={() => {
                                                 if(confirm(`¿Restaurar a ${c.nombre} a la etapa de Exploración?`)) {
-                                                    onUpdate(c.id, { stage: 'stage_1', status_interno: 'viewed' });
+                                                    onUpdate(c.id, { stage: 'stage_1', status_interno: 'viewed', notes: "" });
                                                 }
                                             }}
                                             className="text-xs font-bold text-emerald-500 hover:text-emerald-400 border border-emerald-900/30 bg-emerald-900/10 px-3 py-1.5 rounded hover:bg-emerald-900/20 transition-all"
@@ -887,6 +887,8 @@ function TrashView({ candidates, onUpdate }) {
 // ==========================================
 const ProfessionalReport = ({ data, onBack, onEdit }) => {
     const [downloading, setDownloading] = React.useState(false);
+    const [downloadingPDF, setDownloadingPDF] = React.useState(false);
+    const reportRef = React.useRef(null);
 
     const handleDownload = async () => {
         setDownloading(true);
@@ -914,6 +916,53 @@ const ProfessionalReport = ({ data, onBack, onEdit }) => {
         } finally {
             setDownloading(false);
         }
+    };
+
+    const handleDownloadPDF = async () => {
+        setDownloadingPDF(true);
+        try {
+            // Cargar html2pdf.js dinámicamente si no existe (usando unpkg que está permitido en CSP)
+            if (!window.html2pdf) {
+                const script = document.createElement('script');
+                script.src = 'https://unpkg.com/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js';
+                script.onload = () => generatePDF();
+                script.onerror = () => {
+                    alert("Error cargando la librería PDF. Revisa la consola.");
+                    setDownloadingPDF(false);
+                };
+                document.head.appendChild(script);
+            } else {
+                generatePDF();
+            }
+        } catch (error) {
+            console.error(error);
+            alert("No se pudo descargar el PDF. Revisa la consola.");
+            setDownloadingPDF(false);
+        }
+    };
+
+    const generatePDF = () => {
+        const element = reportRef.current;
+        if (!element) {
+            setDownloadingPDF(false);
+            return;
+        }
+
+        const opt = {
+            margin: 0,
+            filename: `Informe_${data.nombre.replace(/\s+/g, '_')}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        window.html2pdf().set(opt).from(element).save().then(() => {
+            setDownloadingPDF(false);
+        }).catch((error) => {
+            console.error(error);
+            alert("Error generando PDF. Revisa la consola.");
+            setDownloadingPDF(false);
+        });
     };
 
     const getLevelColor = (nivel) => {
@@ -945,6 +994,14 @@ const ProfessionalReport = ({ data, onBack, onEdit }) => {
                         ✏️ Seguir Editando
                     </button>
                     <button 
+                        onClick={handleDownloadPDF} 
+                        disabled={downloadingPDF}
+                        className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg shadow-lg shadow-emerald-900/20 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-wait"
+                    >
+                        {downloadingPDF ? <Loader2 className="animate-spin" size={18}/> : <FileText size={18}/>}
+                        {downloadingPDF ? "Generando..." : "Descargar PDF"}
+                    </button>
+                    <button 
                         onClick={handleDownload} 
                         disabled={downloading}
                         className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg shadow-lg shadow-blue-900/20 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-wait"
@@ -959,7 +1016,7 @@ const ProfessionalReport = ({ data, onBack, onEdit }) => {
             <div className="flex-1 overflow-y-auto overflow-x-hidden py-8 px-4 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex justify-center">
                 
                 {/* HOJA A4 DIGITAL (TAMAÑO ESCALADO) */}
-                <div className="bg-white text-slate-900 w-full max-w-[850px] shadow-2xl mx-auto mb-8 flex flex-col rounded-lg overflow-hidden">
+                <div ref={reportRef} className="bg-white text-slate-900 w-full max-w-[850px] shadow-2xl mx-auto mb-8 flex flex-col rounded-lg overflow-hidden">
                     
                     {/* ENCABEZADO ELEGANTE */}
                     <header className="px-10 sm:px-12 pt-10 sm:pt-12 pb-6 sm:pb-8 border-b-4 border-slate-900 mb-6 sm:mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 bg-slate-50">
@@ -1622,7 +1679,15 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
         if (candidate.interview_transcript && !candidate.transcripcion_entrevista) {
             setTranscript(candidate.interview_transcript);
         }
-    }, [candidate.meet_link, candidate.interview_transcript, candidate.transcripcion_entrevista]);
+        // Sincronizar estado del formulario 2 (cuando el webhook actualiza desde el backend)
+        if (candidate.process_step_2_form) {
+            setForm2Status(candidate.process_step_2_form);
+        }
+        // Sincronizar resultado final si existe
+        if (candidate.process_step_3_result) {
+            setFinalResult(candidate.process_step_3_result);
+        }
+    }, [candidate.meet_link, candidate.interview_transcript, candidate.transcripcion_entrevista, candidate.process_step_2_form, candidate.process_step_3_result]);
 
     // Recuperar alertas y skills
     const flags = candidate.ia_alertas || candidate.alerts || [];
@@ -1708,11 +1773,9 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
         }
     };
 
-    // 2. Guardar Transcripción (al salir del campo)
+    // 2. Guardar Transcripción (misma lógica que saveLinks)
     const saveTranscript = () => {
-        if (transcript !== candidate.interview_transcript) {
-            onUpdate(candidate.id, { interview_transcript: transcript });
-        }
+        onUpdate(candidate.id, { interview_transcript: transcript });
     };
 
 // ==========================================
@@ -1769,10 +1832,9 @@ Equipo de Selección | Global Talent Connections`
 
 // 2. ABRIR GMAIL PARA EL FORMULARIO 2 (Evaluación Técnica)
 const handleSendForm2 = () => {
-    // Actualizamos visualmente el semáforo a "Enviado" (Amarillo) en la lista interna
-    if (typeof updateChecklist === 'function') {
-         updateChecklist('form2', 'sent');
-    }
+    // Guardar estado "sent" en la BD (misma lógica que updateChecklist pero directo)
+    setForm2Status('sent');
+    onUpdate(candidate.id, { process_step_2_form: 'sent', usuario_accion: currentUser });
    
     const recipient = candidate.email;
     const subject = encodeURIComponent(`Próximos pasos: Evaluación de Competencias – Global Talent Connections`);
@@ -2084,6 +2146,7 @@ Equipo de Selección | Global Talent Connections`
                className={`w-full pl-10 pr-4 py-2.5 bg-slate-900 border rounded-lg text-sm text-white focus:outline-none transition-all placeholder-slate-600 ${candidate.meet_link ? 'border-emerald-500/50 text-emerald-400' : 'border-slate-700 focus:border-blue-500'}`}
                value={candidate.meet_link || meetLink}
                onChange={(e) => setMeetLink(e.target.value)}
+               onBlur={saveMeetLink}
            />
        </div>
       
@@ -2400,6 +2463,7 @@ const handleUpdateCandidate = async (id, updates) => {
         // Calculamos esto AHORA, fuera del setCandidates, para enviarlo bien a la API
         if (currentCandidate && activeTab === 'stage_1' && currentCandidate.status_interno === 'new' && !updates.stage) {
             finalUpdates.status_interno = 'viewed';
+            finalUpdates.usuario_accion = currentUser; // 🔥 Identificar quién lo visualizó
         }
 
         // 5. Actualizamos la PANTALLA (Frontend)
