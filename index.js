@@ -21,6 +21,27 @@ const fs = require("fs");
 const { google } = require("googleapis");
 const nodemailer = require("nodemailer");
 require("dotenv").config();
+
+// ========================================================================
+// 📧 CONFIGURACIÓN DE NODEMAILER (PARA ENVÍO DE EMAILS CON HTML)
+// ========================================================================
+const transporter = nodemailer.createTransport({
+    service: 'gmail', // Usar servicio de Gmail
+    auth: {
+        user: process.env.EMAIL_FROM,
+        pass: process.env.EMAIL_PASS
+    }
+});
+
+// Verificar configuración del transporter (solo al iniciar, no bloquea)
+transporter.verify(function (error, success) {
+    if (error) {
+        console.log("⚠️ Error en configuración de email:", error.message);
+        console.log("   El sistema seguirá funcionando, pero los emails pueden fallar.");
+    } else {
+        console.log("✅ Servidor de email listo para enviar mensajes");
+    }
+});
 const axios = require("axios");
 const vision = require("@google-cloud/vision");
 const crypto = require("node:crypto");
@@ -1224,29 +1245,48 @@ async function analizarCorreos() {
 
     try {
 
-      const { q = "", desde = null, hasta = null } = req.query;
+      const { q = "", desde = null, hasta = null, limit = 100, startAfter = null } = req.query;
 
       
 
-      console.log(`📡 Solicitud de búsqueda recibida. Query: "${q}"`);
+      console.log(`📡 Solicitud de búsqueda recibida. Query: "${q}", Limit: ${limit}, StartAfter: ${startAfter ? 'Sí' : 'No'}`);
 
   
 
       // USAMOS LA VARIABLE MAESTRA
       let ref = admin.firestore().collection(MAIN_COLLECTION);
 
-      const snap = await ref.orderBy('creado_en', 'desc').limit(100).get();
+      const bloqueados = await obtenerCandidatosBloqueados();
+      const termino = q.toLowerCase().trim();
+      const limitNum = parseInt(limit) || 100;
+      
+      // 🔥 MEJORA: Si hay término de búsqueda, buscar en Firestore directamente
+      // Firestore no soporta búsqueda full-text nativa, pero podemos hacer queries por campos
+      let query = ref.orderBy('creado_en', 'desc');
+      
+      // Si hay un cursor (startAfter), usarlo para paginación
+      if (startAfter) {
+        try {
+          // startAfter es el ID del último documento
+          const lastDoc = await ref.doc(startAfter).get();
+          if (lastDoc.exists) {
+            // Firestore necesita el documento completo para startAfter
+            query = query.startAfter(lastDoc);
+          }
+        } catch (e) {
+          console.warn(`⚠️ Error usando startAfter: ${e.message}`);
+        }
+      }
+      
+      // Aplicar límite (aumentamos a 100 por defecto, pero permitimos más)
+      query = query.limit(limitNum + 1); // Traemos uno más para saber si hay más resultados
+      
+      const snap = await query.get();
       
 
-      if (snap.empty) return res.json({ resultados: [] });
+      if (snap.empty) return res.json({ resultados: [], hasMore: false, lastDoc: null });
 
   
-
-      const bloqueados = await obtenerCandidatosBloqueados();
-
-      const termino = q.toLowerCase().trim();
-
-      
 
 // --- INICIO BLOQUE REEMPLAZADO: MAPEO UNIFICADO ---
 let candidatos = snap.docs.map(doc => {
@@ -1314,7 +1354,7 @@ let candidatos = snap.docs.map(doc => {
 
       .filter(c => {
 
-        // 2. Filtrado por texto
+        // 2. Filtrado por bloqueados y texto
 
         if (bloqueados.has(c.id.toLowerCase())) return false;
 
@@ -1334,11 +1374,29 @@ let candidatos = snap.docs.map(doc => {
 
       candidatos.sort((a, b) => b.fecha_orden - a.fecha_orden);
 
-  
+      // 4. PAGINACIÓN: Detectar si hay más resultados
+      let hasMore = false;
+      let lastDoc = null;
+      
+      if (candidatos.length > limitNum) {
+        hasMore = true;
+        candidatos = candidatos.slice(0, limitNum); // Quitamos el extra
+      }
+      
+      // El último documento para el cursor
+      if (candidatos.length > 0) {
+        const lastCandidate = candidatos[candidatos.length - 1];
+        lastDoc = lastCandidate.id;
+      }
 
-      console.log(`✅ Enviando ${candidatos.length} candidatos ordenados.`);
+      console.log(`✅ Enviando ${candidatos.length} candidatos ordenados. HasMore: ${hasMore}`);
 
-      res.json({ resultados: candidatos });
+      res.json({ 
+        resultados: candidatos,
+        hasMore: hasMore,
+        lastDoc: lastDoc,
+        total: candidatos.length
+      });
 
   
 
@@ -3047,22 +3105,58 @@ async function generarResenaVideo(videoUrl, puesto) {
     }
     
     // 🔥 CORRECCIÓN: Gemini necesita URI de GCS (gs://) o URL pública directa
-    // Si es una signed URL de GCS, extraer el path y construir gs://
+    // Si es una signed URL de GCS o Firebase Storage, extraer el path y construir gs://
     // Si es una URL externa (Drive, YouTube), intentar usar directamente o subir a GCS
     
     let videoUriParaGemini = videoUrl;
     
+    // 🔥 NUEVO: Detectar URLs de Firebase Storage (firebasestorage.app)
+    if (videoUrl.includes('firebasestorage.app')) {
+      // Formato: https://[PROJECT_ID].firebasestorage.app/v0/b/[BUCKET_NAME]/o/[PATH]?alt=media&token=...
+      // O: https://[PROJECT_ID].firebasestorage.app/v0/b/[BUCKET_NAME]/o/[PATH]?token=...
+      try {
+        const urlObj = new URL(videoUrl);
+        const pathMatch = urlObj.pathname.match(/\/v0\/b\/([^\/]+)\/o\/(.+)/);
+        if (pathMatch) {
+          const bucketName = pathMatch[1];
+          // Decodificar el path (puede estar URL-encoded)
+          const filePath = decodeURIComponent(pathMatch[2].replace(/%2F/g, '/'));
+          videoUriParaGemini = `gs://${bucketName}/${filePath}`;
+          console.log(`🔄 [DEBUG] Convertido Firebase Storage URL a GCS URI: ${videoUriParaGemini}`);
+        } else {
+          // Si no coincide el patrón, intentar extraer del pathname directamente
+          const pathParts = urlObj.pathname.split('/').filter(p => p);
+          if (pathParts.length > 0) {
+            // Buscar el bucket name en el path
+            const bucketIndex = pathParts.findIndex(p => p === 'b');
+            if (bucketIndex !== -1 && pathParts[bucketIndex + 1]) {
+              const bucketName = pathParts[bucketIndex + 1];
+              const filePath = pathParts.slice(bucketIndex + 3).join('/'); // Saltar 'b', bucket, 'o'
+              videoUriParaGemini = `gs://${bucketName}/${decodeURIComponent(filePath)}`;
+              console.log(`🔄 [DEBUG] Convertido Firebase Storage URL a GCS URI (método alternativo): ${videoUriParaGemini}`);
+            }
+          }
+        }
+      } catch (parseError) {
+        console.warn(`⚠️ [DEBUG] No se pudo parsear URL de Firebase Storage: ${parseError.message}`);
+        // Continuar con la URL original y dejar que el fallback lo maneje
+      }
+    }
     // Si es una signed URL de GCS (contiene storage.googleapis.com o storage.cloud.google.com)
-    if (videoUrl.includes('storage.googleapis.com') || videoUrl.includes('storage.cloud.google.com')) {
+    else if (videoUrl.includes('storage.googleapis.com') || videoUrl.includes('storage.cloud.google.com')) {
       // Extraer el path del bucket desde la URL
       // Ejemplo: https://storage.googleapis.com/bucket-name/path/to/video.mp4?X-Goog-Algorithm=...
-      const urlObj = new URL(videoUrl);
-      const pathParts = urlObj.pathname.split('/').filter(p => p);
-      if (pathParts.length >= 2) {
-        const bucketName = pathParts[0];
-        const filePath = pathParts.slice(1).join('/');
-        videoUriParaGemini = `gs://${bucketName}/${filePath}`;
-        console.log(`🔄 [DEBUG] Convertido signed URL a GCS URI: ${videoUriParaGemini}`);
+      try {
+        const urlObj = new URL(videoUrl);
+        const pathParts = urlObj.pathname.split('/').filter(p => p);
+        if (pathParts.length >= 2) {
+          const bucketName = pathParts[0];
+          const filePath = pathParts.slice(1).join('/');
+          videoUriParaGemini = `gs://${bucketName}/${filePath}`;
+          console.log(`🔄 [DEBUG] Convertido signed URL a GCS URI: ${videoUriParaGemini}`);
+        }
+      } catch (parseError) {
+        console.warn(`⚠️ [DEBUG] No se pudo parsear URL de GCS: ${parseError.message}`);
       }
     }
     // Si es Google Drive, necesitamos convertir el link a formato de descarga directa
@@ -3135,13 +3229,14 @@ async function generarResenaVideo(videoUrl, puesto) {
         result = await model.generateContent(parts);
       }
     } catch (geminiError) {
-      // Si falla con URL HTTP, intentar subir el video a GCS primero
+      // Si falla con URL HTTP o URI gs:// inválido, intentar descargar y subir a GCS
       if (!videoUriParaGemini.startsWith('gs://') && !videoUriParaGemini.includes('youtube.com')) {
-        console.log(`⚠️ [DEBUG] Falló con URL HTTP, intentando subir a GCS...`);
+        console.log(`⚠️ [DEBUG] Falló con URL HTTP o URI inválido, intentando descargar y subir a GCS...`);
+        console.log(`⚠️ [DEBUG] Error de Gemini: ${geminiError.message}`);
         
         try {
-          // Descargar el video
-          const videoResponse = await axios.get(videoUriParaGemini, { 
+          // Descargar el video desde la URL original
+          const videoResponse = await axios.get(videoUrl, { 
             responseType: 'arraybuffer',
             timeout: 30000,
             maxContentLength: 100 * 1024 * 1024 // 100MB máximo
@@ -3169,7 +3264,7 @@ async function generarResenaVideo(videoUrl, puesto) {
           ];
           result = await model.generateContent(parts);
         } catch (uploadError) {
-          throw new Error(`Error subiendo video a GCS: ${uploadError.message}`);
+          throw new Error(`Error descargando/subiendo video a GCS: ${uploadError.message}`);
         }
       } else {
         throw geminiError;
@@ -4015,6 +4110,66 @@ async function storageProbe() {
     return false;
   }
 }
+// ==========================================
+// 📧 ENDPOINT PARA ENVIAR EMAILS CON HTML (GESTIÓN)
+// ==========================================
+app.post("/enviar-email", async (req, res) => {
+  try {
+    const { to, subject, htmlBody, tipo } = req.body;
+
+    if (!to || !subject || !htmlBody) {
+      return res.status(400).json({ error: "Faltan campos requeridos: to, subject, htmlBody" });
+    }
+
+    // URL de la imagen del pie de página
+    const imagenPieUrl = 'https://raw.githubusercontent.com/nelsonmdq1996-sys/global-talent-platform/320cd201d6f93d77553f7bacb97bedfcd7cb0324/pie_email.png';
+    
+    // Agregar la imagen al final del HTML
+    const htmlCompleto = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="white-space: pre-wrap;">${htmlBody.replace(/\n/g, '<br>')}</div>
+          <div style="margin-top: 30px; text-align: center;">
+            <img src="${imagenPieUrl}" alt="Global Talent Connections" style="max-width: 600px; width: 100%; height: auto; display: block; margin: 0 auto;" />
+          </div>
+        </body>
+      </html>
+    `;
+
+    // Configurar el email
+    const mailOptions = {
+      from: `"Global Talent Connections" <${process.env.EMAIL_FROM}>`,
+      to: to,
+      subject: subject,
+      html: htmlCompleto
+    };
+
+    // Enviar el email
+    const info = await transporter.sendMail(mailOptions);
+    
+    console.log(`✅ Email enviado exitosamente a ${to} (tipo: ${tipo || 'general'})`);
+    console.log(`   Message ID: ${info.messageId}`);
+
+    res.json({ 
+      success: true, 
+      messageId: info.messageId,
+      message: "Email enviado exitosamente"
+    });
+
+  } catch (error) {
+    console.error("❌ Error enviando email:", error);
+    res.status(500).json({ 
+      error: "Error al enviar el email", 
+      details: error.message 
+    });
+  }
+});
+
 // ==========================================
 // 🛠️ ENDPOINT INTELIGENTE (PATCH) - ACTUALIZA Y GUARDA HISTORIAL
 // ==========================================

@@ -138,7 +138,19 @@
 
         const getStatusLabel = (status) => STATUS_LABELS[status] || status || 'En Proceso';     
 
-       
+        // Función para normalizar nombres: "Nombre Apellido" (primera letra mayúscula, resto minúsculas)
+        const normalizarNombre = (nombre) => {
+            if (!nombre || typeof nombre !== 'string') return nombre || '';
+            return nombre
+                .toLowerCase()
+                .split(' ')
+                .map(palabra => {
+                    if (palabra.length === 0) return palabra;
+                    return palabra.charAt(0).toUpperCase() + palabra.slice(1);
+                })
+                .join(' ')
+                .trim();
+        };
 
         // --- 3. VISTAS DEL SISTEMA ---
 
@@ -746,6 +758,43 @@
 function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
     const [filter, setFilter] = useState('');
     const [debouncedFilter, setDebouncedFilter] = useState('');
+    const [allCandidates, setAllCandidates] = useState(candidates);
+    const [originalCandidates, setOriginalCandidates] = useState(candidates); // Guardar candidatos originales
+    const [hasMore, setHasMore] = useState(false);
+    const [lastDoc, setLastDoc] = useState(null);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [isSearching, setIsSearching] = useState(false); // Estado para saber si está buscando
+
+    // Cargar datos iniciales con información de paginación
+    useEffect(() => {
+        if (candidates.length === 0 && !loading) {
+            // Si no hay candidatos cargados, cargar desde el backend
+            api.candidates.list({ limit: 100 }).then(data => {
+                const candidatos = data.candidatos || [];
+                setAllCandidates(candidatos);
+                setOriginalCandidates(candidatos); // Guardar copia original
+                setHasMore(data.hasMore || false);
+                setLastDoc(data.lastDoc || null);
+            }).catch(err => {
+                console.error("Error cargando candidatos:", err);
+            });
+        } else {
+            // Si ya hay candidatos del padre, usarlos y verificar paginación
+            setAllCandidates(candidates);
+            setOriginalCandidates(candidates); // Guardar copia original
+            // Verificar si hay más candidatos disponibles
+            if (candidates.length >= 100 && lastDoc === null) {
+                api.candidates.list({ limit: 100 }).then(data => {
+                    setHasMore(data.hasMore || false);
+                    if (data.lastDoc) {
+                        setLastDoc(data.lastDoc);
+                    }
+                }).catch(err => {
+                    console.error("Error verificando paginación:", err);
+                });
+            }
+        }
+    }, [candidates.length, loading]); // Solo cuando cambia la cantidad de candidatos o el loading
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -753,6 +802,80 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
         }, 300);
         return () => clearTimeout(timer);
     }, [filter]);
+
+    // Función para cargar más candidatos
+    const cargarMas = async () => {
+        if (loadingMore || !hasMore || !lastDoc) return;
+        
+        setLoadingMore(true);
+        try {
+            const data = await api.candidates.list({ 
+                limit: 100, 
+                startAfter: lastDoc,
+                q: debouncedFilter || undefined
+            });
+            
+            const nuevosCandidatos = data.candidatos || [];
+            setAllCandidates(prev => [...prev, ...nuevosCandidatos]);
+            setHasMore(data.hasMore || false);
+            setLastDoc(data.lastDoc || null);
+        } catch (error) {
+            console.error("❌ Error cargando más candidatos:", error);
+        } finally {
+            setLoadingMore(false);
+        }
+    };
+    
+    // Resetear paginación cuando cambia el filtro de búsqueda
+    useEffect(() => {
+        const termino = debouncedFilter.trim();
+        
+        if (termino) {
+            // Si hay búsqueda, buscar en el backend
+            setIsSearching(true);
+            // NO vaciar allCandidates, mantener los actuales mientras se cargan los nuevos
+            api.candidates.list({ limit: 100, q: termino }).then(data => {
+                const candidatos = data.candidatos || [];
+                setAllCandidates(candidatos);
+                setHasMore(data.hasMore || false);
+                setLastDoc(data.lastDoc || null);
+                setIsSearching(false);
+            }).catch(err => {
+                console.error("Error en búsqueda:", err);
+                setIsSearching(false);
+            });
+        } else {
+            // Si se borró la búsqueda, restaurar candidatos originales
+            setIsSearching(false);
+            
+            // Si tenemos candidatos originales guardados, restaurarlos
+            if (originalCandidates.length > 0) {
+                setAllCandidates(originalCandidates);
+                // Restaurar paginación original si había
+                if (originalCandidates.length >= 100) {
+                    api.candidates.list({ limit: 100 }).then(data => {
+                        setHasMore(data.hasMore || false);
+                        if (data.lastDoc) {
+                            setLastDoc(data.lastDoc);
+                        }
+                    }).catch(err => {
+                        console.error("Error verificando paginación:", err);
+                    });
+                }
+            } else {
+                // Si no hay candidatos originales, recargar desde el backend
+                api.candidates.list({ limit: 100 }).then(data => {
+                    const candidatos = data.candidatos || [];
+                    setAllCandidates(candidatos);
+                    setOriginalCandidates(candidatos);
+                    setHasMore(data.hasMore || false);
+                    setLastDoc(data.lastDoc || null);
+                }).catch(err => {
+                    console.error("Error recargando candidatos:", err);
+                });
+            }
+        }
+    }, [debouncedFilter]); // Solo depende de debouncedFilter
 
     
 
@@ -785,23 +908,30 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
     };
     
     // 1. Ordenamiento Seguro (Nuevos arriba)
-    const sortedCandidates = [...candidates].sort((a, b) => {
+    const sortedCandidates = [...allCandidates].sort((a, b) => {
         const dateA = parseFirebaseDate(a.fecha) || new Date(0);
         const dateB = parseFirebaseDate(b.fecha) || new Date(0);
         return dateB - dateA;
     });
     
-    // 2. Filtrado (ÚNICA DECLARACIÓN)
-    const filtered = sortedCandidates.filter(c => 
-        c.stage === 'stage_1' && 
-        (c.nombre.toLowerCase().includes(debouncedFilter.toLowerCase()) || 
-         c.puesto.toLowerCase().includes(debouncedFilter.toLowerCase()))
-    );
+    // 2. Filtrado (ÚNICA DECLARACIÓN) - Busca por nombre, email y puesto
+    const filtered = sortedCandidates.filter(c => {
+        if (c.stage !== 'stage_1') return false;
+        
+        if (!debouncedFilter.trim()) return true; // Si no hay filtro, mostrar todos
+        
+        const termino = debouncedFilter.toLowerCase().trim();
+        const nombreMatch = c.nombre?.toLowerCase().includes(termino) || false;
+        const emailMatch = c.email?.toLowerCase().includes(termino) || false;
+        const puestoMatch = c.puesto?.toLowerCase().includes(termino) || false;
+        
+        return nombreMatch || emailMatch || puestoMatch;
+    });
 
     
 
     return (
-        <div className="h-full flex flex-col max-w-7xl mx-auto px-4">
+        <div className="h-full flex flex-col max-w-7xl mx-auto px-4 pb-0">
             {/* CABECERA */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
                 <div>
@@ -836,70 +966,132 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
                 </div>
             </div>
 
-            {/* GRILLA DE TARJETAS */}
-            {/* GRILLA DE TARJETAS CON SKELETON LOADERS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
+            {/* LISTADO COMPACTO DE CANDIDATOS */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col flex-1 min-h-0">
                 {loading ? (
-                    /* 1. Mientras carga, generamos 6 tarjetas de silueta (Skeletons) */
-                    Array(6).fill(0).map((_, i) => <SkeletonCard key={i} />)
+                    /* Skeleton loaders para el listado */
+                    <div className="divide-y divide-slate-800 overflow-y-auto custom-scrollbar h-full">
+                        {Array(6).fill(0).map((_, i) => (
+                            <div key={i} className="p-4 animate-pulse">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-full bg-slate-800"></div>
+                                    <div className="flex-1">
+                                        <div className="h-4 bg-slate-800 rounded w-1/3 mb-2"></div>
+                                        <div className="h-3 bg-slate-800 rounded w-1/2"></div>
+                                    </div>
+                                    <div className="h-6 bg-slate-800 rounded w-16"></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : filtered.length === 0 ? (
+                    <div className="p-12 text-center">
+                        <p className="text-slate-500 text-sm">No se encontraron candidatos.</p>
+                    </div>
                 ) : (
-                    /* 2. Cuando termina de cargar, mostramos los datos reales */
-                    filtered.map(c => {
-                        // Debug temporal: verificar origen
-                        if (c.origen) {
-                            console.log(`Candidato ${c.nombre} - origen:`, c.origen);
-                        }
-                        return (
-                        <div 
-                            key={c.id} 
-                            onClick={() => onSelect(c.id)} 
-                            className="bg-slate-900 border border-slate-800 rounded-xl p-6 cursor-pointer hover:border-slate-600 transition-all group relative flex flex-col justify-between min-h-[180px]"
-                        >
-                            {/* HEADER: PUESTO + SCORE */}
-                            <div className="flex justify-between items-start mb-3">
-                                <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider max-w-[70%] leading-tight">
-                                    {c.puesto || "CANDIDATURA GENERAL"}
-                                </span>
-                                
-                                {/* Score Box */}
-                                <div className={`flex items-center justify-center px-2 py-1 rounded border ${
-                                    (c.ia_score || 0) >= 90 
-                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                                    : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                                }`}>
-                                    <span className="text-xs font-bold">{c.ia_score || 0}</span>
-                                </div>
-                            </div>
-
-                            {/* BODY: NOMBRE + ETIQUETAS */}
-                            <div className="mb-6">
-                                <h3 className="text-lg font-bold text-white group-hover:text-blue-100 transition-colors mb-2">
-                                    {c.nombre || "Sin Nombre"}
-                                </h3>
-                                {/* Etiquetas: NUEVO y CARGA MANUAL */}
-                                <div className="flex gap-2 flex-wrap">
-                                    {isToday(c.fecha) && c.status_interno === 'new' && (
-                                        <span className="inline-block px-2 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded shadow-sm animate-pulse">
-                                            NUEVO
-                                        </span>
-                                    )}
-                                    {(c.origen === "carga_manual" || c.origen === "manual") && (
-                                        <span className="inline-block px-2 py-0.5 bg-purple-600 text-white text-[10px] font-bold rounded shadow-sm">
-                                            CARGA MANUAL
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* FOOTER: FECHA */}
-                            <div className="mt-auto border-t border-slate-800 pt-3">
-                                <span className="text-xs text-slate-500 font-medium">
-                                    {simpleDate(c.fecha)}
-                                </span>
-                            </div>
+                    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                        <div className="overflow-x-auto overflow-y-auto custom-scrollbar h-full">
+                            <table className="w-full">
+                                <thead className="bg-slate-800 border-b border-slate-800 sticky top-0 z-10">
+                                    <tr>
+                                        <th className="text-left p-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Candidato</th>
+                                        <th className="text-left p-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Puesto</th>
+                                        <th className="text-center p-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Score</th>
+                                        <th className="text-left p-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Fecha</th>
+                                        <th className="text-right p-4 text-xs font-bold text-slate-400 uppercase tracking-wider"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800">
+                                {filtered.map(c => (
+                                    <tr 
+                                        key={c.id} 
+                                        onClick={() => onSelect(c.id)}
+                                        className="hover:bg-slate-800/30 cursor-pointer transition-colors group"
+                                    >
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar name={normalizarNombre(c.nombre)} size="sm"/>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <p className="font-bold text-sm text-white group-hover:text-blue-400 transition-colors truncate">
+                                                            {normalizarNombre(c.nombre) || "Sin Nombre"}
+                                                        </p>
+                                                        {/* Badges inline */}
+                                                        {isToday(c.fecha) && c.status_interno === 'new' && (
+                                                            <span className="inline-block px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded shadow-sm animate-pulse whitespace-nowrap">
+                                                                NUEVO
+                                                            </span>
+                                                        )}
+                                                        {(c.origen === "carga_manual" || c.origen === "manual") && (
+                                                            <span className="inline-block px-1.5 py-0.5 bg-purple-600 text-white text-[9px] font-bold rounded shadow-sm whitespace-nowrap">
+                                                                MANUAL
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs text-slate-500 truncate">{c.email || "S/E"}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <span className="text-xs font-medium text-blue-400">
+                                                {c.puesto || "Candidatura General"}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-center">
+                                            <div className={`inline-flex items-center justify-center px-2.5 py-1 rounded border ${
+                                                (c.ia_score || 0) >= 90 
+                                                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                                                : (c.ia_score || 0) >= 70
+                                                ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                                                : 'bg-slate-800/50 border-slate-700 text-slate-400'
+                                            }`}>
+                                                <span className="text-xs font-bold">{c.ia_score || 0}</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <span className="text-xs text-slate-500 font-medium">
+                                                {simpleDate(c.fecha)}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onSelect(c.id);
+                                                }}
+                                                className="px-3 py-1.5 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 hover:border-blue-500/50 text-blue-400 hover:text-blue-300 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 group shadow-sm hover:shadow-blue-500/20"
+                                            >
+                                                <Eye size={14} className="group-hover:scale-110 transition-transform"/>
+                                                Ver
+                                                <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform"/>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                </tbody>
+                            </table>
                         </div>
-                        );
-                    })
+                        {/* Botón Cargar Más */}
+                        {hasMore && (
+                            <div className="p-4 border-t border-slate-800 flex justify-center bg-slate-900">
+                                <button
+                                    onClick={cargarMas}
+                                    disabled={loadingMore}
+                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:cursor-wait text-white text-sm font-bold rounded-lg transition-all flex items-center gap-2"
+                                >
+                                    {loadingMore ? (
+                                        <>
+                                            <Loader2 size={16} className="animate-spin"/> Cargando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            Cargar más candidatos
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
         </div>
@@ -934,9 +1126,9 @@ function ManageView({ candidates, onSelect, currentUser }) {
                                     <tr key={c.id} onClick={() => onSelect(c.id)} className="hover:bg-slate-800/60 cursor-pointer transition-colors group">
                                         <td className="px-6 py-3">
                                             <div className="flex items-center gap-3">
-                                                <Avatar name={c.nombre} />
+                                                <Avatar name={normalizarNombre(c.nombre)} />
                                                 <div>
-                                                    <span className="font-bold text-slate-200 text-sm group-hover:text-white">{c.nombre}</span>
+                                                    <span className="font-bold text-slate-200 text-sm group-hover:text-white">{normalizarNombre(c.nombre)}</span>
                                                     <p className="text-[10px] text-slate-500">{c.email}</p>
                                                 </div>
                                             </div>
@@ -1346,6 +1538,7 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
     const [editorData, setEditorData] = React.useState(null);
     const [loading, setLoading] = React.useState(false);
     const [isGenerating, setIsGenerating] = React.useState(false);
+    const [generatingReportId, setGeneratingReportId] = React.useState(null); // Estado para rastrear qué candidato está generando informe
     
     // ESTADOS PARA CARGA MANUAL
     const [showManual, setShowManual] = React.useState(false);
@@ -1487,6 +1680,10 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
     // --- ABRIR CANDIDATO DEL PIPELINE ---
     const handleOpenCandidate = async (candidate) => {
         setLoading(true);
+        // Si no tiene informe, activamos el estado de carga en el botón
+        if (!candidate.informe_final_data) {
+            setGeneratingReportId(candidate.id);
+        }
         try {
             let initialData = candidate.informe_final_data;
             if (!initialData) {
@@ -1516,6 +1713,7 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
             alert("Error cargando datos del candidato.");
         } finally {
             setLoading(false);
+            setGeneratingReportId(null); // Limpiar el estado de carga del botón
         }
     };
 
@@ -1820,10 +2018,10 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                     )}
                 </div>
                 <button 
-                    onClick={() => setShowManual(!showManual)}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all border ${showManual ? 'bg-amber-500/10 border-amber-500/50 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
+                    disabled
+                    className="px-4 py-2 rounded-lg text-xs font-bold transition-all border bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed opacity-50"
                 >
-                    {showManual ? "✕ CERRAR MODO MANUAL" : "⚡ MODO MANUAL"}
+                    Método incorrecto
                 </button>
             </div>
 
@@ -1933,9 +2131,22 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                                     ) : (
                                         <button 
                                             onClick={() => handleOpenCandidate(c)}
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
+                                            disabled={generatingReportId === c.id}
+                                            className={`px-4 py-2 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2 ${
+                                                generatingReportId === c.id 
+                                                    ? 'bg-blue-700 cursor-wait opacity-75' 
+                                                    : 'bg-blue-600 hover:bg-blue-500'
+                                            }`}
                                         >
-                                            <FileText size={14}/> Generar Informe
+                                            {generatingReportId === c.id ? (
+                                                <>
+                                                    <Loader2 size={14} className="animate-spin"/> Generando...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <FileText size={14}/> Generar Informe
+                                                </>
+                                            )}
                                         </button>
                                     )}
                                 </div>
@@ -2026,7 +2237,8 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
                 try {
                     // Recargar datos del candidato desde la API
                     const apiClient = window.api || api;
-                    const lista = await apiClient.candidates.list();
+                    const data = await apiClient.candidates.list();
+                    const lista = data.candidatos || data || [];
                     const candidatoActualizado = lista.find(c => c.id === candidate.id);
                     
                     if (candidatoActualizado) {
@@ -2259,8 +2471,8 @@ Equipo de Selección | Global Talent Connections`
 
     // 5. Pasar a Informe (Solo si cumple requisitos)
     const handleMoveToReport = () => {
-        if (!meetLink || form2Status !== 'received' || finalResult !== 'qualified') {
-            return alert("⚠️ Para avanzar, debes completar: Link de Meet, Formulario Recibido y Calificación Positiva.");
+        if (!meetLink || form2Status !== 'received' || !candidate.transcripcion_entrevista || finalResult !== 'qualified') {
+            return alert("⚠️ Para avanzar, debes completar: Link de Meet, Formulario 2 Recibido, Transcripción Analizada y Calificación Positiva.");
         }
         onUpdate(candidate.id, { 
             stage: 'stage_3', 
@@ -2268,8 +2480,13 @@ Equipo de Selección | Global Talent Connections`
         });
     };
 
-    // Validación visual para habilitar botón
-    const isStage2Complete = meetLink && form2Status === 'received' && finalResult === 'qualified';
+    // Validación para habilitar botones de Decisión Final
+    // Requiere: Formulario 2 recibido Y transcripción analizada
+    const canMakeDecision = form2Status === 'received' && !!candidate.transcripcion_entrevista;
+    
+    // Validación visual para habilitar botón "Pasar a Informe"
+    // Requiere: Link de Meet, Formulario 2 recibido, Transcripción analizada Y Calificado
+    const isStage2Complete = meetLink && form2Status === 'received' && !!candidate.transcripcion_entrevista && finalResult === 'qualified';
 
     return (
         <div className="flex flex-col h-full animate-in slide-in-from-right duration-300 pb-10 max-w-7xl mx-auto px-4 relative">
@@ -2316,7 +2533,7 @@ Equipo de Selección | Global Talent Connections`
                         <ArrowRight className="rotate-180" size={24} />
                     </button>
                     <div>
-                        <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+                        <h1 className="text-2xl font-bold text-white flex items-center gap-3 flex-wrap">
                             {candidate.nombre}
                             {candidate.assignedTo && (
                                 <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/30 uppercase">
@@ -2324,7 +2541,15 @@ Equipo de Selección | Global Talent Connections`
                                 </span>
                             )}
                         </h1>
-                        <p className="text-sm text-slate-400">{candidate.puesto}</p>
+                        <p className="text-sm text-slate-400 flex items-center gap-2">
+                            {candidate.puesto}
+                            {candidate.email && (
+                                <>
+                                    <span className="text-slate-500">•</span>
+                                    <span className="text-slate-400">{candidate.email}</span>
+                                </>
+                            )}
+                        </p>
                     </div>
                 </div>
 
@@ -2686,26 +2911,37 @@ Equipo de Selección | Global Talent Connections`
                                        </div>
 
 
-                                       {/* DECISIÓN DEL RECLUTADOR (SOLO APARECE SI ESTÁ RECIBIDO O ENVIADO) */}
-                                       <div className={`transition-all duration-500 ${form2Status === 'pending' ? 'opacity-50 pointer-events-none grayscale' : 'opacity-100'}`}>
-                                           <label className="text-[10px] text-slate-500 font-bold uppercase mb-3 block">Decisión Final</label>
+                                       {/* DECISIÓN DEL RECLUTADOR (SOLO SE HABILITA SI ESTÁ RECIBIDO Y TRANSCRIPCIÓN ANALIZADA) */}
+                                       <div className={`transition-all duration-500 ${!canMakeDecision ? 'opacity-50 pointer-events-none grayscale' : 'opacity-100'}`}>
+                                           <label className="text-[10px] text-slate-500 font-bold uppercase mb-3 block">
+                                               Decisión Final
+                                               {!canMakeDecision && (
+                                                   <span className="ml-2 text-amber-500 text-[9px] normal-case">(Requiere: Formulario 2 recibido y Transcripción analizada)</span>
+                                               )}
+                                           </label>
                                            <div className="grid grid-cols-2 gap-4">
                                                <button
                                                    onClick={() => updateChecklist('result', 'qualified')}
+                                                   disabled={!canMakeDecision}
                                                    className={`py-3 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                                                        finalResult === 'qualified'
                                                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-900/30 ring-1 ring-emerald-400'
-                                                       : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-emerald-500/50 hover:text-emerald-400'
+                                                       : canMakeDecision
+                                                       ? 'bg-slate-900 text-slate-400 border-slate-700 hover:border-emerald-500/50 hover:text-emerald-400'
+                                                       : 'bg-slate-900 text-slate-400 border-slate-700 cursor-not-allowed opacity-50'
                                                    }`}
                                                >
                                                    <ThumbsUp size={16}/> Calificado
                                                </button>
                                                <button
                                                    onClick={() => updateChecklist('result', 'disqualified')}
+                                                   disabled={!canMakeDecision}
                                                    className={`py-3 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                                                        finalResult === 'disqualified'
                                                        ? 'bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-900/30 ring-1 ring-rose-400'
-                                                       : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-rose-500/50 hover:text-rose-400'
+                                                       : canMakeDecision
+                                                       ? 'bg-slate-900 text-slate-400 border-slate-700 hover:border-rose-500/50 hover:text-rose-400'
+                                                       : 'bg-slate-900 text-slate-400 border-slate-700 cursor-not-allowed opacity-50'
                                                    }`}
                                                >
                                                    <ThumbsDown size={16}/> No Calificado
@@ -2887,7 +3123,9 @@ function App() {
         setLoading(true);
         try {
             const data = await api.candidates.list();
-            setCandidates(data);
+            // Manejar nuevo formato con paginación
+            const candidatos = data.candidatos || data || [];
+            setCandidates(candidatos);
             setInit(true);
         } catch (error) {
             console.error("❌ Error cargando datos:", error);

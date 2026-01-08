@@ -58,12 +58,23 @@ const api = {
                 }
             },
             candidates: {
-                list: async () => {
+                list: async (options = {}) => {
                     try {
-                        const res = await fetch(`${API_URL}/buscar`);
+                        // Construir query params para paginación y búsqueda
+                        const params = new URLSearchParams();
+                        if (options.limit) params.append('limit', options.limit);
+                        if (options.startAfter) params.append('startAfter', options.startAfter);
+                        if (options.q) params.append('q', options.q);
+                        
+                        const queryString = params.toString();
+                        const url = queryString ? `${API_URL}/buscar?${queryString}` : `${API_URL}/buscar`;
+                        
+                        const res = await fetch(url);
                         const data = await res.json();
                         const lista = data.resultados || [];
-                        return lista.map(c => ({
+                        
+                        // Mapear candidatos
+                        const candidatos = lista.map(c => ({
                         id: c.id,
                         nombre: c.nombre || "Sin Nombre",
                         email: c.email || "S/E",
@@ -103,9 +114,17 @@ const api = {
                         process_step_2_form: c.process_step_2_form || null,
                         process_step_3_result: c.process_step_3_result || null
                     }));
+                    
+                    // Devolver con información de paginación
+                    return {
+                        candidatos: candidatos,
+                        hasMore: data.hasMore || false,
+                        lastDoc: data.lastDoc || null,
+                        total: data.total || candidatos.length
+                    };
                     } catch (error) {
                         console.error("Error cargando:", error);
-                        return []; 
+                        return { candidatos: [], hasMore: false, lastDoc: null, total: 0 }; 
                     }
                 },
                 // 🚀 EL ARREGLO DEL BOTÓN (USANDO PATCH)
@@ -196,6 +215,26 @@ const api = {
                             zoho_form1: { status: "rojo", razon: "Error de conexión" },
                             zoho_form2: { status: "rojo", razon: "Error de conexión" }
                         };
+                    }
+                }
+            },
+            email: {
+                send: async (to, subject, htmlBody, tipo = 'general') => {
+                    try {
+                        const headers = await getHeaders({ 'Content-Type': 'application/json' });
+                        const res = await fetch(`${API_URL}/enviar-email`, {
+                            method: 'POST',
+                            headers: headers,
+                            body: JSON.stringify({ to, subject, htmlBody, tipo })
+                        });
+                        const data = await res.json();
+                        if (!res.ok) {
+                            throw new Error(data.error || 'Error al enviar email');
+                        }
+                        return data;
+                    } catch (e) {
+                        console.error("Error enviando email:", e);
+                        return { success: false, error: e.message };
                     }
                 }
             }
