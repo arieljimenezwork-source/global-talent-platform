@@ -1,4 +1,4 @@
-.# Archivos de sistema y dependencias
+# Archivos de sistema y dependencias
 node_modules/
 .DS_Store
 
@@ -7,3 +7,9 @@ node_modules/
 firebase-key.json
 serviceAccountKey.json
 *.log
+
+# Backups y scripts de mantenimiento (no necesarios en producción)
+backups/
+backup-firestore.js
+verificar-colecciones.js
+eliminar-colecciones.js
