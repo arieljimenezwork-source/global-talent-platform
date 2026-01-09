@@ -3021,18 +3021,43 @@ Equipo de Selección | Global Talent Connections`
 // --- COMPONENTE LOGIN (PORTERÍA DE ACCESO) ---
 const LoginView = ({ onLogin }) => {
     const [isAuthenticating, setIsAuthenticating] = useState(false);
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [passwordInput, setPasswordInput] = useState('');
+    const [errorMessage, setErrorMessage] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const team = [
-        { name: "Gladymar", role: "Recursos Humanos" },
-        { name: "Sandra", role: "Recursos Humanos" },
-        { name: "Viviana", role: "Recursos Humanos" },
-        { name: "Pilar", role: "Ventas / Closer" },
-        { name: "Norma", role: "Control de Calidad" },
-        { name: "Daniel (CEO)", role: "Dirección" },
-        { name: "Admin", role: "Superusuario" }
+        { name: "Gladymar", role: "Recursos Humanos", password: "Gladymar58741" },
+        { name: "Sandra", role: "Recursos Humanos", password: "Sandra39284" },
+        { name: "Viviana", role: "Recursos Humanos", password: "Viviana74629" },
+        { name: "Pilar", role: "Ventas / Closer", password: "Pilar18563" },
+        { name: "Javier", role: "Marketing", password: "Javier42957" },
+        { name: "Norma", role: "Control de Calidad", password: "Norma63841" },
+        { name: "Daniel (CEO)", role: "Dirección", password: "Daniel29476" },
+        { name: "Admin", role: "Superusuario", password: "Admin51783" }
     ];
     
-    const handleLogin = async (userName) => {
+    const handleUserClick = (user) => {
+        setSelectedUser(user);
+        setPasswordInput('');
+        setErrorMessage('');
+        setShowPassword(false);
+    };
+    
+    const handlePasswordSubmit = async (e) => {
+        e.preventDefault();
+        
+        if (!selectedUser) return;
+        
+        // Validar contraseña
+        if (passwordInput !== selectedUser.password) {
+            setErrorMessage('Contraseña incorrecta. Intentá de nuevo.');
+            setPasswordInput('');
+            return;
+        }
+        
+        // Contraseña correcta, proceder con login
         setIsAuthenticating(true);
+        setErrorMessage('');
         
         try {
             // Intentar autenticación con Firebase si está disponible
@@ -3058,8 +3083,17 @@ const LoginView = ({ onLogin }) => {
         } finally {
             setIsAuthenticating(false);
             // Siempre llamar a onLogin con el nombre (mantiene compatibilidad)
-            onLogin(userName);
+            onLogin(selectedUser.name);
+            setSelectedUser(null);
+            setPasswordInput('');
         }
+    };
+    
+    const handleCloseModal = () => {
+        setSelectedUser(null);
+        setPasswordInput('');
+        setErrorMessage('');
+        setShowPassword(false);
     };
     
     return (
@@ -3081,8 +3115,8 @@ const LoginView = ({ onLogin }) => {
                     {team.map(user => (
                         <button 
                             key={user.name}
-                            onClick={() => handleLogin(user.name)}
-                            disabled={isAuthenticating}
+                            onClick={() => handleUserClick(user)}
+                            disabled={isAuthenticating || selectedUser}
                             className="w-full p-4 rounded-xl bg-slate-800 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 transition-all group flex items-center justify-between disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <div className="flex items-center gap-3">
@@ -3099,6 +3133,90 @@ const LoginView = ({ onLogin }) => {
                     ))}
                 </div>
             </div>
+
+            {/* Modal de Contraseña */}
+            {selectedUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl relative animate-in zoom-in duration-200">
+                        <button 
+                            onClick={handleCloseModal}
+                            className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"
+                            disabled={isAuthenticating}
+                        >
+                            <LucideIcon name="X" size={20} />
+                        </button>
+                        
+                        <div className="mb-6">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-lg">
+                                    {selectedUser.name.charAt(0)}
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">{selectedUser.name}</h3>
+                                    <p className="text-xs text-slate-400 uppercase tracking-wider">{selectedUser.role}</p>
+                                </div>
+                            </div>
+                            <p className="text-sm text-slate-400 mt-4">Ingresá tu contraseña para continuar</p>
+                        </div>
+
+                        <form onSubmit={handlePasswordSubmit}>
+                            <div className="mb-4">
+                                <div className="relative">
+                                    <input
+                                        type={showPassword ? "text" : "password"}
+                                        value={passwordInput}
+                                        onChange={(e) => {
+                                            setPasswordInput(e.target.value);
+                                            setErrorMessage('');
+                                        }}
+                                        placeholder="Contraseña"
+                                        autoFocus
+                                        disabled={isAuthenticating}
+                                        className="w-full px-4 py-3 pr-12 bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        disabled={isAuthenticating}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors disabled:opacity-50"
+                                        aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                                    >
+                                        {showPassword ? (
+                                            <LucideIcon name="EyeOff" size={20} />
+                                        ) : (
+                                            <LucideIcon name="Eye" size={20} />
+                                        )}
+                                    </button>
+                                </div>
+                                {errorMessage && (
+                                    <p className="text-sm text-rose-500 mt-2 flex items-center gap-1">
+                                        <LucideIcon name="AlertCircle" size={16} />
+                                        {errorMessage}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={handleCloseModal}
+                                    disabled={isAuthenticating}
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isAuthenticating || !passwordInput}
+                                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    {isAuthenticating ? 'Ingresando...' : 'Ingresar'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

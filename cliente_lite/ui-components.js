@@ -42,11 +42,11 @@ const LucideIcon = ({ name, size = 24, className, ...props }) => {
  // Lista de iconos requeridos (Agregué 'Sparkles' para el análisis)
  const iconList = [
     'LayoutDashboard', 'Users', 'FileText', 'HelpCircle', 'Settings', 
-    'Search', 'CheckCircle', 'XCircle', 'ChevronRight', 'Filter', 
+    'Search', 'CheckCircle', 'XCircle', 'X', 'ChevronRight', 'Filter', 
     'Clock', 'Calendar', 'FileJson', 'RefreshCw', 'Send', 'UserPlus', 
-    'Video', 'ExternalLink', 'AlertTriangle', 'MessageSquare', 'ArrowRight',
+    'Video', 'ExternalLink', 'AlertTriangle', 'AlertCircle', 'MessageSquare', 'ArrowRight',
     'Briefcase', 'Lock', 'UserCheck', 'Loader2', 'Trash2', 'Undo2', 'MoreVertical',
-    'CheckSquare', 'Printer', 'Eye', 'Mail', 'Activity', 'Server', 'Database', 'Globe',
+    'CheckSquare', 'Printer', 'Eye', 'EyeOff', 'Mail', 'Activity', 'Server', 'Database', 'Globe',
     'ThumbsUp', 'ThumbsDown', 'Link', 'Download', 'Share2', 'History',
     'BarChart2', 'List', 'Sparkles', 'Save'
 ];

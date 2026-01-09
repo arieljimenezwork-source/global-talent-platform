@@ -193,10 +193,7 @@ app.use([
   "/cv-censurado-url/:filename",
   "/agendar-cita",
   "/contratar",
-  "/contratados",
   "/descartar",
-  "/descartados",
-  "/en-proceso",
   "/analyze",
   "/cv-censurado-url"
 ], verifyToken);
@@ -277,15 +274,32 @@ function sanitizeForAI(text) {
 
 /////////////////// obtiene candidatos  a no mostrar ///////////////////////
 async function obtenerCandidatosBloqueados() {
-  // QUITAMOS "en_proceso" para que aparezcan en el buscador
-  const colecciones = ["contratados", "descartados"]; 
+  // Solo leer de CVs_staging con stage = 'trash' o 'stage_3' (contratados)
   const bloqueados = new Set();
-
-  for (const col of colecciones) {
-    const snap = await firestore.collection(col).get();
+  
+  try {
+    const snap = await firestore.collection(MAIN_COLLECTION)
+      .where("stage", "in", ["trash", "stage_3"])
+      .get();
+    
     snap.forEach((doc) => {
       bloqueados.add(doc.id.trim().toLowerCase());
     });
+  } catch (error) {
+    // Si falla la query con "in", hacer dos queries separadas
+    try {
+      const trashSnap = await firestore.collection(MAIN_COLLECTION)
+        .where("stage", "==", "trash")
+        .get();
+      trashSnap.forEach((doc) => bloqueados.add(doc.id.trim().toLowerCase()));
+      
+      const contratadosSnap = await firestore.collection(MAIN_COLLECTION)
+        .where("stage", "==", "stage_3")
+        .get();
+      contratadosSnap.forEach((doc) => bloqueados.add(doc.id.trim().toLowerCase()));
+    } catch (e) {
+      console.warn("Error obteniendo candidatos bloqueados:", e);
+    }
   }
 
   return bloqueados;
@@ -1765,7 +1779,8 @@ app.get("/entrevistas/:nombre/puntaje", async (req, res) => {
   }
 });
 /////// ENDPOINT: Obtener motivos de los candidatos (mejorado)///7
-
+// ❌ DESHABILITADO - cv_revisados es una colección vieja, ahora todo está en CVs_staging
+/*
 app.get('/motivos', async (req, res) => {
   try {
     const { nombre = '', estado = '' } = req.query;
@@ -1843,6 +1858,7 @@ app.get('/motivos', async (req, res) => {
       .json({ error: 'Error al obtener los motivos de revisión' });
   }
 });
+*/
 
 //////////mostrar carpetas de la bbase de datos////////
 
@@ -1881,15 +1897,13 @@ async function listFilesWithSignedUrls(prefix, { nombre } = {}) {
   return out;
 }
 
-// 🔹 Obtiene los nombres de archivos ya clasificados en Firestore
+// 🔹 Obtiene los nombres de archivos ya clasificados en Firestore (SOLO CVs_staging)
 async function obtenerNombresArchivados() {
-  const colecciones = ['en_proceso', 'contratados', 'descartados', 'favoritos'];
   const nombres = new Set();
 
-  for (const col of colecciones) {
-    const snap = await firestore.collection(col).get(); // 🔹 usa tu instancia global de Firestore
-    if (snap.empty) continue;
-
+  try {
+    const snap = await firestore.collection(MAIN_COLLECTION).get();
+    
     snap.forEach(doc => {
       const data = doc.data();
 
@@ -1898,15 +1912,21 @@ async function obtenerNombresArchivados() {
         nombres.add(data.nombre_archivo.trim().toLowerCase());
       }
 
-      // Caso especial: colección "favoritos" (array de cvs)
-      if (Array.isArray(data.cvs)) {
-        data.cvs.forEach(nombre => {
-          if (nombre && typeof nombre === 'string') {
-            nombres.add(nombre.trim().toLowerCase());
-          }
-        });
+      // También por email si existe
+      if (data.applicant_email) {
+        nombres.add(data.applicant_email.trim().toLowerCase());
+      }
+      
+      // También por nombre del archivo CV si existe
+      if (data.cv_storage_path) {
+        const nombreArchivo = data.cv_storage_path.split('/').pop();
+        if (nombreArchivo) {
+          nombres.add(nombreArchivo.trim().toLowerCase());
+        }
       }
     });
+  } catch (error) {
+    console.warn("Error obteniendo nombres archivados:", error);
   }
 
   console.log('🔥 Archivos ya clasificados:', Array.from(nombres));
@@ -2339,6 +2359,9 @@ app.get("/firebase-storage/archivos", async (req, res) => {
 //////////////////////// botones para mover entre listas ///////////////////////////////////
 
 /////////////////////////////////////  LISTAS: en_proceso / contratados / descartados  ////////////////////////
+// ❌ DESHABILITADO - Estas colecciones son viejas, ahora todo está en CVs_staging
+// Los endpoints /listas y /listas/mover están comentados porque usan colecciones viejas
+/*
 const LIST_COLLECTIONS = ["en_proceso", "contratados", "descartados"];
 
 function ensureListName(name) {
@@ -2348,11 +2371,7 @@ function ensureListName(name) {
   return name;
 }
 
-/**
- * GET /listas
- * query:
- * - lista (opcional)
- */
+// GET /listas - query: lista (opcional)
 app.get("/listas", async (req, res) => {
   try {
     const { lista } = req.query;
@@ -2489,6 +2508,7 @@ app.post("/listas/mover", async (req, res) => {
     res.status(500).json({ error: "Error moviendo candidato" });
   }
 });
+*/
 
 
 ///////////////////////boton buscar candidato//////////////////////
@@ -2541,12 +2561,36 @@ async function limpiarBloqueosExpirados() {
   }
 }
 async function obtenerCandidatosMovidos() {
-  const estados = ["en_proceso", "contratados", "descartados"];
+  // Solo candidatos que NO están en stage_1 (ya fueron procesados)
   const movidos = new Set();
-
-  for (const est of estados) {
-    const snap = await firestore.collection(est).get();
+  
+  try {
+    // Obtener candidatos en stage_2, stage_3 o trash
+    const snap = await firestore.collection(MAIN_COLLECTION)
+      .where("stage", "in", ["stage_2", "stage_3", "trash"])
+      .get();
+    
     snap.forEach(d => movidos.add(d.id));
+  } catch (error) {
+    // Si falla la query con "in", hacer queries separadas
+    try {
+      const stage2Snap = await firestore.collection(MAIN_COLLECTION)
+        .where("stage", "==", "stage_2")
+        .get();
+      stage2Snap.forEach(d => movidos.add(d.id));
+      
+      const stage3Snap = await firestore.collection(MAIN_COLLECTION)
+        .where("stage", "==", "stage_3")
+        .get();
+      stage3Snap.forEach(d => movidos.add(d.id));
+      
+      const trashSnap = await firestore.collection(MAIN_COLLECTION)
+        .where("stage", "==", "trash")
+        .get();
+      trashSnap.forEach(d => movidos.add(d.id));
+    } catch (e) {
+      console.warn("Error obteniendo candidatos movidos:", e);
+    }
   }
 
   return movidos;
@@ -2602,7 +2646,7 @@ app.get("/panel/metrics", async (req, res) => {
     hoy.setHours(0, 0, 0, 0);
 
     /* ===========================================================
-       🔵 MÉTRICAS FINALES
+       🔵 MÉTRICAS FINALES (SOLO CVs_staging)
        =========================================================== */
 
     const totals = {
@@ -2616,50 +2660,63 @@ app.get("/panel/metrics", async (req, res) => {
     const porDia = {};
 
     /* ===========================================================
-       🔵 1. LEER APROBADOS / RECHAZADOS DESDE cv_revisados
+       🔵 1. LEER MÉTRICAS DESDE CVs_staging (ÚNICA FUENTE)
        =========================================================== */
 
-    const revisadosSnap = await firestore.collection("cv_revisados").get();
+    const stagingSnap = await firestore.collection(MAIN_COLLECTION).get();
 
-    revisadosSnap.forEach((doc) => {
+    stagingSnap.forEach((doc) => {
       const data = doc.data();
       if (!data) return;
 
-      const estado = (data.estado || "").toLowerCase();
+      const stage = data.stage || 'stage_1';
+      const statusInterno = data.status_interno || 'new';
 
-      if (estado === "aprobado") totals.aprobados++;
-      if (estado === "rechazado") totals.rechazados++;
+      // Contar por stage
+      if (stage === 'stage_2') totals.enProceso++;
+      if (stage === 'stage_3') totals.contratados++;
+      if (stage === 'trash') totals.descartados++;
 
-      const fechaRef = data.fecha_movimiento || data.creado_en;
-      if (!fechaRef) return;
+      // Contar aprobados/rechazados basado en historial
+      const historial = data.historial_movimientos || [];
+      historial.forEach((evento) => {
+        if (evento.event === "Aprobado a Gestión") totals.aprobados++;
+        if (evento.event === "Movido a Papelera") totals.rechazados++;
 
-      const fecha = fechaRef.toDate().toISOString().split("T")[0];
+        // Agrupar por día
+        if (evento.date) {
+          const fecha = new Date(evento.date).toISOString().split("T")[0];
+          if (!porDia[fecha]) {
+            porDia[fecha] = {
+              enProceso: 0,
+              contratados: 0,
+              descartados: 0,
+              aprobados: 0,
+              rechazados: 0,
+            };
+          }
+          if (evento.event === "Aprobado a Gestión") porDia[fecha].aprobados++;
+          if (evento.event === "Movido a Papelera") porDia[fecha].rechazados++;
+        }
+      });
 
-      if (!porDia[fecha]) {
-        porDia[fecha] = {
-          enProceso: 0,
-          contratados: 0,
-          descartados: 0,
-          aprobados: 0,
-          rechazados: 0,
-        };
+      // Agrupar stages por día de actualización
+      if (data.actualizado_en) {
+        const fecha = new Date(data.actualizado_en).toISOString().split("T")[0];
+        if (!porDia[fecha]) {
+          porDia[fecha] = {
+            enProceso: 0,
+            contratados: 0,
+            descartados: 0,
+            aprobados: 0,
+            rechazados: 0,
+          };
+        }
+        if (stage === 'stage_2') porDia[fecha].enProceso++;
+        if (stage === 'stage_3') porDia[fecha].contratados++;
+        if (stage === 'trash') porDia[fecha].descartados++;
       }
-
-      if (estado === "aprobado") porDia[fecha].aprobados++;
-      if (estado === "rechazado") porDia[fecha].rechazados++;
     });
-
-    /* ===========================================================
-       🔵 2. LEER LISTAS REALES
-       =========================================================== */
-
-    const enProcesoSnap = await firestore.collection("en_proceso").get();
-    const contratadosSnap = await firestore.collection("contratados").get();
-    const descartadosSnap = await firestore.collection("descartados").get();
-
-    totals.enProceso = enProcesoSnap.size;
-    totals.contratados = contratadosSnap.size;
-    totals.descartados = descartadosSnap.size;
 
     /* ===========================================================
        🔵 3. MÉTRICAS POR USUARIO (consultas y movimientos)
