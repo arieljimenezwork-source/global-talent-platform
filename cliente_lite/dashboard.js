@@ -1101,6 +1101,50 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
 
 function ManageView({ candidates, onSelect, currentUser }) {
     const stage2 = candidates.filter(c => c.stage === 'stage_2');
+    
+    // 🔧 FUNCIÓN PARA DETERMINAR ESTADO REAL DEL CANDIDATO (Dinámico)
+    const getEstadoReal = (candidato) => {
+        // Prioridad 1: Si está calificado y listo para informe
+        if (candidato.process_step_3_result === 'qualified') {
+            return { label: 'Calificado', type: 'success' };
+        }
+        
+        // Prioridad 2: Si tiene transcripción analizada
+        if (candidato.transcripcion_entrevista) {
+            // Si además tiene Form2 recibido
+            if (candidato.process_step_2_form === 'received' || candidato.skip_form2) {
+                return { label: 'Listo para Calificar', type: 'success' }; // Verde
+            }
+            // Si tiene Form2 enviado pero no recibido
+            if (candidato.process_step_2_form === 'sent') {
+                return { label: 'Esperando Form2', type: 'warning' }; // Amarillo
+            }
+            // Solo tiene entrevista realizada
+            return { label: 'Entrevista Realizada', type: 'success' };
+        }
+        
+        // Prioridad 3: Si tiene Form2 recibido pero no entrevista
+        if (candidato.process_step_2_form === 'received' || candidato.skip_form2) {
+            return { label: 'Form2 Recibido', type: 'blue' }; // Azul
+        }
+        
+        // Prioridad 4: Si tiene Form2 enviado
+        if (candidato.process_step_2_form === 'sent') {
+            return { label: 'Esperando Form2', type: 'warning' }; // Amarillo
+        }
+        
+        // Prioridad 5: Si tiene meet_link (entrevista agendada)
+        if (candidato.meet_link) {
+            return { label: 'Entrevista Agendada', type: 'purple' }; // Lila
+        }
+        
+        // Prioridad 6: Estado por defecto según status_interno (Pendiente Entrevista)
+        return { 
+            label: getStatusLabel(candidato.status_interno), 
+            type: 'orange' // Naranja
+        };
+    };
+    
     return (
         <div className="h-full flex flex-col max-w-7xl mx-auto px-4">
             <div className="mb-6">
@@ -1122,34 +1166,37 @@ function ManageView({ candidates, onSelect, currentUser }) {
                         </thead>
                         <tbody className="divide-y divide-slate-800/50">
                             {stage2.length > 0 ? (
-                                stage2.map(c => (
-                                    <tr key={c.id} onClick={() => onSelect(c.id)} className="hover:bg-slate-800/60 cursor-pointer transition-colors group">
-                                        <td className="px-6 py-3">
-                                            <div className="flex items-center gap-3">
-                                                <Avatar name={normalizarNombre(c.nombre)} />
-                                                <div>
-                                                    <span className="font-bold text-slate-200 text-sm group-hover:text-white">{normalizarNombre(c.nombre)}</span>
-                                                    <p className="text-[10px] text-slate-500">{c.email}</p>
+                                stage2.map(c => {
+                                    const estado = getEstadoReal(c);
+                                    return (
+                                        <tr key={c.id} onClick={() => onSelect(c.id)} className="hover:bg-slate-800/60 cursor-pointer transition-colors group">
+                                            <td className="px-6 py-3">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar name={normalizarNombre(c.nombre)} />
+                                                    <div>
+                                                        <span className="font-bold text-slate-200 text-sm group-hover:text-white">{normalizarNombre(c.nombre)}</span>
+                                                        <p className="text-[10px] text-slate-500">{c.email}</p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-3"><span className="text-xs text-slate-400">{c.puesto}</span></td>
-                                        <td className="px-6 py-3"><Badge type="blue">{getStatusLabel(c.status_interno)}</Badge></td>
-                                        <td className="px-6 py-3">
-                                            {c.assignedTo ? (
-                                                <div className="flex items-center gap-2">
-                                                    <Avatar name={c.assignedTo} size="sm"/>
-                                                    <span className={`text-xs ${c.assignedTo === currentUser ? 'text-blue-400 font-bold' : 'text-slate-500'}`}>
-                                                        {c.assignedTo}
-                                                    </span>
-                                                </div>
-                                            ) : <span className="text-xs text-slate-600 italic">Sin asignar</span>}
-                                        </td>
-                                        <td className="px-6 py-3 text-right">
-                                            <ChevronRight size={16} className="ml-auto text-slate-600 group-hover:text-white transition-transform group-hover:translate-x-1"/>
-                                        </td>
-                                    </tr>
-                                ))
+                                            </td>
+                                            <td className="px-6 py-3"><span className="text-xs text-slate-400">{c.puesto}</span></td>
+                                            <td className="px-6 py-3"><Badge type={estado.type}>{estado.label}</Badge></td>
+                                            <td className="px-6 py-3">
+                                                {c.assignedTo ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <Avatar name={c.assignedTo} size="sm"/>
+                                                        <span className={`text-xs ${c.assignedTo === currentUser ? 'text-blue-400 font-bold' : 'text-slate-500'}`}>
+                                                            {c.assignedTo}
+                                                        </span>
+                                                    </div>
+                                                ) : <span className="text-xs text-slate-600 italic">Sin asignar</span>}
+                                            </td>
+                                            <td className="px-6 py-3 text-right">
+                                                <ChevronRight size={16} className="ml-auto text-slate-600 group-hover:text-white transition-transform group-hover:translate-x-1"/>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             ) : (
                                 <tr>
                                     <td colSpan="5" className="px-6 py-12 text-center text-slate-500 text-sm italic">
@@ -2166,6 +2213,7 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     const [newVideoLink, setNewVideoLink] = useState(candidate.video_url || "");
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isAnalyzingVideo, setIsAnalyzingVideo] = useState(false);
+    const [isReparandoCV, setIsReparandoCV] = useState(false);
     const [activeSubTab, setActiveSubTab] = useState('gestion');
     const [showResenaCV, setShowResenaCV] = useState(false);
 
@@ -2469,10 +2517,22 @@ Equipo de Selección | Global Talent Connections`
         onUpdate(candidate.id, payload);
     };
 
+    // ==========================================================================
+    // 🔧 SOLUCIÓN TEMPORAL: Saltar Form2 para carga manual (con botón manual)
+    // ==========================================================================
+    // Para REVERTIR: Comentar las 2 líneas siguientes y restaurar validaciones originales
+    const esCargaManual = candidate.origen === 'carga_manual' || candidate.origen === 'test_completo' || candidate.origen === 'test_flujo_completo';
+    const form2Completo = form2Status === 'received' || candidate.skip_form2 === true;
+    // ==========================================================================
+
     // 5. Pasar a Informe (Solo si cumple requisitos)
     const handleMoveToReport = () => {
-        if (!meetLink || form2Status !== 'received' || !candidate.transcripcion_entrevista || finalResult !== 'qualified') {
-            return alert("⚠️ Para avanzar, debes completar: Link de Meet, Formulario 2 Recibido, Transcripción Analizada y Calificación Positiva.");
+        // 🔧 TEMPORAL: Validación modificada para permitir saltar Form2 en carga manual
+        if (!meetLink || !form2Completo || !candidate.transcripcion_entrevista || finalResult !== 'qualified') {
+            const mensaje = candidate.skip_form2
+                ? "⚠️ Para avanzar, debes completar: Link de Meet, Transcripción Analizada y Calificación Positiva."
+                : "⚠️ Para avanzar, debes completar: Link de Meet, Formulario 2 Recibido, Transcripción Analizada y Calificación Positiva.";
+            return alert(mensaje);
         }
         onUpdate(candidate.id, { 
             stage: 'stage_3', 
@@ -2481,12 +2541,14 @@ Equipo de Selección | Global Talent Connections`
     };
 
     // Validación para habilitar botones de Decisión Final
-    // Requiere: Formulario 2 recibido Y transcripción analizada
-    const canMakeDecision = form2Status === 'received' && !!candidate.transcripcion_entrevista;
+    // 🔧 TEMPORAL: Modificado para permitir saltar Form2 en carga manual
+    // ORIGINAL: const canMakeDecision = form2Status === 'received' && !!candidate.transcripcion_entrevista;
+    const canMakeDecision = form2Completo && !!candidate.transcripcion_entrevista;
     
     // Validación visual para habilitar botón "Pasar a Informe"
-    // Requiere: Link de Meet, Formulario 2 recibido, Transcripción analizada Y Calificado
-    const isStage2Complete = meetLink && form2Status === 'received' && !!candidate.transcripcion_entrevista && finalResult === 'qualified';
+    // 🔧 TEMPORAL: Modificado para permitir saltar Form2 en carga manual
+    // ORIGINAL: const isStage2Complete = meetLink && form2Status === 'received' && !!candidate.transcripcion_entrevista && finalResult === 'qualified';
+    const isStage2Complete = meetLink && form2Completo && !!candidate.transcripcion_entrevista && finalResult === 'qualified';
 
     return (
         <div className="flex flex-col h-full animate-in slide-in-from-right duration-300 pb-10 max-w-7xl mx-auto px-4 relative">
@@ -2653,8 +2715,65 @@ Equipo de Selección | Global Talent Connections`
                                 <div className="flex items-center gap-4 p-4 rounded-xl border border-slate-800 bg-slate-950 hover:border-blue-500/50 hover:bg-slate-900 transition-all group">
                                     <a href={candidate.cv_url} target="_blank" className="flex items-center gap-4 flex-1 cursor-pointer">
                                         <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform"><FileText size={20}/></div>
-                                        <div className="flex-1"><h4 className="text-sm font-bold text-white">Curriculum Vitae</h4><p className="text-xs text-blue-500 group-hover:underline">{candidate.cv_url && candidate.cv_url.length > 5 ? "Ver Documento" : "Link no disponible"}</p></div>
+                                        <div className="flex-1">
+                                            <h4 className="text-sm font-bold text-white">Curriculum Vitae</h4>
+                                            <p className="text-xs text-blue-500 group-hover:underline">
+                                                {candidate.cv_url && candidate.cv_url.length > 5 ? "Ver Documento" : "Link no disponible"}
+                                            </p>
+                                        </div>
                                     </a>
+                                    {/* 🔧 BOTÓN DE REPARACIÓN: Solo mostrar si hay reseña_cv pero no cv_url */}
+                                    {candidate.reseña_cv && (!candidate.cv_url || candidate.cv_url.length <= 5) && (
+                                        <button
+                                            onClick={async () => {
+                                                if (isReparandoCV) return; // Prevenir múltiples clics
+                                                if (!confirm("¿Buscar y enlazar el CV en Storage? Esto también recalculará el score si es necesario.")) return;
+                                                
+                                                setIsReparandoCV(true); // Activar estado de carga
+                                                
+                                                try {
+                                                    const result = await api.candidates.repararCV(candidate.id);
+                                                    if (result.ok) {
+                                                        alert(`✅ ${result.mensaje}\n\nScore: ${result.datos.score_anterior} → ${result.datos.score_nuevo}`);
+                                                        // Recargar datos del candidato
+                                                        const data = await api.candidates.list();
+                                                        const lista = data.candidatos || data || [];
+                                                        const candidatoActualizado = lista.find(c => c.id === candidate.id);
+                                                        if (candidatoActualizado) {
+                                                            onUpdate(candidate.id, {
+                                                                cv_url: candidatoActualizado.cv_url,
+                                                                tiene_pdf: candidatoActualizado.tiene_pdf,
+                                                                ia_score: candidatoActualizado.ia_score,
+                                                                ia_motivos: candidatoActualizado.ia_motivos,
+                                                                ia_alertas: candidatoActualizado.ia_alertas,
+                                                                ia_status: candidatoActualizado.ia_status
+                                                            });
+                                                        }
+                                                    } else {
+                                                        alert(`❌ ${result.error || result.mensaje || "Error al reparar CV"}`);
+                                                    }
+                                                } catch (error) {
+                                                    console.error("Error reparando CV:", error);
+                                                    alert("❌ Error al reparar CV. Revisa la consola.");
+                                                } finally {
+                                                    setIsReparandoCV(false); // Desactivar estado de carga
+                                                }
+                                            }}
+                                            disabled={isReparandoCV}
+                                            className={`px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded border border-amber-400 flex items-center gap-2 transition-all shadow-lg shadow-amber-900/20 ${isReparandoCV ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            title={isReparandoCV ? "Buscando CV en Storage..." : "Buscar CV en Storage y enlazarlo"}
+                                        >
+                                            {isReparandoCV ? (
+                                                <>
+                                                    <Loader2 size={14} className="animate-spin"/> Buscando...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Wrench size={14}/> Reparar CV
+                                                </>
+                                            )}
+                                        </button>
+                                    )}
                                 </div>
                                 <div className={`flex items-center gap-4 p-4 rounded-xl border border-slate-800 bg-slate-950 transition-all group ${!candidate.video_url || !candidate.video_url.startsWith('http') ? 'opacity-50' : ''} ${isAnalyzingVideo ? 'border-purple-500/50 bg-purple-500/5' : ''}`}>
                                     <div className="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform">
@@ -2908,6 +3027,41 @@ Equipo de Selección | Global Talent Connections`
                                            </div>
                                            {form2Status === 'sent' && <p className="text-[9px] text-amber-500/70 mt-1 pl-1">* Esperando respuesta del candidato.</p>}
                                            {form2Status === 'received' && <p className="text-[9px] text-emerald-500/70 mt-1 pl-1">* Respuestas cargadas correctamente.</p>}
+                                           
+                                           {/* 🔧 BOTÓN TEMPORAL: Saltar Form2 (solo para carga manual) */}
+                                           {esCargaManual && form2Status !== 'received' && !candidate.skip_form2 && (
+                                               <div className="mt-4 pt-4 border-t border-slate-800">
+                                                   <p className="text-[9px] text-amber-500/70 mb-2">Candidato de carga manual - Opción temporal:</p>
+                                                   <button
+                                                       onClick={() => {
+                                                           if (confirm("¿Marcar este candidato como 'Formulario 2 saltado'? Esto permitirá avanzar al informe sin el Form2. Esta acción es temporal.")) {
+                                                               onUpdate(candidate.id, { 
+                                                                   skip_form2: true,
+                                                                   usuario_accion: currentUser || 'Sistema'
+                                                               });
+                                                               setForm2Status('skipped'); // Actualizar estado local para feedback visual
+                                                           }
+                                                       }}
+                                                       className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-lg border border-amber-400 flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-900/20"
+                                                       title="Marcar como saltado (solo para candidatos de carga manual)"
+                                                   >
+                                                       <XCircle size={14}/> Saltar Formulario 2
+                                                   </button>
+                                               </div>
+                                           )}
+                                           
+                                           {/* Indicador visual si está saltado */}
+                                           {candidate.skip_form2 && (
+                                               <div className="mt-4 pt-4 border-t border-slate-800">
+                                                   <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                                                       <XCircle size={14} className="text-amber-400"/>
+                                                       <div className="flex-1">
+                                                           <p className="text-xs font-bold text-amber-400">Formulario 2 Saltado</p>
+                                                           <p className="text-[9px] text-amber-500/70">Este candidato puede avanzar al informe sin Form2</p>
+                                                       </div>
+                                                   </div>
+                                               </div>
+                                           )}
                                        </div>
 
 
@@ -2916,7 +3070,11 @@ Equipo de Selección | Global Talent Connections`
                                            <label className="text-[10px] text-slate-500 font-bold uppercase mb-3 block">
                                                Decisión Final
                                                {!canMakeDecision && (
-                                                   <span className="ml-2 text-amber-500 text-[9px] normal-case">(Requiere: Formulario 2 recibido y Transcripción analizada)</span>
+                                                   <span className="ml-2 text-amber-500 text-[9px] normal-case">
+                                                       {candidate.skip_form2 
+                                                           ? "(Requiere: Transcripción analizada)" 
+                                                           : "(Requiere: Formulario 2 recibido y Transcripción analizada)"}
+                                                   </span>
                                                )}
                                            </label>
                                            <div className="grid grid-cols-2 gap-4">

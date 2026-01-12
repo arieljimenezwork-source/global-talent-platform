@@ -112,7 +112,10 @@ const api = {
                         interview_transcript: c.interview_transcript || null,
                         transcripcion_entrevista: c.transcripcion_entrevista || null,
                         process_step_2_form: c.process_step_2_form || null,
-                        process_step_3_result: c.process_step_3_result || null
+                        process_step_3_result: c.process_step_3_result || null,
+                        
+                        // 🔧 SOLUCIÓN TEMPORAL: Campo para saltar Form2
+                        skip_form2: c.skip_form2 || false
                     }));
                     
                     // Devolver con información de paginación
@@ -177,6 +180,23 @@ const api = {
                         return await res.json();
                     } catch (e) {
                         console.error("Error en upload:", e);
+                        return { ok: false, error: e.message };
+                    }
+                },
+                repararCV: async (id) => {
+                    try {
+                        const headers = await getHeaders({ 'Content-Type': 'application/json' });
+                        const res = await fetch(`${API_URL}/candidatos/${id}/reparar-cv`, {
+                            method: 'POST',
+                            headers: headers
+                        });
+                        const data = await res.json();
+                        if (!res.ok) {
+                            throw new Error(data.error || 'Error al reparar CV');
+                        }
+                        return data;
+                    } catch (e) {
+                        console.error("Error reparando CV:", e);
                         return { ok: false, error: e.message };
                     }
                 }

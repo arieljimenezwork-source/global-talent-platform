@@ -274,32 +274,20 @@ function sanitizeForAI(text) {
 
 /////////////////// obtiene candidatos  a no mostrar ///////////////////////
 async function obtenerCandidatosBloqueados() {
-  // Solo leer de CVs_staging con stage = 'trash' o 'stage_3' (contratados)
+  // 🔧 CORREGIDO: Solo bloquear candidatos en 'trash', NO en 'stage_3' (Informes)
+  // stage_3 es la etapa de "Generar Informe", no son contratados, deben aparecer
   const bloqueados = new Set();
   
   try {
     const snap = await firestore.collection(MAIN_COLLECTION)
-      .where("stage", "in", ["trash", "stage_3"])
+      .where("stage", "==", "trash")
       .get();
     
     snap.forEach((doc) => {
       bloqueados.add(doc.id.trim().toLowerCase());
     });
   } catch (error) {
-    // Si falla la query con "in", hacer dos queries separadas
-    try {
-      const trashSnap = await firestore.collection(MAIN_COLLECTION)
-        .where("stage", "==", "trash")
-        .get();
-      trashSnap.forEach((doc) => bloqueados.add(doc.id.trim().toLowerCase()));
-      
-      const contratadosSnap = await firestore.collection(MAIN_COLLECTION)
-        .where("stage", "==", "stage_3")
-        .get();
-      contratadosSnap.forEach((doc) => bloqueados.add(doc.id.trim().toLowerCase()));
-    } catch (e) {
-      console.warn("Error obteniendo candidatos bloqueados:", e);
-    }
+    console.warn("Error obteniendo candidatos bloqueados:", error);
   }
 
   return bloqueados;
@@ -1361,7 +1349,10 @@ let candidatos = snap.docs.map(doc => {
     reseña_cv: data.reseña_cv || null,
     reseña_video: data.reseña_video || null,
     video_error: data.video_error || null, // Error si el video no se pudo procesar
-    video_link_publico: data.video_link_publico || null // Si el link es público o no
+    video_link_publico: data.video_link_publico || null, // Si el link es público o no
+    
+    // 🔧 SOLUCIÓN TEMPORAL: Campo para saltar Form2
+    skip_form2: data.skip_form2 || false
   };
 })
 // --- FIN BLOQUE REEMPLAZADO ---
@@ -1481,6 +1472,9 @@ app.post("/candidatos/:id/resumen", async (req, res) => {
     const analisisPostEntrevista = data.ia_motivos || "";
     const alertasPostEntrevista = data.ia_alertas || [];
     
+    // 🔥 DETECCIÓN: Form 2 marcado como recibido pero sin datos reales (marcado manualmente)
+    const form2MarcadoPeroVacio = data.process_step_2_form === 'received' && Object.keys(respuestasForm2).length === 0;
+    
     // Combinar toda la información en un texto para la IA
     const notasCompletas = `
 ${notasStage1 ? `NOTAS INICIALES (Stage 1):\n${notasStage1}\n\n` : ''}
@@ -1497,7 +1491,8 @@ ${alertasPostEntrevista.length > 0 ? `ALERTAS DETECTADAS:\n${alertasPostEntrevis
         notasCompletas, // Usar las notas combinadas de todo el pipeline
         respuestasForm2, // Form 2 como objeto separado (por si la función lo necesita)
         analisisPostEntrevista, // Análisis post-entrevista
-        responsable || data.assignedTo || "Admin"
+        responsable || data.assignedTo || "Admin",
+        form2MarcadoPeroVacio // Flag: true si Form 2 está marcado pero vacío
     );
 
     if (informeGenerado) {
@@ -2899,20 +2894,117 @@ Respuesta:
 // ====================================================================
 // 🧠 CEREBRO V3: BLINDADO PARA NOTAS VAGAS O DESESTRUCTURADAS
 // ====================================================================
-async function generarDatosParaInforme(textoCV, puesto, notas, form2, analisisPrevio, responsable) {
+async function generarDatosParaInforme(textoCV, puesto, notas, form2, analisisPrevio, responsable, form2MarcadoPeroVacio = false) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    const prompt = `
-      Actúa como un Consultor Senior de RRHH y Redactor de Informes Corporativos.
-      Tu misión es transformar notas crudas (a veces vagas o desordenadas) en un INFORME EJECUTIVO ESTRUCTURADO Y PROFESIONAL.
-
+    // 🔥 DETECCIÓN: ¿Es pipeline? (tiene analisisPrevio o datos de Form 2)
+    const esPipeline = analisisPrevio && analisisPrevio !== "Generación manual directa sin pipeline previo";
+    
+    let seccionFuentes = "";
+    
+    if (esPipeline) {
+      // 🔥 DISTRIBUCIÓN CONDICIONAL: Si Form 2 está marcado pero vacío, redistribuir pesos
+      if (form2MarcadoPeroVacio) {
+        // DISTRIBUCIÓN B (Form 2 vacío): Notas como fuente principal
+        seccionFuentes = `
+      --- FUENTES DE INFORMACIÓN (100% DEL PESO TOTAL) ---
+      ⚠️ NOTA IMPORTANTE: El Formulario 2 fue marcado como recibido manualmente pero no contiene datos estructurados del webhook. Las NOTAS DEL RECLUTADOR pueden incluir las respuestas del Form 2 escritas manualmente.
+      
+      1. **NOTAS DEL RECLUTADOR (Stage 1 y notas manuales) – 50% del peso total**
+         *Instrucción:* Estas notas son la fuente principal del informe. Pueden contener:
+         - Respuestas del Formulario 2 escritas manualmente por el reclutador.
+         - Herramientas y tecnologías mencionadas.
+         - Niveles de manejo (Avanzado / Sólido / Básico).
+         - Nivel de inglés REAL observado.
+         - Disponibilidad real, motivación, fit cultural.
+         - Soft skills y habilidades blandas observadas.
+         - Fortalezas y debilidades mencionadas por el reclutador.
+      
+      2. **ANÁLISIS POST-ENTREVISTA (IA) – 20% del peso total**
+         *Instrucción:* Usá este análisis como síntesis estructurada de la entrevista.
+         La TRANSCRIPCIÓN cruda de la entrevista NO es una fuente independiente: solo debe influir a través de este análisis.
+      
+      3. **RESPUESTAS FORMULARIO 1 + ALERTAS DETECTADAS – 15% del peso total combinado**
+         *Instrucción:*
+         - Usá Formulario 1 como contexto inicial (datos de postulación).
+         - Usá las ALERTAS para ajustar la conclusión final (banderas rojas o riesgos).
+      
+      4. **CV DEL CANDIDATO (SOLO DATOS DUROS) – 5% del peso total**
+         Contenido del CV (texto extraído):
+         ${textoCV.slice(0, 20000)}
+         *Instrucción:* Usá el CV ÚNICAMENTE para:
+         - Nombre completo.
+         - Título universitario o formación principal.
+         - Ubicación.
+         - Empresas anteriores y años de experiencia.
+         NO uses el CV para evaluar nivel técnico ni soft skills (eso viene de los puntos 1 a 3).
+      
+      5. **RESPUESTAS FORMULARIO 2 – 0% del peso total**
+         *Instrucción:* No hay datos estructurados del Formulario 2 disponibles. Toda la información relevante debe venir de las NOTAS DEL RECLUTADOR.
+      
+      **RESUMEN DE PESOS:** Notas (50%) + Análisis (20%) + Form 1 + Alertas (15%) + CV (5%) + Form 2 (0%) = 100% del informe final.
+      `;
+      } else {
+        // DISTRIBUCIÓN ORIGINAL (Form 2 con datos reales del webhook)
+        seccionFuentes = `
+      --- FUENTES DE INFORMACIÓN (100% DEL PESO TOTAL) ---
+      
+      1. **RESPUESTAS FORMULARIO 2 (Validación Técnica) – 40% del peso total**
+         Contenido disponible en el bloque de notas del proceso:
+         ${notas}
+                  
+         *Instrucción:* Tomá de aquí principalmente:
+         - Herramientas y tecnologías declaradas.
+         - Niveles de manejo (Avanzado / Sólido / Básico).
+         - Soft skills que el formulario ayude a validar.
+      
+      2. **NOTAS DEL RECLUTADOR (Stage 1 y notas manuales) – 30% del peso total**
+         *Instrucción:* Estas notas representan la mirada humana del proceso.
+         Priorizá desde aquí:
+         - Nivel de inglés REAL observado.
+         - Disponibilidad real, motivación, fit cultural.
+         - Fortalezas y debilidades mencionadas por el reclutador.
+      
+      3. **ANÁLISIS POST-ENTREVISTA (IA) – 15% del peso total**
+         *Instrucción:* Usá este análisis como síntesis estructurada de la entrevista.
+         La TRANSCRIPCIÓN cruda de la entrevista NO es una fuente independiente: solo debe influir a través de este análisis.
+      
+      4. **RESPUESTAS FORMULARIO 1 + ALERTAS DETECTADAS – 10% del peso total combinado**
+         *Instrucción:*
+         - Usá Formulario 1 como contexto inicial (datos de postulación).
+         - Usá las ALERTAS para ajustar la conclusión final (banderas rojas o riesgos).
+      
+      5. **CV DEL CANDIDATO (SOLO DATOS DUROS) – 5% del peso total**
+         Contenido del CV (texto extraído):
+         ${textoCV.slice(0, 20000)}
+         *Instrucción:* Usá el CV ÚNICAMENTE para:
+         - Nombre completo.
+         - Título universitario o formación principal.
+         - Ubicación.
+         - Empresas anteriores y años de experiencia.
+         NO uses el CV para evaluar nivel técnico ni soft skills (eso viene de los puntos 1 a 4).
+      
+      **RESUMEN DE PESOS:** Form 2 (40%) + Notas (30%) + Análisis (15%) + Form 1 + Alertas (10%) + CV (5%) = 100% del informe final.
+      `;
+      }
+    } else {
+      // DISTRIBUCIÓN SIMPLE (modo manual, sin pipeline)
+      seccionFuentes = `
       --- FUENTES DE INFORMACIÓN ---
       1. **NOTAS DEL RECLUTADOR (PRIORIDAD TOTAL - 90%):** "${notas}"
          *Instrucción:* Estas notas contienen la verdad sobre el candidato. Extrae de aquí: nivel de inglés real, disponibilidad, skills técnicas validadas y habilidades blandas observadas. Si el texto es un párrafo corrido, DESGLÓSALO.
 
       2. **CV DEL CANDIDATO (APOYO - 10%):** "${textoCV.slice(0, 20000)}"
          *Instrucción:* Úsalo SOLO para rellenar datos duros que no estén en las notas (Nombre completo, Título universitario exacto, Ubicación, Nombres de empresas anteriores).
+      `;
+    }
+
+    const prompt = `
+      Actúa como un Consultor Senior de RRHH y Redactor de Informes Corporativos.
+      Tu misión es transformar notas crudas (a veces vagas o desordenadas) en un INFORME EJECUTIVO ESTRUCTURADO Y PROFESIONAL.
+
+      ${seccionFuentes}
 
       --- REGLAS DE PROCESAMIENTO INTELIGENTE ---
       - **Detección de Skills:** Si las notas dicen "dominio sólido en Python", agrégalo a Competencias Técnicas con nivel "Alto" o "Avanzado".
@@ -4082,6 +4174,191 @@ app.post("/test/candidato-completo", async (req, res) => {
   } catch (error) {
     console.error("❌ Error creando candidato de prueba:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ==========================================================================
+// 🔧 ENDPOINT: REPARAR CV DESVINCULADO
+// ==========================================================================
+// Busca el CV en Storage y lo enlaza al candidato, recalculando el score si es necesario
+
+app.post("/candidatos/:id/reparar-cv", async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`🔧 [REPARAR] Iniciando reparación para candidato: ${id}`);
+    
+    // 1. Obtener datos del candidato
+    const docRef = firestore.collection("CVs_staging").doc(id);
+    const docSnap = await docRef.get();
+    
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: "Candidato no encontrado" });
+    }
+    
+    const datosActuales = docSnap.data();
+    
+    // 2. Verificar si realmente necesita reparación
+    if (datosActuales.cv_url && datosActuales.cv_url.length > 5 && datosActuales.tiene_pdf) {
+      return res.json({
+        ok: true,
+        mensaje: "El CV ya está enlazado correctamente",
+        cv_url: datosActuales.cv_url,
+        tiene_pdf: datosActuales.tiene_pdf
+      });
+    }
+    
+    // 3. Buscar el PDF en Storage (ruta esperada)
+    const rutaEsperada = `CVs_staging/files/${id}_CV.pdf`;
+    const bucketFile = bucket.file(rutaEsperada);
+    
+    let publicCvUrl = null;
+    let tienePdfEnStorage = false;
+    
+    try {
+      // Verificar si el archivo existe
+      const [exists] = await bucketFile.exists();
+      
+      if (exists) {
+        console.log(`✅ [REPARAR] PDF encontrado en Storage: ${rutaEsperada}`);
+        
+        // Generar signed URL
+        const [signedUrl] = await bucketFile.getSignedUrl({
+          action: 'read',
+          expires: '01-01-2035'
+        });
+        
+        publicCvUrl = signedUrl;
+        tienePdfEnStorage = true;
+        console.log(`✅ [REPARAR] Signed URL generado correctamente`);
+      } else {
+        console.log(`⚠️ [REPARAR] PDF no encontrado en ruta esperada: ${rutaEsperada}`);
+        
+        // Intentar buscar en otras rutas posibles
+        const rutasAlternativas = [
+          `CVs_staging/files/${id}.pdf`,
+          `CVs_staging/${id}_CV.pdf`,
+          `CVs_staging/files/${datosActuales.email?.replace(/[^a-z0-9]/g, "_")}_CV.pdf`
+        ];
+        
+        for (const rutaAlt of rutasAlternativas) {
+          const fileAlt = bucket.file(rutaAlt);
+          const [existsAlt] = await fileAlt.exists();
+          
+          if (existsAlt) {
+            console.log(`✅ [REPARAR] PDF encontrado en ruta alternativa: ${rutaAlt}`);
+            const [signedUrlAlt] = await fileAlt.getSignedUrl({
+              action: 'read',
+              expires: '01-01-2035'
+            });
+            publicCvUrl = signedUrlAlt;
+            tienePdfEnStorage = true;
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`❌ [REPARAR] Error buscando PDF en Storage:`, error.message);
+    }
+    
+    // 4. Preparar actualización
+    const updateData = {
+      actualizado_en: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    if (tienePdfEnStorage && publicCvUrl) {
+      updateData.cv_url = publicCvUrl;
+      updateData.tiene_pdf = true;
+      console.log(`✅ [REPARAR] CV enlazado correctamente`);
+    } else {
+      // Si no se encontró el PDF, pero hay reseña_cv, significa que el CV fue procesado
+      // pero el archivo no está en Storage. Marcamos esto para debugging
+      updateData.debug_cv_no_encontrado = {
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        ruta_buscada: rutaEsperada,
+        tiene_reseña_cv: !!datosActuales.reseña_cv
+      };
+      
+      return res.status(404).json({
+        ok: false,
+        error: "PDF no encontrado en Storage",
+        mensaje: "El CV no se encontró en ninguna de las rutas esperadas. Puede que el archivo no se haya subido correctamente.",
+        rutas_buscadas: [rutaEsperada, `CVs_staging/files/${id}.pdf`, `CVs_staging/${id}_CV.pdf`]
+      });
+    }
+    
+    // 5. Si hay reseña_cv pero el score está en 0, recalcular
+    if (datosActuales.reseña_cv && (!datosActuales.ia_score || datosActuales.ia_score === 0)) {
+      console.log(`🤖 [REPARAR] Recalculando score con reseña existente...`);
+      
+      try {
+        const respuestasFiltro = datosActuales.respuestas_filtro || {};
+        const datosFormulario = JSON.stringify(respuestasFiltro);
+        
+        const analisisIA = await verificaConocimientosMinimos(
+          datosActuales.puesto || "General",
+          datosFormulario,
+          "", // declaraciones vacío
+          datosActuales.reseña_cv, // Reseña del CV existente
+          datosActuales.reseña_video || null // Reseña del video si existe
+        );
+        
+        // Limitar score según origen
+        const origen = datosActuales.origen || "";
+        if (origen === "webhook_zoho_passive" || origen.includes("zoho") || origen.includes("mail")) {
+          analisisIA.score = Math.min(analisisIA.score, 80);
+        } else if (origen === "carga_manual") {
+          analisisIA.score = Math.min(analisisIA.score, 70);
+        }
+        
+        updateData.ia_score = analisisIA.score;
+        updateData.ia_motivos = analisisIA.motivos;
+        updateData.ia_alertas = analisisIA.alertas || [];
+        updateData.ia_status = "processed";
+        
+        console.log(`✅ [REPARAR] Score recalculado: ${analisisIA.score}`);
+      } catch (error) {
+        console.error(`❌ [REPARAR] Error recalculando score:`, error.message);
+        // No fallamos si el score no se puede recalcular, solo actualizamos el CV
+      }
+    }
+    
+    // 6. Agregar evento al historial
+    const eventoReparacion = {
+      date: new Date().toISOString(),
+      event: 'CV Reparado',
+      detail: tienePdfEnStorage 
+        ? 'CV encontrado en Storage y enlazado correctamente' 
+        : 'Intento de reparación (CV no encontrado)',
+      usuario: 'Sistema (Reparación Automática)'
+    };
+    
+    updateData.historial_movimientos = admin.firestore.FieldValue.arrayUnion(eventoReparacion);
+    
+    // 7. Actualizar en Firestore
+    await docRef.set(updateData, { merge: true });
+    
+    console.log(`✅ [REPARAR] Reparación completada para ${id}`);
+    
+    res.json({
+      ok: true,
+      mensaje: tienePdfEnStorage 
+        ? "CV encontrado y enlazado correctamente" 
+        : "Reparación completada (CV no encontrado en Storage)",
+      datos: {
+        cv_url: publicCvUrl || datosActuales.cv_url || "",
+        tiene_pdf: tienePdfEnStorage,
+        score_anterior: datosActuales.ia_score || 0,
+        score_nuevo: updateData.ia_score || datosActuales.ia_score || 0,
+        score_recalculado: !!updateData.ia_score
+      }
+    });
+    
+  } catch (error) {
+    console.error("❌ [REPARAR] Error en reparación:", error);
+    res.status(500).json({
+      ok: false,
+      error: error.message
+    });
   }
 });
 

@@ -48,7 +48,7 @@ const LucideIcon = ({ name, size = 24, className, ...props }) => {
     'Briefcase', 'Lock', 'UserCheck', 'Loader2', 'Trash2', 'Undo2', 'MoreVertical',
     'CheckSquare', 'Printer', 'Eye', 'EyeOff', 'Mail', 'Activity', 'Server', 'Database', 'Globe',
     'ThumbsUp', 'ThumbsDown', 'Link', 'Download', 'Share2', 'History',
-    'BarChart2', 'List', 'Sparkles', 'Save'
+    'BarChart2', 'List', 'Sparkles', 'Save', 'Wrench'
 ];
 
 const Icons = {};
@@ -66,7 +66,7 @@ const {
     Briefcase, Lock, UserCheck, Loader2, Trash2, Undo2, MoreVertical,
     CheckSquare, Printer, Eye, Mail, Activity, Server, Database, Globe,
     ThumbsUp, ThumbsDown, LinkIcon, Download, Share2, History,
-    BarChart2, List, Sparkles
+    BarChart2, List, Sparkles, Wrench
 } = Icons;
 
 const Badge = ({ children, type = 'neutral', className = '' }) => {
@@ -77,6 +77,7 @@ const Badge = ({ children, type = 'neutral', className = '' }) => {
         blue: "bg-blue-500/10 text-blue-400 border-blue-500/20",
         purple: "bg-purple-500/10 text-purple-400 border-purple-500/20",
         danger: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+        orange: "bg-orange-500/10 text-orange-400 border-orange-500/20",
     };
     if (type === 'green') type = 'success';
     if (type === 'slate') type = 'neutral';
