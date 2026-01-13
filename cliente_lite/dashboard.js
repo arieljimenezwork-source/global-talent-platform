@@ -3189,9 +3189,10 @@ const LoginView = ({ onLogin }) => {
         { name: "Viviana", role: "Recursos Humanos", password: "Viviana74629" },
         { name: "Pilar", role: "Ventas / Closer", password: "Pilar18563" },
         { name: "Javier", role: "Marketing", password: "Javier42957" },
+        { name: "Reyna", role: "Revision RRHH", password: "Reyna23546" },
         { name: "Norma", role: "Control de Calidad", password: "Norma63841" },
         { name: "Daniel (CEO)", role: "Dirección", password: "Daniel29476" },
-        { name: "Admin", role: "Superusuario", password: "Admin51783" }
+        { name: "Admin", role: "Superusuario", password: "12345" }
     ];
     
     const handleUserClick = (user) => {
@@ -3240,6 +3241,12 @@ const LoginView = ({ onLogin }) => {
             console.error('❌ Error en proceso de login:', error);
         } finally {
             setIsAuthenticating(false);
+            // Guardar usuario y timestamp en localStorage (válido por 30 minutos)
+            const loginData = {
+                user: selectedUser.name,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('gtc_user_session', JSON.stringify(loginData));
             // Siempre llamar a onLogin con el nombre (mantiene compatibilidad)
             onLogin(selectedUser.name);
             setSelectedUser(null);
@@ -3389,9 +3396,33 @@ function App() {
     const [loading, setLoading] = useState(false);
     const [init, setInit] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
-    const [showManualModal, setShowManualModal] = useState(false); 
+    const [showManualModal, setShowManualModal] = useState(false);
+    const [showUserMenu, setShowUserMenu] = useState(false); 
 
     const LOGO_URL = "/GLOBAL.png";
+
+    // 1.5. RESTAURAR SESIÓN AL CARGAR (ANTES DE TODO)
+    useEffect(() => {
+        const sessionData = localStorage.getItem('gtc_user_session');
+        if (sessionData) {
+            try {
+                const { user, timestamp } = JSON.parse(sessionData);
+                const now = Date.now();
+                const sessionAge = (now - timestamp) / (1000 * 60); // Edad en minutos
+                
+                // Si la sesión tiene menos de 30 minutos, restaurar usuario
+                if (sessionAge < 30) {
+                    setCurrentUser(user);
+                } else {
+                    // Sesión expirada, limpiar localStorage
+                    localStorage.removeItem('gtc_user_session');
+                }
+            } catch (error) {
+                console.error('❌ Error restaurando sesión:', error);
+                localStorage.removeItem('gtc_user_session');
+            }
+        }
+    }, []); // Solo se ejecuta al montar el componente
 
     // 2. FUNCIÓN DE CARGA
     const cargarDatos = async (forceRefresh = false) => {
@@ -3414,6 +3445,17 @@ function App() {
     useEffect(() => { 
         if (currentUser) cargarDatos(); 
     }, [currentUser]);
+
+    // Cerrar menú de usuario al hacer clic fuera
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (showUserMenu && !event.target.closest('.user-menu-container')) {
+                setShowUserMenu(false);
+            }
+        };
+        document.addEventListener('click', handleClickOutside);
+        return () => document.removeEventListener('click', handleClickOutside);
+    }, [showUserMenu]);
 
     // 4. LA PORTERÍA (Ubicado después de los hooks para evitar crashes)
     if (!currentUser) {
@@ -3527,17 +3569,44 @@ const handleUpdateCandidate = async (id, updates) => {
                             );
                         })}
                     </nav>
-                    <div className="p-4 border-t border-slate-800">
-                        <button className="flex items-center gap-3 w-full p-2 rounded-xl hover:bg-slate-800 transition-colors group border border-transparent hover:border-slate-700">
+                    <div className="p-4 border-t border-slate-800 relative user-menu-container">
+                        <button 
+                            onClick={() => setShowUserMenu(!showUserMenu)}
+                            className="flex items-center gap-3 w-full p-2 rounded-xl hover:bg-slate-800 transition-colors group border border-transparent hover:border-slate-700"
+                        >
                             <Avatar name={currentUser} />
-                            <div className="flex-col flex items-start overflow-hidden">
+                            <div className="flex-col flex items-start overflow-hidden flex-1">
                                 <span className="text-xs font-bold text-slate-200 group-hover:text-white">{currentUser}</span>
                                 <span className="text-[10px] text-emerald-400 flex items-center gap-1">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"/> Online
                                 </span>
                             </div>
-                            <Settings size={14} className="ml-auto text-slate-600 group-hover:text-slate-400 transition-colors"/>
+                            <ChevronDown 
+                                size={14} 
+                                className={`ml-auto text-slate-600 group-hover:text-slate-400 transition-all ${showUserMenu ? 'rotate-180' : ''}`}
+                            />
                         </button>
+                        
+                        {/* Menú desplegable */}
+                        {showUserMenu && (
+                            <div className="absolute bottom-full left-4 right-4 mb-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 z-50">
+                                <button
+                                    onClick={() => {
+                                        // Limpiar sesión
+                                        localStorage.removeItem('gtc_user_session');
+                                        localStorage.removeItem('firebase_token');
+                                        localStorage.removeItem('firebase_token_expires');
+                                        // Cerrar sesión
+                                        setCurrentUser(null);
+                                        setShowUserMenu(false);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800 transition-colors text-rose-400 hover:text-rose-300"
+                                >
+                                    <LogOut size={16} />
+                                    <span className="text-sm font-medium">Cerrar sesión</span>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </aside>
                 <main className="flex-1 overflow-auto p-6 relative bg-slate-950">
