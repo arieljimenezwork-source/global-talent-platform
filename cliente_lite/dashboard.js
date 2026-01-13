@@ -1643,8 +1643,8 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
         document.body.removeChild(a);
     };
 
-    // Filtrar candidatos listos (Etapa 3)
-    const pipelineCandidates = candidates.filter(c => c.stage === 'stage_3');
+    // Filtrar candidatos listos (Etapa 3) que NO tengan informe generado
+    const pipelineCandidates = candidates.filter(c => c.stage === 'stage_3' && !c.informe_final_data);
 
     // ⚡ MAGIA 1: RECUPERAR BORRADOR AL INICIAR
     React.useEffect(() => {
@@ -2205,6 +2205,103 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
         </div>
     );
 }
+
+// =========================================================
+// VISTA: BASE DE DATOS DE INFORMES GENERADOS
+// =========================================================
+function ReportsView({ candidates, setCurrentReport }) {
+    // Filtrar solo candidatos con informe generado
+    const reportsWithData = candidates.filter(c => c.informe_final_data);
+    
+    // Ordenar por fecha de creación (más recientes primero)
+    const sortedReports = [...reportsWithData].sort((a, b) => {
+        const dateA = a.informe_final_data?.fecha_generacion || a.creado_en || 0;
+        const dateB = b.informe_final_data?.fecha_generacion || b.creado_en || 0;
+        return new Date(dateB) - new Date(dateA);
+    });
+
+    const handleViewReport = (candidate) => {
+        if (candidate.informe_final_data) {
+            setCurrentReport(candidate.informe_final_data);
+        }
+    };
+
+    const formatDate = (dateValue) => {
+        if (!dateValue) return 'Fecha no disponible';
+        try {
+            const date = typeof dateValue === 'object' && dateValue._seconds 
+                ? new Date(dateValue._seconds * 1000)
+                : new Date(dateValue);
+            return date.toLocaleDateString('es-AR', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch {
+            return 'Fecha inválida';
+        }
+    };
+
+    return (
+        <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
+            {/* CABECERA */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-6">
+                <div>
+                    <h1 className="text-2xl font-bold text-white">Base de Datos de Informes</h1>
+                    <p className="text-slate-400 text-sm">Todos los informes generados del sistema.</p>
+                </div>
+                <Badge type="success">{sortedReports.length} Informes</Badge>
+            </div>
+
+            {/* LISTA DE INFORMES */}
+            <section className="space-y-4 pt-4">
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    Informes Generados ({sortedReports.length})
+                </h3>
+                {sortedReports.length === 0 ? (
+                    <div className="p-8 border border-slate-800 border-dashed rounded-xl text-center text-slate-600 text-sm">
+                        No hay informes generados aún.
+                    </div>
+                ) : (
+                    <div className="grid gap-3">
+                        {sortedReports.map(c => {
+                            const reportDate = c.informe_final_data?.fecha_generacion || c.creado_en;
+                            return (
+                                <div key={c.id} className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between hover:bg-slate-800/50 transition-colors group">
+                                    <div className="flex items-center gap-4 flex-1">
+                                        <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold text-xs">
+                                            {c.nombre.substring(0,2).toUpperCase()}
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">
+                                                {c.nombre}
+                                            </h4>
+                                            <p className="text-[10px] text-slate-500">{c.puesto || "Candidato"}</p>
+                                            <p className="text-[9px] text-slate-600 mt-1">
+                                                Generado: {formatDate(reportDate)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <button 
+                                            onClick={() => handleViewReport(c)}
+                                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
+                                        >
+                                            <Eye size={14}/> Ver Informe
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </section>
+        </div>
+    );
+}
+
 // --- VISTA DETALLE MEJORADA (CON GESTIÓN DE ENTREVISTA + CHECKLIST) ---
 function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     const [noteInput, setNoteInput] = useState(candidate.notes || "");
@@ -2220,6 +2317,15 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     // ESTADOS PARA EL MODAL DE DESCARTE (TU CÓDIGO ORIGINAL)
     const [showDiscardModal, setShowDiscardModal] = useState(false);
     const [discardReason, setDiscardReason] = useState("");
+    const [sendEmailOnDiscard, setSendEmailOnDiscard] = useState(false);
+
+    // ESTADOS PARA EL MODAL DE "NO CALIFICADO" CON EMAIL
+    const [showDisqualifiedModal, setShowDisqualifiedModal] = useState(false);
+    const [sendEmailOnDisqualify, setSendEmailOnDisqualify] = useState(false);
+
+    // ESTADOS PARA EL MODAL DE APROBACIÓN CON EMAIL
+    const [showApproveModal, setShowApproveModal] = useState(false);
+    const [sendEmailOnApprove, setSendEmailOnApprove] = useState(false);
 
     // --- NUEVOS ESTADOS: GESTIÓN DE ENTREVISTA (STAGE 2) ---
     const [meetLink, setMeetLink] = useState(candidate.meet_link || "");
@@ -2327,11 +2433,23 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     };
 
     const handleApprove = () => {
+        // Abrir modal de aprobación
+        setShowApproveModal(true);
+    };
+
+    const confirmApprove = () => {
+        // Si eligió enviar email, abrir Gmail primero
+        if (sendEmailOnApprove) {
+            handleOpenApprovalEmail();
+        }
+        
         onUpdate(candidate.id, { 
             stage: 'stage_2', 
             status_interno: 'interview_pending',
             assignedTo: currentUser 
         });
+        setShowApproveModal(false);
+        setSendEmailOnApprove(false);
     };
     // --- 6. FUNCIÓN DE RE-ANÁLISIS (CONECTADA AL BACKEND) ---
     const handleAnalyzeInterview = async () => {
@@ -2378,12 +2496,19 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
 
     const confirmDiscard = () => {
         if (!discardReason.trim()) return alert("Por favor escribe un motivo.");
+        
+        // Si eligió enviar email, abrir Gmail primero
+        if (sendEmailOnDiscard) {
+            handleOpenDiscardEmail();
+        }
+        
         onUpdate(candidate.id, { 
             stage: 'trash', 
             motivo: discardReason, 
             notes: discardReason   
         });
         setShowDiscardModal(false);
+        setSendEmailOnDiscard(false);
     };
 
     // --- NUEVAS ACCIONES (STAGE 2) ---
@@ -2504,7 +2629,122 @@ Equipo de Selección | Global Talent Connections`
     window.open(gmailUrl, '_blank');
 };
 
+// 3. ABRIR GMAIL PARA EMAIL DE DESCARTE (No pasa de fase)
+const handleOpenDiscardEmail = () => {
+    if (!candidate.email) {
+        alert("⚠️ El candidato no tiene email registrado.");
+        return;
+    }
 
+    const recipient = candidate.email;
+    const subject = encodeURIComponent(`Actualización sobre tu proceso de selección – Global Talent Connections`);
+    
+    // Cuerpo del mensaje de descarte (texto proporcionado por el usuario)
+    const bodyText = `Hola, ${candidate.nombre}:
+
+Gracias por completar nuestro formulario de validación y por tu interés en formar parte de nuestro equipo.
+
+Tras analizar los datos proporcionados, te informamos que en esta ocasión no podemos avanzar con tu perfil, ya que no se ajusta a la totalidad de los requisitos operativos o técnicos indispensables para esta posición específica.
+
+Mantendremos tu información en nuestros registros para futuras vacantes que se adapten mejor a tu perfil. Agradecemos tu tiempo y te deseamos éxito en tu búsqueda laboral.
+
+Atentamente, Equipo de Selección - Global Talent Connections`;
+    
+    const body = encodeURIComponent(bodyText);
+    
+    // Abrir Gmail en pestaña nueva
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
+    window.open(gmailUrl, '_blank');
+};
+
+// 4. ABRIR GMAIL PARA EMAIL DE APROBACIÓN (Pasa a siguiente etapa)
+const handleOpenApprovalEmail = () => {
+    if (!candidate.email) {
+        alert("⚠️ El candidato no tiene email registrado.");
+        return;
+    }
+
+    const recipient = candidate.email;
+    const subject = encodeURIComponent(`Actualización sobre tu proceso de selección – Global Talent Connections`);
+    
+    // Cuerpo del mensaje de aprobación (texto proporcionado por el usuario)
+    const bodyText = `Hola, ${candidate.nombre}:
+
+Esperamos que estés muy bien.
+
+Queremos contarte que hemos revisado tu postulación y has avanzado a la siguiente etapa de nuestro proceso de selección para la posición de ${candidate.puesto || '[Nombre del Puesto]'}.
+
+Tu presentación (CV, formulario y video) cumple con los estándares que buscamos en Global Talent Connections y por eso seguiremos adelante con tu candidatura. 🎯
+
+En los próximos días:
+	•	Nuestro equipo de selección analizará en detalle tu perfil.
+	•	Nos pondremos en contacto contigo por correo o WhatsApp para informarte los próximos pasos (entrevista y/o evaluaciones adicionales).
+	•	No es necesario que hagas nada por ahora, solo te pedimos que estés atento/a a tus medios de contacto.
+
+Agradecemos el tiempo, la dedicación y el interés en formar parte de nuestra comunidad de asistentes virtuales.`;
+    
+    const body = encodeURIComponent(bodyText);
+    
+    // Abrir Gmail en pestaña nueva
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
+    window.open(gmailUrl, '_blank');
+};
+
+// 5. ABRIR GMAIL PARA EMAIL DE RECHAZO (No Calificado)
+const handleOpenRejectionEmail = () => {
+    if (!candidate.email) {
+        alert("⚠️ El candidato no tiene email registrado.");
+        return;
+    }
+
+    const recipient = candidate.email;
+    const subject = encodeURIComponent(`Actualización sobre tu proceso de selección – Global Talent Connections`);
+    
+    // Cuerpo del mensaje de rechazo profesional (con HTML para negrita)
+    const bodyText = `Hola, ${candidate.nombre}:
+
+Ha sido un gusto conocerte y avanzar contigo hasta las etapas finales de nuestro proceso de selección. Valoramos mucho el tiempo y el esfuerzo que invertiste en cada paso.
+
+Queremos informarte que, aunque tu perfil es excelente, en esta oportunidad hemos seleccionado a otro candidato que se alinea de forma más específica con los requerimientos actuales del cliente. Sin embargo, tu talento y competencias nos han parecido sumamente valiosos.
+
+Por ello, hemos decidido incluirte en nuestro Banco de Talento Preferencial. En caso de que surja una nueva oportunidad que coincida con tu especialidad, te contactaremos de manera prioritaria para retomar el proceso.
+
+Te agradecemos nuevamente por confiar en nosotros y esperamos colaborar contigo en el futuro cercano.
+
+Saludos cordiales, Equipo de Selección - Global Talent Connections`;
+    
+    const body = encodeURIComponent(bodyText);
+    
+    // Abrir Gmail en pestaña nueva
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
+    window.open(gmailUrl, '_blank');
+    
+    // Registrar evento en la cronología
+    try {
+        onUpdate(candidate.id, {
+            email_rechazo_abierto: true,
+            fecha_email_rechazo: new Date().toISOString(),
+            usuario_accion: currentUser || 'Sistema'
+        });
+    } catch (error) {
+        console.error("Error registrando evento de email:", error);
+    }
+};
+
+// 4. CONFIRMAR "NO CALIFICADO" (con opción de abrir email)
+const handleConfirmDisqualified = () => {
+    // Si eligió enviar email, abrir Gmail primero
+    if (sendEmailOnDisqualify) {
+        handleOpenRejectionEmail();
+    }
+
+    // Marcar como "No Calificado"
+    updateChecklist('result', 'disqualified');
+    
+    // Cerrar modal y resetear estado
+    setShowDisqualifiedModal(false);
+    setSendEmailOnDisqualify(false);
+};
 
     // 4. Actualizar Checklist
     const updateChecklist = (field, value) => {
@@ -2578,10 +2818,189 @@ Equipo de Selección | Global Talent Connections`
                             autoFocus
                         ></textarea>
 
+                        {/* Checkbox para abrir email */}
+                        <div className="mb-6 p-4 bg-slate-950/50 border border-slate-800 rounded-lg">
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    checked={sendEmailOnDiscard}
+                                    onChange={(e) => setSendEmailOnDiscard(e.target.checked)}
+                                    className="w-5 h-5 rounded border-slate-700 bg-slate-900 text-rose-600 focus:ring-rose-500 focus:ring-2 cursor-pointer"
+                                    disabled={!candidate.email}
+                                />
+                                <div className="flex-1">
+                                    <span className="text-sm font-medium text-white block">
+                                        Notificar al candidato que no sigue en el proceso
+                                    </span>
+                                    {!candidate.email ? (
+                                        <span className="text-xs text-rose-400 mt-1 block">
+                                            ⚠️ El candidato no tiene email registrado
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs text-slate-500 mt-1 block">
+                                            Se abrirá Gmail con un mensaje pre-escrito que podrás editar antes de enviar
+                                        </span>
+                                    )}
+                                </div>
+                            </label>
+                        </div>
+
                         <div className="flex justify-end gap-3">
-                            <button onClick={() => setShowDiscardModal(false)} className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white">Cancelar</button>
+                            <button 
+                                onClick={() => {
+                                    setShowDiscardModal(false);
+                                    setSendEmailOnDiscard(false);
+                                }} 
+                                className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors"
+                            >
+                                Cancelar
+                            </button>
                             <button onClick={confirmDiscard} className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold rounded-lg shadow-lg shadow-rose-900/20">
                                 Confirmar Descarte
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- MODAL DE APROBACIÓN CON OPCIÓN DE EMAIL --- */}
+            {showApproveModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-slate-900 border border-emerald-900/50 rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
+                        <button 
+                            onClick={() => {
+                                setShowApproveModal(false);
+                                setSendEmailOnApprove(false);
+                            }} 
+                            className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"
+                        >
+                            ✕
+                        </button>
+                        
+                        <div className="flex items-center gap-3 mb-4 text-emerald-500">
+                            <CheckCircle size={24} />
+                            <h3 className="text-xl font-bold text-white">Aprobar Candidato</h3>
+                        </div>
+                        
+                        <p className="text-slate-400 text-sm mb-6">
+                            Estás a punto de aprobar a <strong className="text-white">{candidate.nombre}</strong> y moverlo a la etapa de Gestión.
+                        </p>
+
+                        {/* Checkbox para abrir email */}
+                        <div className="mb-6 p-4 bg-slate-950/50 border border-slate-800 rounded-lg">
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    checked={sendEmailOnApprove}
+                                    onChange={(e) => setSendEmailOnApprove(e.target.checked)}
+                                    className="w-5 h-5 rounded border-slate-700 bg-slate-900 text-emerald-600 focus:ring-emerald-500 focus:ring-2 cursor-pointer"
+                                    disabled={!candidate.email}
+                                />
+                                <div className="flex-1">
+                                    <span className="text-sm font-medium text-white block">
+                                        Notificar al candidato que avanzó a la siguiente etapa
+                                    </span>
+                                    {!candidate.email ? (
+                                        <span className="text-xs text-rose-400 mt-1 block">
+                                            ⚠️ El candidato no tiene email registrado
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs text-slate-500 mt-1 block">
+                                            Se abrirá Gmail con un mensaje pre-escrito que podrás editar antes de enviar
+                                        </span>
+                                    )}
+                                </div>
+                            </label>
+                        </div>
+
+                        <div className="flex justify-end gap-3">
+                            <button 
+                                onClick={() => {
+                                    setShowApproveModal(false);
+                                    setSendEmailOnApprove(false);
+                                }} 
+                                className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={confirmApprove} 
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg shadow-lg shadow-emerald-900/20 flex items-center gap-2 transition-all"
+                            >
+                                <CheckCircle size={16} />
+                                Confirmar Aprobación
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- MODAL DE "NO CALIFICADO" CON OPCIÓN DE EMAIL --- */}
+            {showDisqualifiedModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-slate-900 border border-rose-900/50 rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
+                        <button 
+                            onClick={() => {
+                                setShowDisqualifiedModal(false);
+                                setSendEmailOnDisqualify(false);
+                            }} 
+                            className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"
+                        >
+                            ✕
+                        </button>
+                        
+                        <div className="flex items-center gap-3 mb-4 text-rose-500">
+                            <ThumbsDown size={24} />
+                            <h3 className="text-xl font-bold text-white">Marcar como No Calificado</h3>
+                        </div>
+                        
+                        <p className="text-slate-400 text-sm mb-6">
+                            Estás a punto de marcar a <strong className="text-white">{candidate.nombre}</strong> como "No Calificado".
+                        </p>
+
+                        {/* Checkbox para abrir email */}
+                        <div className="mb-6 p-4 bg-slate-950/50 border border-slate-800 rounded-lg">
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    checked={sendEmailOnDisqualify}
+                                    onChange={(e) => setSendEmailOnDisqualify(e.target.checked)}
+                                    className="w-5 h-5 rounded border-slate-700 bg-slate-900 text-rose-600 focus:ring-rose-500 focus:ring-2 cursor-pointer"
+                                    disabled={!candidate.email}
+                                />
+                                <div className="flex-1">
+                                    <span className="text-sm font-medium text-white block">
+                                        Abrir Gmail con email de notificación
+                                    </span>
+                                    {!candidate.email ? (
+                                        <span className="text-xs text-rose-400 mt-1 block">
+                                            ⚠️ El candidato no tiene email registrado
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs text-slate-500 mt-1 block">
+                                            Se abrirá Gmail con un mensaje pre-escrito que podrás editar antes de enviar
+                                        </span>
+                                    )}
+                                </div>
+                            </label>
+                        </div>
+
+                        <div className="flex justify-end gap-3">
+                            <button 
+                                onClick={() => {
+                                    setShowDisqualifiedModal(false);
+                                    setSendEmailOnDisqualify(false);
+                                }} 
+                                className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={handleConfirmDisqualified} 
+                                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold rounded-lg shadow-lg shadow-rose-900/20 flex items-center gap-2 transition-all"
+                            >
+                                <ThumbsDown size={16} />
+                                Confirmar No Calificado
                             </button>
                         </div>
                     </div>
@@ -3092,7 +3511,7 @@ Equipo de Selección | Global Talent Connections`
                                                    <ThumbsUp size={16}/> Calificado
                                                </button>
                                                <button
-                                                   onClick={() => updateChecklist('result', 'disqualified')}
+                                                   onClick={() => setShowDisqualifiedModal(true)}
                                                    disabled={!canMakeDecision}
                                                    className={`py-3 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                                                        finalResult === 'disqualified'
@@ -3532,6 +3951,7 @@ const handleUpdateCandidate = async (id, updates) => {
             case 'stage_2':   return <ManageView candidates={candidates} onSelect={handleSelectCandidate} currentUser={currentUser} />;
             case 'stage_3':   return <ReportView candidates={candidates} onUpdate={handleUpdateCandidate} setCurrentReport={setCurrentReport} />;
             case 'search':    return <SearchView candidates={candidates} onSelect={handleSelectCandidate} />;
+            case 'reports':   return <ReportsView candidates={candidates} setCurrentReport={setCurrentReport} />;
             case 'trash':     return <TrashView candidates={candidates} onUpdate={handleUpdateCandidate} />;
             default:          return <DashboardView candidates={candidates} onNavigate={setActiveTab} />;
         }
@@ -3545,6 +3965,7 @@ const handleUpdateCandidate = async (id, updates) => {
         { id: 'stage_3', label: '3. Generar Informe', icon: FileJson, sub: 'Listos para Asignar' },
         { type: 'divider', label: 'SISTEMA' },
         { id: 'search', label: 'Búsqueda', icon: Search },
+        { id: 'reports', label: 'Informes', icon: FileText },
         { id: 'trash', label: 'Papelera', icon: Trash2 },
     ];
 
