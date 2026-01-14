@@ -2210,6 +2210,9 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
 // VISTA: BASE DE DATOS DE INFORMES GENERADOS
 // =========================================================
 function ReportsView({ candidates, setCurrentReport }) {
+    // ⚡ ESTADO PARA CRONOLOGÍA
+    const [selectedCandidateForHistory, setSelectedCandidateForHistory] = React.useState(null);
+
     // Filtrar solo candidatos con informe generado
     const reportsWithData = candidates.filter(c => c.informe_final_data);
     
@@ -2245,7 +2248,13 @@ function ReportsView({ candidates, setCurrentReport }) {
     };
 
     // ⚡ FUNCIÓN PARA EXPORTAR CRONOLOGÍA A CSV
-    const handleDownloadHistoryCSV = (candidate) => {
+    const handleExportHistory = () => {
+        if (!selectedCandidateForHistory) {
+            alert("No hay candidato seleccionado.");
+            return;
+        }
+
+        const candidate = selectedCandidateForHistory;
         const historial = candidate.history || candidate.historial_movimientos || [];
         
         if (!historial || historial.length === 0) {
@@ -2289,6 +2298,78 @@ function ReportsView({ candidates, setCurrentReport }) {
         document.body.removeChild(a);
     };
 
+    // RENDER: VISTA CRONOLOGÍA (MODAL)
+    // =========================================================
+    if (selectedCandidateForHistory) {
+        return (
+            <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <div className="mb-6 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                            <History size={20}/> Cronología de Movimientos
+                        </h2>
+                        <p className="text-slate-400 text-sm mt-1">
+                            {selectedCandidateForHistory.nombre} - {selectedCandidateForHistory.puesto || "Candidato"}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {(() => {
+                            const historial = selectedCandidateForHistory.history || selectedCandidateForHistory.historial_movimientos || [];
+                            return historial.length > 0 && (
+                                <button 
+                                    onClick={handleExportHistory}
+                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-2"
+                                >
+                                    <Download size={16}/> Exportar CSV
+                                </button>
+                            );
+                        })()}
+                        <button 
+                            onClick={() => setSelectedCandidateForHistory(null)}
+                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-lg transition-colors"
+                        >
+                            Volver
+                        </button>
+                    </div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-8">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <History size={16}/> Historial de Movimientos
+                    </h3>
+                    
+                    {(() => {
+                        const historial = selectedCandidateForHistory.history || selectedCandidateForHistory.historial_movimientos || [];
+                        return historial.length === 0 ? (
+                            <div className="text-center py-10 border-2 border-dashed border-slate-800 rounded-xl">
+                                <p className="text-slate-500 text-sm">No hay movimientos registrados aún.</p>
+                            </div>
+                        ) : (
+                            <div className="relative border-l-2 border-slate-800 ml-3 space-y-8 pl-8 py-2">
+                                {historial.map((h, idx) => (
+                                <div key={idx} className="relative group">
+                                    <div className="absolute -left-[39px] top-1 w-5 h-5 rounded-full bg-slate-900 border-2 border-blue-500 z-10 group-hover:scale-125 transition-transform shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">
+                                            {h.date ? new Date(h.date).toLocaleString('es-AR') : 'Fecha desconocida'}
+                                        </span>
+                                        <h4 className="text-white font-bold text-sm">{h.event || 'Evento del sistema'}</h4>
+                                        <p className="text-xs text-slate-400 bg-slate-950/50 p-2 rounded border border-slate-800 inline-block mt-1">
+                                            {h.detail || 'Sin detalles adicionales.'}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        );
+                    })()}
+                </div>
+            </div>
+        );
+    }
+
+    // RENDER: LISTA DE INFORMES (DEFAULT)
+    // =========================================================
     return (
         <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
             {/* CABECERA */}
@@ -2331,10 +2412,10 @@ function ReportsView({ candidates, setCurrentReport }) {
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <button 
-                                            onClick={() => handleDownloadHistoryCSV(c)}
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
+                                            onClick={() => setSelectedCandidateForHistory(c)}
+                                            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
                                         >
-                                            <Download size={14}/> Descargar CSV
+                                            <History size={14}/> Ver Cronología
                                         </button>
                                         <button 
                                             onClick={() => handleViewReport(c)}
