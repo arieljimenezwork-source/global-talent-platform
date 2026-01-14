@@ -1160,8 +1160,14 @@ async function analizarCorreos() {
             reseñaVideo // Reseña del video (puede ser null)
           );
           
-          // Limitar score inicial a máximo 80 (antes de la entrevista)
-          analisisIA.score = Math.min(analisisIA.score, 80);
+          // Limitar score según si el video se procesó exitosamente
+          if (reseñaVideo) {
+              // Si el video se procesó correctamente, límite de 80
+              analisisIA.score = Math.min(analisisIA.score, 80);
+          } else {
+              // Si NO hay video procesado (falló o no existe), límite de 75
+              analisisIA.score = Math.min(analisisIA.score, 75);
+          }
           
           // Si hay error con el video, agregar alerta
           if (videoError) {
@@ -4460,12 +4466,24 @@ app.post("/candidatos/:id/reparar-cv", async (req, res) => {
           datosActuales.reseña_video || null // Reseña del video si existe
         );
         
-        // Limitar score según origen
+        // Limitar score según origen y si hay video procesado
         const origen = datosActuales.origen || "";
+        const tieneVideoProcesado = datosActuales.reseña_video ? true : false;
+        
         if (origen === "webhook_zoho_passive" || origen.includes("zoho") || origen.includes("mail")) {
-          analisisIA.score = Math.min(analisisIA.score, 80);
+            // Ingreso por formulario
+            if (tieneVideoProcesado) {
+                analisisIA.score = Math.min(analisisIA.score, 80);
+            } else {
+                analisisIA.score = Math.min(analisisIA.score, 75);
+            }
         } else if (origen === "carga_manual") {
-          analisisIA.score = Math.min(analisisIA.score, 70);
+            // Ingreso manual
+            if (tieneVideoProcesado) {
+                analisisIA.score = Math.min(analisisIA.score, 75);
+            } else {
+                analisisIA.score = Math.min(analisisIA.score, 70);
+            }
         }
         
         updateData.ia_score = analisisIA.score;
