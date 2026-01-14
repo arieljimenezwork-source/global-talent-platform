@@ -578,9 +578,9 @@
         "Asistente para Desarrollo Web",
         "Asistente de Diseño Grafico",
         "Asistente de Automatizacion con IA",
-        "Asistente de Gestion y Calidad",
+        "Asistente de Gestión y Calidad",
         "Asistende de Recursos Humanos",
-        "Asistente de Gestion de Procesos",
+        "Asistente de Gestión de Procesos",
         "Asistente Diseñador/a de Productos e Interiores",
         "Asistente Técnico/a de Proyectos Acústicos",
         "Asistente de Atención al Cliente",
@@ -591,7 +591,7 @@
         "Aistente Desarrollador/a Senior - Magnolia CMS",
         "Asistente Delineante técnico",
         "Asistente Ingeniero/a de Caminos",
-        "Asistente de Gestion de Proyectos",
+        "Asistente de Gestión de Proyectos",
         "Asistente Virtual Ejecutiva",
         "Asistente Project Manager",
         "Asistente de Marketing con Elementor",
@@ -2539,36 +2539,41 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     
     const recipient = candidate.email;
     // Asunto Dinámico
-    const subject = encodeURIComponent(`¡Confirmación de Entrevista! – Posición: ${candidate.puesto} 🚀`);
+    const subject = encodeURIComponent(`¡Buenas noticias! Tu entrevista con GTC está lista 🚀`);
     
     // Cuerpo del mensaje con Variables Dinámicas y Formato de Texto
     const body = encodeURIComponent(
 `Hola, ${candidate.nombre}:
 
+¡Esperamos que estés teniendo un excelente día!
 
-Espero que estés teniendo un excelente día.
-Nos complace informarte que hemos revisado tu perfil y nos encantaría conocerte mejor. Por ello, te confirmamos los detalles para tu entrevista con nuestro equipo de selección:
+Queremos contarte que hemos revisado tu postulación y has avanzado a la siguiente etapa para la posición de ${candidate.puesto}. Tu presentación (CV, formulario y video) cumple con los estándares de excelencia que buscamos en Global Talent Connections, ¡felicidades! 🎯
 
+Nos encantaría conocerte mejor y conversar sobre tu potencial, por lo que ya tenemos todo listo para nuestra entrevista:
 
-📍 Link de conexión (Google Meet): ${linkToUse}
-📅 Fecha y Hora: [Insertar Fecha y Hora]
+📅 Detalles de tu cita:
 
+●	Fecha y Hora: [Insertar Fecha y Hora]
+●	📍 Link de conexión (Google Meet): ${linkToUse}
 
-RECOMENDACIONES PARA TU ENTREVISTA:
-- Asegúrate de contar con una conexión estable a internet.
-- Te sugerimos conectarte unos minutos antes desde un lugar tranquilo y sin ruido ambiente.
-- ¡Sé tú mismo! Queremos conocer tu potencial y experiencia de cerca.
+📍 ¿Qué sigue después de esto? (Tú ruta al éxito):
 
+1.	Entrevista inicial: Conversaremos sobre tu experiencia y expectativas.
+2.	Validación Técnica: Analizaremos en detalle tu perfil con nuestro equipo especializado.
+3.	Confirmación: Nos pondremos en contacto contigo por correo o WhatsApp para informarte los pasos finales.
 
-Por favor, confírmanos tu asistencia aceptando el meet. Si llegaras a tener algún inconveniente con el horario, avísanos con antelación para intentar reprogramar.
+💡 Consejos para brillar:
 
+●	Conéctate unos minutos antes desde un lugar tranquilo y asegúrate de que tu internet esté estable.
+●	¡Sé tú mismo! Queremos conocer a la persona detrás del talento.
 
-¡Estamos ansiosos por conversar contigo!
+Por favor, confírmanos tu asistencia aceptando la invitación de Google Calendar. Si tienes algún inconveniente con el horario, avísanos con antelación vía WhatsApp o respondiendo este mail para intentar reprogramar.
 
+Agradecemos mucho tu interés en formar parte de nuestra comunidad. ¡Estamos ansiosos por conversar contigo!
 
-Saludos,
-${currentUser || 'Equipo de Selección'}
-Equipo de Selección | Global Talent Connections`
+Saludos cordiales,
+
+${currentUser || 'Equipo de Selección'} Equipo de Selección | Global Talent Connections`
     );
     
     // Abrir Gmail en pestaña nueva
@@ -2595,33 +2600,32 @@ const handleSendForm2 = () => {
     onUpdate(candidate.id, { process_step_2_form: 'sent', usuario_accion: currentUser });
    
     const recipient = candidate.email;
-    const subject = encodeURIComponent(`Próximos pasos: Evaluación de Competencias – Global Talent Connections`);
+    const subject = encodeURIComponent(`¡Excelentes noticias! Seguimos adelante 🚀`);
    
     // Cuerpo del mensaje con el Link de Zoho Fijo y Formato de Lista
     const body = encodeURIComponent(
 `Hola, ${candidate.nombre}:
 
+¡Qué gusto saludarte! Fue un verdadero placer conversar contigo en nuestra entrevista y conocer un poco más sobre tu trayectoria.
 
-Fue un gusto conversar contigo en la entrevista previa.
-Para continuar con tu proceso de selección, el siguiente paso es completar una breve validación de competencias técnicas y conductuales. Esto nos permitirá conocer más a fondo tu perfil y alinearlo con los requerimientos de la posición.
+Para seguir construyendo este camino juntos, el siguiente paso es completar nuestra Validación de Competencias. Queremos ver tu talento en acción y asegurarnos de que el rol de ${candidate.puesto} sea el "match" perfecto para ti. ✨
 
+📍 Haz clic aquí para empezar: 👉  Formulario de competencias
+https://forms.zohopublic.eu/globaltalentconnection1/form/ValidacionAsistentes/formperma/g9ttDk7Jj0cHyTgIRH_CdUcD7I5kHhTWL9XCpKWOeB0
 
-📍 Puedes acceder al formulario aquí:
-👉 https://forms.zohopublic.eu/globaltalentconnection1/form/ValidacionAsistentes/formperma/g9ttDk7Jj0cHyTgIRH_CdUcD7I5kHhTWL9XCpKWOeB0
+¿Qué debes tener en cuenta?
 
+●	Tu experiencia es la clave: Verás preguntas sobre tus herramientas favoritas, autogestión y compromiso.
+●	Sé tú mismo: Te recomendamos responder con total sinceridad y detalle; ¡queremos conocer tu esencia!
+●	¡Nosotros nos encargamos del resto!: Una vez que lo envíes, nuestro equipo revisará tus respuestas y te contactaremos muy pronto para contarte qué sigue.
 
-CONSIDERACIONES IMPORTANTES:
-- El formulario incluye preguntas sobre tu experiencia, compromiso, herramientas y autogestión.
-- Te recomendamos completarlo con sinceridad y detalle.
-- Una vez enviado, nuestro equipo revisará tus respuestas para notificarte la siguiente etapa.
+Agradecemos mucho la energía y el tiempo que le estás dedicando a este proceso. ¡Estamos muy emocionados de ver tus respuestas y seguir avanzando!
 
+Quedamos atentos a cualquier duda que tengas.
 
-Agradecemos tu tiempo y dedicación en este proceso. Quedamos atentos a tus respuestas para seguir avanzando.
+Un gran saludo,
 
-
-Saludos cordiales,
-${currentUser || 'Equipo de Selección'}
-Equipo de Selección | Global Talent Connections`
+${currentUser || 'Equipo de Selección'} Equipo de Selección | Global Talent Connections`
     );
    
     // Abrimos Gmail Web en pestaña nueva
