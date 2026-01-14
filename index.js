@@ -46,6 +46,16 @@ const axios = require("axios");
 const vision = require("@google-cloud/vision");
 const crypto = require("node:crypto");
 const { Storage } = require("@google-cloud/storage");
+const ffmpeg = require("fluent-ffmpeg");
+const ffmpegStatic = require("ffmpeg-static");
+
+// Configurar ffmpeg para usar el binario estático
+if (ffmpegStatic) {
+  ffmpeg.setFfmpegPath(ffmpegStatic);
+  console.log(`✅ FFmpeg configurado: ${ffmpegStatic}`);
+} else {
+  console.warn(`⚠️ ffmpeg-static no encontrado, usando ffmpeg del sistema`);
+}
 const pLimit = require("p-limit");        // concurrencia
 const helmet = require("helmet");         // seguridad
 const rateLimit = require("express-rate-limit");
@@ -1988,7 +1998,7 @@ function safeUnlink(p) {
 
 const upload = multer({
   dest: os.tmpdir(),
-  limits: { fileSize: 16 * 1024 * 1024 }
+  limits: { fileSize: 50 * 1024 * 1024 }
 });
 const { execFile } = require("child_process");
 const TEMPLATE_PATH = process.env.FICHA_TEMPLATE_PATH
@@ -3316,17 +3326,9 @@ async function generarResenaVideo(videoUrl, puesto) {
     }
     // Si es Google Drive, necesitamos convertir el link a formato de descarga directa
     else if (videoUrl.includes('drive.google.com')) {
-      // Intentar convertir link de Drive a formato de descarga
-      // Si es un link de visualización, convertirlo a formato de descarga
-      if (videoUrl.includes('/file/d/')) {
-        const fileIdMatch = videoUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-        if (fileIdMatch) {
-          const fileId = fileIdMatch[1];
-          // Intentar usar el link directo de descarga (requiere que el archivo sea público)
-          videoUriParaGemini = `https://drive.google.com/uc?export=download&id=${fileId}`;
-          console.log(`🔄 [DEBUG] Convertido link de Drive a formato de descarga: ${videoUriParaGemini}`);
-        }
-      }
+      // Usar la función helper que ya maneja confirm=t para archivos grandes
+      videoUriParaGemini = convertirLinkDriveADescarga(videoUrl);
+      console.log(`🔄 [DEBUG] Convertido link de Drive a formato de descarga: ${videoUriParaGemini}`);
     }
     // Si es YouTube, usar la URL directamente (Gemini puede procesar YouTube)
     else if (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')) {
@@ -3393,9 +3395,28 @@ async function generarResenaVideo(videoUrl, puesto) {
           // Descargar el video desde la URL original
           const videoResponse = await axios.get(videoUrl, { 
             responseType: 'arraybuffer',
-            timeout: 30000,
-            maxContentLength: 100 * 1024 * 1024 // 100MB máximo
+            timeout: 300000, // 5 minutos para videos grandes
+            maxContentLength: 500 * 1024 * 1024, // 500MB máximo (aumentado para videos grandes)
+            maxRedirects: 10,
+            headers: { 
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' 
+            }
           });
+          
+          // 🔥 VALIDAR que realmente descargamos un video
+          const contentType = videoResponse.headers['content-type'] || '';
+          const responseStart = Buffer.from(videoResponse.data.slice(0, Math.min(1000, videoResponse.data.length))).toString('utf-8');
+          const isHTML = contentType.includes('text/html') || 
+                         responseStart.includes('<!DOCTYPE') ||
+                         responseStart.includes('<html');
+          
+          if (isHTML) {
+            throw new Error('La URL devolvió HTML en lugar del video. Verifica que el link sea accesible.');
+          }
+          
+          if (videoResponse.data.length < 1024) {
+            throw new Error(`Video descargado es demasiado pequeño (${videoResponse.data.length} bytes).`);
+          }
           
           // Subir a GCS
           const videoFileName = `CVs_staging/videos/${crypto.randomUUID()}_video.mp4`;
@@ -3455,11 +3476,114 @@ async function generarResenaVideo(videoUrl, puesto) {
 }
 
 // ==========================================
+// 🎥 HELPER: DESCARGAR VIDEO DE GOOGLE DRIVE
+// ==========================================
+/**
+ * Convierte un link de Google Drive a formato de descarga directa
+ * @param {string} driveUrl - URL de Google Drive
+ * @returns {string} URL de descarga directa
+ */
+function convertirLinkDriveADescarga(driveUrl) {
+  // Si ya es un link de descarga, retornarlo tal cual
+  if (driveUrl.includes('/uc?export=download')) {
+    return driveUrl;
+  }
+  
+  // Si es un link de visualización (/file/d/), extraer el ID y convertir
+  if (driveUrl.includes('/file/d/')) {
+    const fileIdMatch = driveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (fileIdMatch) {
+      const fileId = fileIdMatch[1];
+      return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+  }
+  
+  // Si es un link compartido (/open?id=), extraer el ID
+  if (driveUrl.includes('/open?id=')) {
+    const fileIdMatch = driveUrl.match(/\/open\?id=([a-zA-Z0-9_-]+)/);
+    if (fileIdMatch) {
+      const fileId = fileIdMatch[1];
+      return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+  }
+  
+  // Si no se puede convertir, retornar el original
+  return driveUrl;
+}
+
+// ==========================================
+// 🎥 HELPER: COMPRIMIR VIDEO A MÁXIMO 50MB
+// ==========================================
+/**
+ * Comprime un video a máximo 50MB usando ffmpeg
+ * @param {string} inputPath - Ruta del video original
+ * @param {string} outputPath - Ruta donde guardar el video comprimido
+ * @returns {Promise<{success: boolean, sizeMB: number, error: string|null}>}
+ */
+function comprimirVideoA50MB(inputPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    // Primero obtener la duración del video para calcular el bitrate
+    ffmpeg.ffprobe(inputPath, (err, metadata) => {
+      if (err) {
+        return reject(new Error(`Error obteniendo metadata del video: ${err.message}`));
+      }
+      
+      const duracionSegundos = metadata.format.duration || 60; // Fallback a 60 segundos
+      const tamañoMaximoBytes = 50 * 1024 * 1024; // 50MB en bytes
+      const tamañoMaximoBits = tamañoMaximoBytes * 8; // Convertir a bits
+      
+      // Calcular bitrate objetivo (dejando espacio para audio ~128kbps)
+      const bitrateVideoKbps = Math.max(500, Math.floor((tamañoMaximoBits / duracionSegundos - 128000) / 1000));
+      
+      console.log(`📊 [COMPRESIÓN] Duración: ${duracionSegundos.toFixed(2)}s, Bitrate objetivo: ${bitrateVideoKbps}kbps`);
+      
+      // Comprimir el video
+      ffmpeg(inputPath)
+        .videoCodec('libx264')
+        .audioCodec('aac')
+        .videoBitrate(`${bitrateVideoKbps}k`)
+        .audioBitrate('128k')
+        .outputOptions([
+          '-preset medium',
+          '-crf 23', // Calidad balanceada
+          '-movflags +faststart' // Para streaming web
+        ])
+        .on('start', (commandLine) => {
+          console.log(`🎬 [COMPRESIÓN] Iniciando: ${commandLine}`);
+        })
+        .on('progress', (progress) => {
+          if (progress.percent) {
+            console.log(`📊 [COMPRESIÓN] Progreso: ${Math.round(progress.percent)}%`);
+          }
+        })
+        .on('end', () => {
+          // Verificar tamaño final
+          const stats = fs.statSync(outputPath);
+          const sizeMB = stats.size / (1024 * 1024);
+          console.log(`✅ [COMPRESIÓN] Completado. Tamaño final: ${sizeMB.toFixed(2)}MB`);
+          
+          resolve({
+            success: true,
+            sizeMB: sizeMB,
+            error: null
+          });
+        })
+        .on('error', (err) => {
+          console.error(`❌ [COMPRESIÓN] Error: ${err.message}`);
+          reject(new Error(`Error comprimiendo video: ${err.message}`));
+        })
+        .save(outputPath);
+    });
+  });
+}
+
+// ==========================================
 // 📥 HELPER: PROCESAR ARCHIVO DESDE LINK (WorkDrive, Loom, YouTube, Drive)
 // ==========================================
 /**
  * Descarga archivos desde links privados (WorkDrive) y los sube a Firebase Storage,
  * o retorna links públicos directamente (Loom, YouTube, Google Drive).
+ * Para Google Drive, descarga, comprime a máximo 50MB y sube a Storage.
  * 
  * @param {string} url - URL del archivo (WorkDrive, Loom, YouTube, Drive, etc.)
  * @param {string} tipo - Tipo de archivo: 'cv' o 'video'
@@ -3479,8 +3603,104 @@ async function procesarArchivoDesdeLink(url, tipo, safeId) {
     const esYouTube = url.includes('youtube.com') || url.includes('youtu.be');
     const esGoogleDrive = url.includes('drive.google.com');
     
-    // Si es un link público conocido, guardarlo directamente
-    if (esLoom || esYouTube || esGoogleDrive) {
+    // 🎥 PROCESAMIENTO ESPECIAL PARA GOOGLE DRIVE (solo videos)
+    if (esGoogleDrive && tipo === 'video') {
+      console.log(`🎥 Procesando video de Google Drive: descargando, comprimiendo y subiendo...`);
+      
+      try {
+        // 1. Convertir link de Drive a formato de descarga
+        const downloadUrl = convertirLinkDriveADescarga(url);
+        console.log(`📥 Descargando desde: ${downloadUrl.substring(0, 80)}...`);
+        
+        // 2. Descargar el video (límite alto, lo comprimiremos después)
+        const response = await axios.get(downloadUrl, {
+          responseType: 'arraybuffer',
+          timeout: 300000, // 5 minutos timeout (videos grandes pueden tardar)
+          maxContentLength: 500 * 1024 * 1024, // 500MB máximo para descarga (luego comprimimos a 50MB)
+          maxRedirects: 10, // Seguir redirects de Google Drive
+          headers: { 
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' 
+          },
+          validateStatus: function (status) {
+            return status >= 200 && status < 400; // Aceptar redirects
+          }
+        });
+        
+        // 🔥 VALIDAR que realmente descargamos un video, no HTML
+        const contentType = response.headers['content-type'] || '';
+        const responseStart = Buffer.from(response.data.slice(0, Math.min(1000, response.data.length))).toString('utf-8');
+        const isHTML = contentType.includes('text/html') || 
+                       responseStart.includes('<!DOCTYPE') ||
+                       responseStart.includes('<html') ||
+                       responseStart.includes('Google Drive');
+        
+        if (isHTML) {
+          throw new Error('Google Drive devolvió HTML en lugar del video. El archivo puede ser muy grande o requiere permisos especiales. Verifica que el link sea público y accesible.');
+        }
+        
+        // Validar que el tamaño sea razonable (mínimo 1KB)
+        if (response.data.length < 1024) {
+          throw new Error(`Video descargado es demasiado pequeño (${response.data.length} bytes). Posible error en la descarga.`);
+        }
+        
+        // 3. Guardar temporalmente el video descargado
+        const tempInputPath = path.join(os.tmpdir(), `${safeId}_video_original_${Date.now()}.mp4`);
+        const tempOutputPath = path.join(os.tmpdir(), `${safeId}_video_comprimido_${Date.now()}.mp4`);
+        
+        fs.writeFileSync(tempInputPath, Buffer.from(response.data));
+        const sizeOriginalMB = response.data.length / (1024 * 1024);
+        console.log(`📊 Video descargado: ${sizeOriginalMB.toFixed(2)}MB`);
+        
+        // 4. Comprimir el video a máximo 50MB
+        let videoBuffer;
+        if (sizeOriginalMB > 50) {
+          console.log(`🎬 Comprimiendo video de ${sizeOriginalMB.toFixed(2)}MB a máximo 50MB...`);
+          await comprimirVideoA50MB(tempInputPath, tempOutputPath);
+          videoBuffer = fs.readFileSync(tempOutputPath);
+          
+          // Limpiar archivos temporales
+          try { fs.unlinkSync(tempInputPath); } catch(e) {}
+          try { fs.unlinkSync(tempOutputPath); } catch(e) {}
+        } else {
+          console.log(`✅ Video ya está bajo 50MB, no necesita compresión`);
+          videoBuffer = Buffer.from(response.data);
+          // Limpiar archivo temporal
+          try { fs.unlinkSync(tempInputPath); } catch(e) {}
+        }
+        
+        // 5. Subir a Firebase Storage
+        const fileName = `CVs_staging/videos/${safeId}_video.mp4`;
+        const bucketFile = bucket.file(fileName);
+        
+        await bucketFile.save(videoBuffer, { 
+          metadata: { contentType: 'video/mp4' } 
+        });
+        
+        // 6. Generar link público firmado
+        const [publicUrl] = await bucketFile.getSignedUrl({
+          action: 'read',
+          expires: '01-01-2035',
+          responseDisposition: 'inline'
+        });
+        
+        const sizeFinalMB = videoBuffer.length / (1024 * 1024);
+        console.log(`✅ Video de Google Drive procesado y comprimido: ${sizeFinalMB.toFixed(2)}MB → ${fileName}`);
+        
+        return { urlPublica: publicUrl, procesado: true, error: null };
+        
+      } catch (error) {
+        console.error(`❌ Error procesando video de Google Drive:`, error.message);
+        // Si falla, retornar el link original como fallback
+        return {
+          urlPublica: url,
+          procesado: false,
+          error: `Error procesando video de Drive: ${error.message}`
+        };
+      }
+    }
+    
+    // Si es un link público conocido (Loom, YouTube) o Drive pero es CV, guardarlo directamente
+    if (esLoom || esYouTube || (esGoogleDrive && tipo === 'cv')) {
       console.log(`✅ Link ${tipo} es público (${esLoom ? 'Loom' : esYouTube ? 'YouTube' : 'Google Drive'}), guardando directamente.`);
       return { urlPublica: url, procesado: false, error: null };
     }
@@ -3504,8 +3724,9 @@ async function procesarArchivoDesdeLink(url, tipo, safeId) {
       // Descargar el archivo
       const response = await axios.get(url, {
         responseType: 'arraybuffer',
-        timeout: 60000, // 60 segundos timeout
-        maxContentLength: tipo === 'cv' ? 10 * 1024 * 1024 : 100 * 1024 * 1024, // 10MB para CV, 100MB para video
+        timeout: tipo === 'video' ? 300000 : 60000, // 5 minutos para videos, 60 seg para CVs
+        maxContentLength: tipo === 'cv' ? 10 * 1024 * 1024 : 500 * 1024 * 1024, // 10MB para CV, 500MB para video
+        maxRedirects: 10,
         headers: { 
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' 
         }
@@ -4817,9 +5038,37 @@ app.patch("/candidatos/:id", async (req, res) => {
         console.log(`🎥 [DEBUG] Score ANTES de analizar video: ${datosActuales.ia_score || 'N/A'}`);
         
         try {
-            // 1. Generar reseña del video
+            // 🎥 PROCESAR VIDEO DE GOOGLE DRIVE (descargar y comprimir si es necesario)
+            let videoUrlParaAnalizar = videoUrlNuevo;
+            const esGoogleDrive = videoUrlNuevo.includes('drive.google.com');
+            
+            if (esGoogleDrive) {
+                console.log(`🎥 [DEBUG] Video de Google Drive detectado, procesando (descargar y comprimir)...`);
+                try {
+                    const resultadoProcesamiento = await procesarArchivoDesdeLink(videoUrlNuevo, 'video', id);
+                    
+                    if (resultadoProcesamiento.procesado && resultadoProcesamiento.urlPublica) {
+                        // Si se procesó correctamente, usar la URL procesada (comprimida)
+                        videoUrlParaAnalizar = resultadoProcesamiento.urlPublica;
+                        // Actualizar el video_url con la URL procesada
+                        finalUpdate.video_url = resultadoProcesamiento.urlPublica;
+                        finalUpdate.video_tipo = "archivo_procesado"; // Marcar como procesado
+                        console.log(`✅ [DEBUG] Video de Google Drive procesado y comprimido. Nueva URL: ${videoUrlParaAnalizar.substring(0, 80)}...`);
+                    } else if (resultadoProcesamiento.error) {
+                        console.warn(`⚠️ [DEBUG] Error procesando video de Drive: ${resultadoProcesamiento.error}`);
+                        console.log(`⚠️ [DEBUG] Continuando con URL original para análisis...`);
+                        // Continuar con la URL original si falla el procesamiento
+                    }
+                } catch (errorProcesamiento) {
+                    console.error(`❌ [DEBUG] Error en procesamiento de Drive:`, errorProcesamiento.message);
+                    console.log(`⚠️ [DEBUG] Continuando con URL original para análisis...`);
+                    // Continuar con la URL original si falla
+                }
+            }
+            
+            // 1. Generar reseña del video (usando URL procesada si es Drive, o original si no)
             console.log(`🎥 [DEBUG] Iniciando generación de reseña del video...`);
-            const resultadoVideo = await generarResenaVideo(videoUrlNuevo, datosActuales.puesto || "General");
+            const resultadoVideo = await generarResenaVideo(videoUrlParaAnalizar, datosActuales.puesto || "General");
             
             let reseñaVideo = null;
             let videoError = null;
@@ -4902,7 +5151,10 @@ app.patch("/candidatos/:id", async (req, res) => {
             finalUpdate.reseña_video = reseñaVideo || null;
             finalUpdate.video_error = videoError || null;
             finalUpdate.video_link_publico = videoLinkPublico;
-            finalUpdate.video_tipo = updates.video_tipo || "link"; // Por defecto "link" si se agrega manualmente
+            // Si no se procesó antes (no es Drive o falló), usar el tipo del update o "link" por defecto
+            if (!finalUpdate.video_tipo) {
+                finalUpdate.video_tipo = updates.video_tipo || "link"; // Por defecto "link" si se agrega manualmente
+            }
             
             // 4. Agregar evento a cronología
             const eventoVideo = {

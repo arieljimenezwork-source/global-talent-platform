@@ -7,7 +7,7 @@
     "start": "node index.js",
     "analiza": "node analyze.js",
     "build": "vite build",
-    "postinstall": "if command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y ffmpeg; else echo \"Saltando apt-get (entorno sin apt-get)\"; fi"
+    "postinstall": "node -e \"const os = require('os'); const { execSync } = require('child_process'); if (os.platform() === 'linux') { try { execSync('which apt-get', {stdio: 'ignore'}); execSync('apt-get update && apt-get install -y ffmpeg', {stdio: 'inherit'}); } catch(e) { console.log('Saltando apt-get (usando ffmpeg-static)'); } } else { console.log('Usando ffmpeg-static en', os.platform()); }\""
   },
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.16.0",
@@ -27,6 +27,7 @@
     "express": "^4.21.2",
     "express-rate-limit": "^6.11.2",
     "ffmpeg-static": "^5.2.0",
+    "fluent-ffmpeg": "^2.1.2",
     "firebase-admin": "^13.5.0",
     "form-data": "^4.0.4",
     "fs": "^0.0.1-security",
