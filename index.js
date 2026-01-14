@@ -3221,20 +3221,30 @@ async function generarResenaCV(textoCV, puesto) {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
     const prompt = `
-      ACTÚA COMO: Reclutador Senior de Global Talent Connections.
-      TAREA: Generar una reseña profesional y concisa del CV del candidato.
-      
-      CV DEL CANDIDATO (para el puesto de "${puesto}"):
-      ${textoCV.slice(0, 15000)}
-      
-      GENERA UNA RESEÑA que incluya:
-      1. Experiencia relevante (años, roles principales)
-      2. Habilidades técnicas destacadas
-      3. Fortalezas del perfil
-      4. Posibles debilidades o gaps
-      
-      Formato: Párrafo de 3-5 líneas, profesional y objetivo.
-      NO incluyas score ni recomendaciones, solo la reseña descriptiva.
+    ACTÚA COMO: Auditor de Talento Senior para Global Talent Connections.
+    TAREA: Realizar una "Due Diligence" rápida del CV para validar el Seniority real.
+    
+    CONTEXTO: El puesto a cubrir es "${puesto}".
+    CV DEL CANDIDATO:
+    ${textoCV.slice(0, 15000)}
+    
+    INSTRUCCIONES DE ANÁLISIS CRÍTICO (Filtro de Calidad):
+    No resumas el CV. Audita la relevancia real de la experiencia para un entorno corporativo/remoto.
+    
+    1. 📉 DEVALUACIÓN DE EXPERIENCIA NO AFÍN:
+       - Si el candidato suma años en sectores irrelevantes (Retail, Gastronomía, Operativo manual), etiquétalo como "Experiencia no transferible" o "Perfil Junior en transición". No sumes estos años como experiencia válida para el puesto.
+    
+    2. 🔍 VALIDACIÓN DE "FREELANCE":
+       - Si la experiencia reciente es 100% "Freelance/Autónomo" sin clientes o proyectos claros, márcalo como "Seniority no verificable" o "Posible gap laboral".
+    
+    3. 🛠️ CONSISTENCIA TÉCNICA:
+       - Diferencia entre "Menciona herramientas" (lista de palabras clave) y "Demuestra uso" (logros con esas herramientas). Si solo lista, menciónalo como "Conocimiento teórico sin aplicación probada".
+    
+    FORMATO DE SALIDA (Reseña de Auditoría):
+    Redacta un párrafo de 3-5 líneas con tono analítico y sobrio. Destaca las discrepancias entre lo que el candidato dice ser y lo que la experiencia demuestra.
+    
+    Ejemplo de Tono Esperado:
+    "El candidato presenta 10 años de trayectoria total, pero solo 2 son relevantes para el puesto objetivo, siendo el resto experiencia operativa en retail. Su etapa reciente como freelance carece de referencias corporativas sólidas. Aunque lista herramientas de gestión, su perfil es funcionalmente Junior para entornos remotos estructurados debido a la falta de experiencia continua en empresas establecidas."
     `;
     
     const result = await model.generateContent(prompt);
@@ -3340,20 +3350,38 @@ async function generarResenaVideo(videoUrl, puesto) {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
     const prompt = `
-      ACTÚA COMO: Reclutador Senior de Global Talent Connections.
-      TAREA: Analizar el video de presentación del candidato y generar una reseña profesional.
-      
-      CONTEXTO: Candidato postulando para el puesto de "${puesto}".
-      
-      ANALIZA EL VIDEO y genera una reseña que incluya:
-      1. Comunicación verbal (claridad, fluidez, profesionalismo)
-      2. Presentación personal (imagen, actitud)
-      3. Contenido del mensaje (qué dice sobre su experiencia/motivación)
-      4. Nivel de inglés (si habla en inglés)
-      5. Impresión general
-      
-      Formato: Párrafo de 3-5 líneas, profesional y objetivo.
-      NO incluyas score ni recomendaciones, solo la reseña descriptiva.
+    ROL: Auditor de Calidad para Selección Remota (Estándar Internacional).
+    TAREA: Evaluar el video del candidato buscando FACTORES DE RIESGO y PENALIZACIONES.
+    
+    CONTEXTO: Procesamos 2000+ candidatos. Buscamos filtrar implacablemente la calidad "Ready to Work".
+    INPUT: Video de presentación para el puesto de "${puesto}".
+    
+    INSTRUCCIONES DE PUNTUACIÓN (Lógica Negativa):
+    No busques virtudes, busca defectos que impidan el trabajo remoto de alto nivel.
+    
+    ANALIZA ESTOS 4 PILARES Y REDACTA UNA RESEÑA TÉCNICA:
+    
+    1. 🎙️ CALIDAD DE AUDIO (Factor Crítico):
+       - ¿Suena a "llamada de WhatsApp" o a "reunión profesional"?
+       - Penaliza severamente: Eco (reverberación), ruido de fondo, soplidos en el micrófono, volumen bajo.
+       
+    2. 📹 ENTORNO VISUAL:
+       - Penaliza: Encuadre "selfie" (celular en mano), mala iluminación (contraluz/oscuridad), fondo desordenado o doméstico (cama/cocina visibles).
+       - Busca: Estabilidad, fondo neutro/oficina, iluminación frontal.
+       
+    3. 🗣️ FLUIDEZ Y DENSIDAD:
+       - ¿Dice mucho en poco tiempo o da vueltas?
+       - Penaliza: Pausas largas ("eeeeh"), lectura evidente de guion (ojos no miran a cámara), ritmo lento.
+       
+    4. 💼 PRESENCIA PROFESIONAL:
+       - ¿Transmite autoridad o pasividad?
+       - Penaliza: Informalidad excesiva, falta de energía, mirada evasiva.
+    
+    FORMATO DE SALIDA (Reseña Objetiva para Score Automático):
+    Redacta un solo párrafo denso y crítico. Usa términos como "Audio deficiente", "Entorno amateur", "Discurso diluido", "Lectura evidente".
+    
+    Ejemplo de Tono Esperado:
+    "Candidato con dicción aceptable pero entorno técnico deficiente. El audio presenta reverberación notable y captación de ruido ambiental, inadecuado para llamadas con clientes. Visualmente utiliza un encuadre tipo selfie inestable. Discurso estructurado pero leído, restando naturalidad. Perfil operativo básico, no listo para despliegue inmediato."
     `;
     
     // Intentar con fileData primero (para GCS URIs)
