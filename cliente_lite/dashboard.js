@@ -2244,6 +2244,51 @@ function ReportsView({ candidates, setCurrentReport }) {
         }
     };
 
+    // ⚡ FUNCIÓN PARA EXPORTAR CRONOLOGÍA A CSV
+    const handleDownloadHistoryCSV = (candidate) => {
+        const historial = candidate.history || candidate.historial_movimientos || [];
+        
+        if (!historial || historial.length === 0) {
+            alert("No hay cronología disponible para este candidato.");
+            return;
+        }
+
+        // Encabezados del CSV
+        const headers = ['Nombre', 'Email', 'Puesto', 'Fecha y Hora', 'Evento', 'Detalles', 'Usuario'];
+        
+        // Convertir historial a filas CSV
+        const rows = historial.map(h => {
+            const fecha = h.date ? new Date(h.date).toLocaleString('es-AR') : 'Fecha desconocida';
+            return [
+                candidate.nombre || 'Sin nombre',
+                candidate.email || 'S/E',
+                candidate.puesto || 'Sin puesto',
+                fecha,
+                h.event || 'Evento del sistema',
+                (h.detail || 'Sin detalles adicionales.').replace(/"/g, '""'), // Escapar comillas
+                h.usuario || 'Sistema'
+            ];
+        });
+        
+        // Crear contenido CSV
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+        
+        // Crear blob y descargar
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' }); // BOM para Excel
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const safeName = (candidate.nombre || 'Candidato').replace(/[^a-zA-Z0-9 ]/g, "").replace(/\s+/g, "_");
+        a.download = `Cronologia_${safeName}_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    };
+
     return (
         <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
             {/* CABECERA */}
@@ -2285,6 +2330,12 @@ function ReportsView({ candidates, setCurrentReport }) {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3">
+                                        <button 
+                                            onClick={() => handleDownloadHistoryCSV(c)}
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
+                                        >
+                                            <Download size={14}/> Descargar CSV
+                                        </button>
                                         <button 
                                             onClick={() => handleViewReport(c)}
                                             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
