@@ -13,3 +13,6 @@ backups/
 backup-firestore.js
 verificar-colecciones.js
 eliminar-colecciones.js
+
+# IA Context
+repomix-output.txt

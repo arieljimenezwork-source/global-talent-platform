@@ -3184,33 +3184,22 @@ async function extractAudioMono16k(videoPath) {
 // ==========================================
 
 // Función para verificar si un link de video es público y accesible
-async function verificarLinkVideoPublico(videoUrl) {
+async function verificarLinkVideoPublico(url) {
   try {
-    // Hacemos un HEAD request para verificar sin descargar el archivo completo
-    const response = await axios.head(videoUrl, {
-      timeout: 5000,
+    const response = await axios.head(url, {
+      timeout: 10000,
       maxRedirects: 5,
-      validateStatus: (status) => status < 400 // Acepta 2xx y 3xx
+      validateStatus: (status) => status < 500
     });
     
-    // Verificamos que el Content-Type sea de video
-    const contentType = response.headers['content-type'] || '';
-    const esVideo = contentType.startsWith('video/') || 
-                     videoUrl.includes('drive.google.com') || 
-                     videoUrl.includes('youtube.com') ||
-                     videoUrl.includes('youtu.be');
-    
     return {
-      esPublico: true,
-      esVideo: esVideo,
-      contentType: contentType
+      esPublico: response.status === 200,
+      esVideo: (response.headers['content-type'] || '').includes('video')
     };
   } catch (error) {
-    // Si falla, probablemente el link es privado o no accesible
     return {
       esPublico: false,
-      esVideo: false,
-      error: error.message
+      esVideo: false
     };
   }
 }
@@ -3247,233 +3236,6 @@ async function generarResenaCV(textoCV, puesto) {
   }
 }
 
-// Función para procesar video y generar reseña
-async function generarResenaVideo(videoUrl, puesto) {
-  try {
-    // Primero verificamos si el link es público
-    const verificacion = await verificarLinkVideoPublico(videoUrl);
-    
-    if (!verificacion.esPublico) {
-      return {
-        reseña: null,
-        error: "El link del video no es público o no es accesible. El candidato debe compartir el link como público.",
-        linkPublico: false
-      };
-    }
-    
-    if (!verificacion.esVideo && !videoUrl.includes('drive.google.com') && !videoUrl.includes('youtube.com')) {
-      return {
-        reseña: null,
-        error: "El link no parece ser un video válido.",
-        linkPublico: true
-      };
-    }
-    
-    // 🔥 CORRECCIÓN: Gemini necesita URI de GCS (gs://) o URL pública directa
-    // Si es una signed URL de GCS o Firebase Storage, extraer el path y construir gs://
-    // Si es una URL externa (Drive, YouTube), intentar usar directamente o subir a GCS
-    
-    let videoUriParaGemini = videoUrl;
-    
-    // 🔥 NUEVO: Detectar URLs de Firebase Storage (firebasestorage.app)
-    if (videoUrl.includes('firebasestorage.app')) {
-      // Formato: https://[PROJECT_ID].firebasestorage.app/v0/b/[BUCKET_NAME]/o/[PATH]?alt=media&token=...
-      // O: https://[PROJECT_ID].firebasestorage.app/v0/b/[BUCKET_NAME]/o/[PATH]?token=...
-      try {
-        const urlObj = new URL(videoUrl);
-        const pathMatch = urlObj.pathname.match(/\/v0\/b\/([^\/]+)\/o\/(.+)/);
-        if (pathMatch) {
-          const bucketName = pathMatch[1];
-          // Decodificar el path (puede estar URL-encoded)
-          const filePath = decodeURIComponent(pathMatch[2].replace(/%2F/g, '/'));
-          videoUriParaGemini = `gs://${bucketName}/${filePath}`;
-          console.log(`🔄 [DEBUG] Convertido Firebase Storage URL a GCS URI: ${videoUriParaGemini}`);
-        } else {
-          // Si no coincide el patrón, intentar extraer del pathname directamente
-          const pathParts = urlObj.pathname.split('/').filter(p => p);
-          if (pathParts.length > 0) {
-            // Buscar el bucket name en el path
-            const bucketIndex = pathParts.findIndex(p => p === 'b');
-            if (bucketIndex !== -1 && pathParts[bucketIndex + 1]) {
-              const bucketName = pathParts[bucketIndex + 1];
-              const filePath = pathParts.slice(bucketIndex + 3).join('/'); // Saltar 'b', bucket, 'o'
-              videoUriParaGemini = `gs://${bucketName}/${decodeURIComponent(filePath)}`;
-              console.log(`🔄 [DEBUG] Convertido Firebase Storage URL a GCS URI (método alternativo): ${videoUriParaGemini}`);
-            }
-          }
-        }
-      } catch (parseError) {
-        console.warn(`⚠️ [DEBUG] No se pudo parsear URL de Firebase Storage: ${parseError.message}`);
-        // Continuar con la URL original y dejar que el fallback lo maneje
-      }
-    }
-    // Si es una signed URL de GCS (contiene storage.googleapis.com o storage.cloud.google.com)
-    else if (videoUrl.includes('storage.googleapis.com') || videoUrl.includes('storage.cloud.google.com')) {
-      // Extraer el path del bucket desde la URL
-      // Ejemplo: https://storage.googleapis.com/bucket-name/path/to/video.mp4?X-Goog-Algorithm=...
-      try {
-        const urlObj = new URL(videoUrl);
-        const pathParts = urlObj.pathname.split('/').filter(p => p);
-        if (pathParts.length >= 2) {
-          const bucketName = pathParts[0];
-          const filePath = pathParts.slice(1).join('/');
-          videoUriParaGemini = `gs://${bucketName}/${filePath}`;
-          console.log(`🔄 [DEBUG] Convertido signed URL a GCS URI: ${videoUriParaGemini}`);
-        }
-      } catch (parseError) {
-        console.warn(`⚠️ [DEBUG] No se pudo parsear URL de GCS: ${parseError.message}`);
-      }
-    }
-    // Si es Google Drive, necesitamos convertir el link a formato de descarga directa
-    else if (videoUrl.includes('drive.google.com')) {
-      // Usar la función helper que ya maneja confirm=t para archivos grandes
-      videoUriParaGemini = convertirLinkDriveADescarga(videoUrl);
-      console.log(`🔄 [DEBUG] Convertido link de Drive a formato de descarga: ${videoUriParaGemini}`);
-    }
-    // Si es YouTube, usar la URL directamente (Gemini puede procesar YouTube)
-    else if (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')) {
-      // Gemini puede procesar YouTube directamente, usar la URL tal cual
-      videoUriParaGemini = videoUrl;
-      console.log(`🔄 [DEBUG] Usando link de YouTube directamente: ${videoUriParaGemini}`);
-    }
-    
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    
-    const prompt = `
-      ACTÚA COMO: Reclutador Senior de Global Talent Connections.
-      TAREA: Analizar el video de presentación del candidato y generar una reseña profesional.
-      
-      CONTEXTO: Candidato postulando para el puesto de "${puesto}".
-      
-      ANALIZA EL VIDEO y genera una reseña que incluya:
-      1. Comunicación verbal (claridad, fluidez, profesionalismo)
-      2. Presentación personal (imagen, actitud)
-      3. Contenido del mensaje (qué dice sobre su experiencia/motivación)
-      4. Nivel de inglés (si habla en inglés)
-      5. Impresión general
-      
-      Formato: Párrafo de 3-5 líneas, profesional y objetivo.
-      NO incluyas score ni recomendaciones, solo la reseña descriptiva.
-    `;
-    
-    // Intentar con fileData primero (para GCS URIs)
-    let result;
-    try {
-      if (videoUriParaGemini.startsWith('gs://')) {
-        // Si es URI de GCS, usar fileData
-        const parts = [
-          { text: prompt },
-          { 
-            fileData: {
-              fileUri: videoUriParaGemini,
-              mimeType: "video/mp4"
-            }
-          }
-        ];
-        result = await model.generateContent(parts);
-      } else {
-        // Si es URL HTTP, intentar usar directamente (Gemini 2.5 puede aceptar URLs públicas)
-        // Nota: Esto puede fallar, en ese caso necesitaremos subir el video a GCS primero
-        const parts = [
-          { text: prompt },
-          { 
-            fileData: {
-              fileUri: videoUriParaGemini,
-              mimeType: "video/mp4"
-            }
-          }
-        ];
-        result = await model.generateContent(parts);
-      }
-    } catch (geminiError) {
-      // Si falla con URL HTTP o URI gs:// inválido, intentar descargar y subir a GCS
-      if (!videoUriParaGemini.startsWith('gs://') && !videoUriParaGemini.includes('youtube.com')) {
-        console.log(`⚠️ [DEBUG] Falló con URL HTTP o URI inválido, intentando descargar y subir a GCS...`);
-        console.log(`⚠️ [DEBUG] Error de Gemini: ${geminiError.message}`);
-        
-        try {
-          // Descargar el video desde la URL original
-          const videoResponse = await axios.get(videoUrl, { 
-            responseType: 'arraybuffer',
-            timeout: 300000, // 5 minutos para videos grandes
-            maxContentLength: 500 * 1024 * 1024, // 500MB máximo (aumentado para videos grandes)
-            maxRedirects: 10,
-            headers: { 
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' 
-            }
-          });
-          
-          // 🔥 VALIDAR que realmente descargamos un video
-          const contentType = videoResponse.headers['content-type'] || '';
-          const responseStart = Buffer.from(videoResponse.data.slice(0, Math.min(1000, videoResponse.data.length))).toString('utf-8');
-          const isHTML = contentType.includes('text/html') || 
-                         responseStart.includes('<!DOCTYPE') ||
-                         responseStart.includes('<html');
-          
-          if (isHTML) {
-            throw new Error('La URL devolvió HTML en lugar del video. Verifica que el link sea accesible.');
-          }
-          
-          if (videoResponse.data.length < 1024) {
-            throw new Error(`Video descargado es demasiado pequeño (${videoResponse.data.length} bytes).`);
-          }
-          
-          // Subir a GCS
-          const videoFileName = `CVs_staging/videos/${crypto.randomUUID()}_video.mp4`;
-          const videoBucketFile = bucket.file(videoFileName);
-          await videoBucketFile.save(Buffer.from(videoResponse.data), {
-            metadata: { contentType: "video/mp4" }
-          });
-          
-          // Usar URI de GCS
-          const gcsUri = `gs://${bucket.name}/${videoFileName}`;
-          console.log(`✅ [DEBUG] Video subido a GCS: ${gcsUri}`);
-          
-          const parts = [
-            { text: prompt },
-            { 
-              fileData: {
-                fileUri: gcsUri,
-                mimeType: "video/mp4"
-              }
-            }
-          ];
-          result = await model.generateContent(parts);
-        } catch (uploadError) {
-          throw new Error(`Error descargando/subiendo video a GCS: ${uploadError.message}`);
-        }
-      } else {
-        throw geminiError;
-      }
-    }
-    
-    const reseña = result.response.text().trim();
-    
-    return {
-      reseña: reseña,
-      error: null,
-      linkPublico: true
-    };
-  } catch (error) {
-    console.error("❌ Error procesando video:", error.message);
-    console.error("❌ Stack completo:", error.stack);
-    
-    // Si el error es de acceso, probablemente el link es privado
-    if (error.message.includes('403') || error.message.includes('permission') || error.message.includes('access')) {
-      return {
-        reseña: null,
-        error: "El link del video no es público o no es accesible. El candidato debe compartir el link como público.",
-        linkPublico: false
-      };
-    }
-    
-    return {
-      reseña: null,
-      error: `Error al procesar video: ${error.message}`,
-      linkPublico: null
-    };
-  }
-}
 
 // ==========================================
 // 🎥 HELPER: DESCARGAR VIDEO DE GOOGLE DRIVE
@@ -4841,6 +4603,587 @@ async function storageProbe() {
     return false;
   }
 }
+
+// ==========================================
+// 🎥 FUNCIÓN MEJORADA: GENERAR RESEÑA DE VIDEO
+// ==========================================
+/**
+ * Procesa un video y genera una reseña usando Gemini
+ * FLUJO UNIFICADO: Descarga → Valida → Comprime → Sube a GCS → Analiza con Gemini
+ * 
+ * @param {string} videoUrl - URL del video (Drive, YouTube, Firebase Storage, etc.)
+ * @param {string} puesto - Puesto al que aplica el candidato
+ * @returns {Promise<{reseña: string|null, error: string|null, linkPublico: boolean}>}
+ */
+async function generarResenaVideo(videoUrl, puesto) {
+  const logPrefix = '🎥 [VIDEO]';
+  let tempFilePath = null;
+  let compressedFilePath = null;
+  
+  try {
+    console.log(`${logPrefix} ═══════════════════════════════════════════`);
+    console.log(`${logPrefix} Iniciando procesamiento de video`);
+    console.log(`${logPrefix} URL original: ${videoUrl.substring(0, 100)}...`);
+    console.log(`${logPrefix} Puesto: ${puesto}`);
+    
+    // ═══════════════════════════════════════════
+    // PASO 1: VALIDAR QUE EL LINK ES PÚBLICO
+    // ═══════════════════════════════════════════
+    console.log(`${logPrefix} ─────────────────────────────────────────`);
+    console.log(`${logPrefix} PASO 1: Validando acceso público...`);
+    
+    const verificacion = await verificarLinkVideoPublico(videoUrl);
+    
+    if (!verificacion.esPublico) {
+      console.error(`${logPrefix} ❌ Link no público o no accesible`);
+      return {
+        reseña: null,
+        error: "El link del video no es público o no es accesible. El candidato debe compartir el link como público.",
+        linkPublico: false
+      };
+    }
+    
+    console.log(`${logPrefix} ✅ Link es público y accesible`);
+    
+    // Validar que sea un video (excepto para Drive y YouTube que validaremos después)
+    if (!verificacion.esVideo && 
+        !videoUrl.includes('drive.google.com') && 
+        !videoUrl.includes('youtube.com') && 
+        !videoUrl.includes('youtu.be')) {
+      console.error(`${logPrefix} ❌ El link no parece ser un video`);
+      return {
+        reseña: null,
+        error: "El link no parece ser un video válido.",
+        linkPublico: true
+      };
+    }
+    
+    // ═══════════════════════════════════════════
+    // PASO 2: IDENTIFICAR TIPO DE URL
+    // ═══════════════════════════════════════════
+    console.log(`${logPrefix} ─────────────────────────────────────────`);
+    console.log(`${logPrefix} PASO 2: Identificando tipo de URL...`);
+    
+    const esFirebaseStorage = videoUrl.includes('firebasestorage.app');
+    const esGCS = videoUrl.includes('storage.googleapis.com') || videoUrl.includes('storage.cloud.google.com');
+    const esDrive = videoUrl.includes('drive.google.com');
+    const esYouTube = videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be');
+    
+    let tipoURL = 'desconocido';
+    if (esFirebaseStorage) tipoURL = 'Firebase Storage';
+    else if (esGCS) tipoURL = 'Google Cloud Storage';
+    else if (esDrive) tipoURL = 'Google Drive';
+    else if (esYouTube) tipoURL = 'YouTube';
+    
+    console.log(`${logPrefix} 🔍 Tipo detectado: ${tipoURL}`);
+    
+    
+    // ═══════════════════════════════════════════
+    // PASO 3: PROCESAR SEGÚN EL TIPO
+    // ═══════════════════════════════════════════
+    console.log(`${logPrefix} ─────────────────────────────────────────`);
+    console.log(`${logPrefix} PASO 3: Procesando según tipo...`);
+    
+    let gcsUri = null;
+    
+    // CASO 1: Firebase Storage → Convertir a gs:// directamente
+    if (esFirebaseStorage) {
+      console.log(`${logPrefix} 📍 Firebase Storage detectado`);
+      console.log(`${logPrefix} 🔍 URL: ${videoUrl}`);
+      
+      // FALLBACK: Descargar directamente en lugar de parsear
+      console.log(`${logPrefix} 📥 Descargando desde Firebase Storage...`);
+      
+      const videoResponse = await axios.get(videoUrl, {
+        responseType: 'arraybuffer',
+        timeout: 300000,
+        maxContentLength: 500 * 1024 * 1024,
+        maxRedirects: 10,
+        headers: { 
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' 
+        }
+      });
+      
+      // Validar que es un video
+      const contentType = videoResponse.headers['content-type'] || '';
+      if (!contentType.includes('video')) {
+        throw new Error(`No es un video. Content-Type: ${contentType}`);
+      }
+      
+      const sizeMB = videoResponse.data.length / (1024 * 1024);
+      console.log(`${logPrefix} 📊 Descargado: ${sizeMB.toFixed(2)} MB`);
+      
+      // Guardar temporalmente
+      tempFilePath = path.join(os.tmpdir(), `video_firebase_${crypto.randomUUID()}.mp4`);
+      fs.writeFileSync(tempFilePath, Buffer.from(videoResponse.data));
+      
+      // Comprimir si es necesario
+      let videoFileToUpload = tempFilePath;
+      let finalSizeMB = sizeMB;
+      
+      if (sizeMB > 50) {
+        console.log(`${logPrefix} 🗜️ Comprimiendo...`);
+        compressedFilePath = path.join(os.tmpdir(), `video_compressed_${crypto.randomUUID()}.mp4`);
+        
+        try {
+          const compressionResult = await comprimirVideoA50MB(tempFilePath, compressedFilePath);
+          if (compressionResult.success) {
+            videoFileToUpload = compressedFilePath;
+            finalSizeMB = compressionResult.sizeMB;
+            console.log(`${logPrefix} ✅ Comprimido: ${finalSizeMB.toFixed(2)} MB`);
+          }
+        } catch (err) {
+          console.warn(`${logPrefix} ⚠️ No se pudo comprimir, usando original`);
+        }
+      }
+      
+      // Subir a nuestro bucket
+      console.log(`${logPrefix} ☁️ Subiendo a GCS...`);
+      const videoFileName = `CVs_staging/videos/${crypto.randomUUID()}_video.mp4`;
+      const videoBucketFile = bucket.file(videoFileName);
+      
+      const videoBuffer = fs.readFileSync(videoFileToUpload);
+      await videoBucketFile.save(videoBuffer, {
+        metadata: { contentType: "video/mp4" }
+      });
+      
+      // 🔥 FIX: Usar el bucket correcto para Gemini
+      // 🔥 FIX: Hardcodear el bucket correcto temporalmente
+      const realBucketName = 'gtcia-16ad9.appspot.com'; // Cambiar .firebasestorage.app por .appspot.com
+      gcsUri = `gs://${realBucketName}/${videoFileName}`;
+
+      console.log(`${logPrefix} 🔍 DEBUG - Bucket usado: ${realBucketName}`);
+      console.log(`${logPrefix} 🔍 DEBUG - URI completo: ${gcsUri}`);
+      console.log(`${logPrefix} ✅ Subido: ${gcsUri}`);
+    }
+    
+    // CASO 2: GCS Signed URL → Convertir a gs://
+    else if (esGCS) {
+      console.log(`${logPrefix} 📍 GCS Signed URL detectado, convirtiendo a gs://...`);
+      try {
+        const urlObj = new URL(videoUrl);
+        const pathParts = urlObj.pathname.split('/').filter(p => p);
+        if (pathParts.length >= 2) {
+          const bucketName = pathParts[0];
+          const filePath = pathParts.slice(1).join('/');
+          gcsUri = `gs://${bucketName}/${filePath}`;
+          console.log(`${logPrefix} ✅ Convertido a: ${gcsUri}`);
+        } else {
+          throw new Error('No se pudo extraer bucket y path de la URL de GCS');
+        }
+      } catch (parseError) {
+        console.error(`${logPrefix} ❌ Error parseando GCS URL: ${parseError.message}`);
+        throw new Error(`URL de GCS inválida: ${parseError.message}`);
+      }
+    }
+    
+    // CASO 3 y 4: Drive o YouTube → Descargar, validar, subir a GCS
+    else if (esDrive || esYouTube) {
+      console.log(`${logPrefix} 📥 ${tipoURL} detectado, iniciando descarga y procesamiento...`);
+      
+      // Convertir URL de Drive si es necesario
+      let downloadUrl = videoUrl;
+      if (esDrive) {
+        downloadUrl = convertirLinkDriveADescarga(videoUrl);
+        console.log(`${logPrefix} 🔄 URL de descarga: ${downloadUrl.substring(0, 80)}...`);
+      }
+      
+      // Descargar el video
+      console.log(`${logPrefix} ⏬ Descargando video...`);
+      const videoResponse = await axios.get(downloadUrl, {
+        responseType: 'arraybuffer',
+        timeout: 300000, // 5 minutos
+        maxContentLength: 500 * 1024 * 1024, // 500MB máximo
+        maxRedirects: 10,
+        headers: { 
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' 
+        },
+        validateStatus: function (status) {
+          return status >= 200 && status < 400;
+        }
+      });
+      
+      // Validar que es un video, no HTML
+      const contentType = videoResponse.headers['content-type'] || '';
+      const dataStart = Buffer.from(videoResponse.data.slice(0, Math.min(1000, videoResponse.data.length))).toString('utf-8');
+      const isHTML = contentType.includes('text/html') || 
+                     dataStart.includes('<!DOCTYPE') ||
+                     dataStart.includes('<html') ||
+                     dataStart.includes('Google Drive');
+      
+      if (isHTML) {
+        console.error(`${logPrefix} ❌ La respuesta es HTML, no un video`);
+        throw new Error(
+          esDrive 
+            ? 'Google Drive devolvió HTML en lugar del video. El archivo puede ser muy grande o requiere permisos especiales. Verifica que el link sea público y accesible.'
+            : 'La URL devolvió HTML en lugar del video.'
+        );
+      }
+      
+      // Validar tamaño mínimo
+      const sizeMB = videoResponse.data.length / (1024 * 1024);
+      console.log(`${logPrefix} 📊 Tamaño descargado: ${sizeMB.toFixed(2)} MB`);
+      
+      if (videoResponse.data.length < 1024) {
+        console.error(`${logPrefix} ❌ Archivo demasiado pequeño`);
+        throw new Error(`Video descargado es demasiado pequeño (${videoResponse.data.length} bytes). Posible error en la descarga.`);
+      }
+      
+      // Guardar temporalmente
+      tempFilePath = path.join(os.tmpdir(), `video_original_${crypto.randomUUID()}.mp4`);
+      fs.writeFileSync(tempFilePath, Buffer.from(videoResponse.data));
+      console.log(`${logPrefix} 💾 Guardado temporalmente en: ${tempFilePath}`);
+      
+      // Comprimir si es necesario (>50MB)
+      let videoFileToUpload = tempFilePath;
+      let finalSizeMB = sizeMB;
+      
+      if (sizeMB > 50) {
+        console.log(`${logPrefix} 🗜️ Video >50MB, comprimiendo...`);
+        compressedFilePath = path.join(os.tmpdir(), `video_compressed_${crypto.randomUUID()}.mp4`);
+        
+        try {
+          const compressionResult = await comprimirVideoA50MB(tempFilePath, compressedFilePath);
+          
+          if (compressionResult.success) {
+            console.log(`${logPrefix} ✅ Compresión exitosa: ${compressionResult.sizeMB.toFixed(2)} MB`);
+            videoFileToUpload = compressedFilePath;
+            finalSizeMB = compressionResult.sizeMB;
+          } else {
+            console.warn(`${logPrefix} ⚠️ No se pudo comprimir, usando original`);
+          }
+        } catch (compressionError) {
+          console.warn(`${logPrefix} ⚠️ Error en compresión: ${compressionError.message}`);
+          console.warn(`${logPrefix} ⚠️ Usando video original sin comprimir`);
+        }
+      }
+      
+      // Subir a nuestro bucket de GCS
+      console.log(`${logPrefix} ☁️ Subiendo a GCS (${finalSizeMB.toFixed(2)} MB)...`);
+      const videoFileName = `CVs_staging/videos/${crypto.randomUUID()}_video.mp4`;
+      const videoBucketFile = bucket.file(videoFileName);
+      
+      const videoBuffer = fs.readFileSync(videoFileToUpload);
+      await videoBucketFile.save(videoBuffer, {
+        metadata: { 
+          contentType: "video/mp4",
+          metadata: {
+            originalSize: sizeMB.toFixed(2) + 'MB',
+            finalSize: finalSizeMB.toFixed(2) + 'MB',
+            compressed: finalSizeMB < sizeMB ? 'yes' : 'no',
+            uploadedAt: new Date().toISOString()
+          }
+        }
+      });
+      
+      gcsUri = `gs://${bucket.name}/${videoFileName}`;
+      console.log(`${logPrefix} ✅ Subido exitosamente a: ${gcsUri}`);
+    }
+    
+    // CASO DESCONOCIDO: Error
+    else {
+      throw new Error(`Tipo de URL no soportado: ${videoUrl}`);
+    }
+    
+    // ═══════════════════════════════════════════
+    // PASO 4: VALIDAR QUE TENEMOS UN GCS URI
+    // ═══════════════════════════════════════════
+    console.log(`${logPrefix} ─────────────────────────────────────────`);
+    console.log(`${logPrefix} PASO 4: Analizando con Gemini...`);
+    
+    // Verificar que tenemos un archivo local o en GCS
+    let archivoParaGemini = tempFilePath || compressedFilePath;
+    
+    if (!archivoParaGemini || !fs.existsSync(archivoParaGemini)) {
+      throw new Error('No hay archivo de video disponible para analizar');
+    }
+    
+    console.log(`${logPrefix} 📁 Archivo a analizar: ${archivoParaGemini}`);
+    
+    // Obtener tamaño del archivo
+    const stats = fs.statSync(archivoParaGemini);
+    const fileSizeMB = stats.size / (1024 * 1024);
+    console.log(`${logPrefix} 📊 Tamaño del archivo: ${fileSizeMB.toFixed(2)} MB`);
+    
+    // ═══════════════════════════════════════════════════════════════
+    // OPCIÓN A: USAR FILE API DE GEMINI (Recomendado para archivos grandes)
+    // ═══════════════════════════════════════════════════════════════
+    
+    const { GoogleAIFileManager } = require("@google/generative-ai/server");
+    const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY);
+    
+    console.log(`${logPrefix} 📤 Subiendo video al File API de Gemini...`);
+    
+    // Subir el archivo al File API de Gemini
+    const uploadResult = await fileManager.uploadFile(archivoParaGemini, {
+      mimeType: "video/mp4",
+      displayName: `Video candidato - ${puesto}`,
+    });
+    
+    console.log(`${logPrefix} ✅ Video subido al File API de Gemini`);
+    console.log(`${logPrefix} 📝 File URI: ${uploadResult.file.uri}`);
+    console.log(`${logPrefix} 📝 File Name: ${uploadResult.file.name}`);
+    console.log(`${logPrefix} 📊 Tamaño: ${(uploadResult.file.sizeBytes / 1024 / 1024).toFixed(2)} MB`);
+    
+    // Esperar a que el archivo esté procesado
+    console.log(`${logPrefix} ⏳ Esperando procesamiento del archivo...`);
+    
+    let file = await fileManager.getFile(uploadResult.file.name);
+    while (file.state === "PROCESSING") {
+      console.log(`${logPrefix} ⏳ Archivo aún procesándose... (${file.state})`);
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos
+      file = await fileManager.getFile(uploadResult.file.name);
+    }
+    
+    if (file.state === "FAILED") {
+      throw new Error("El procesamiento del archivo en Gemini falló");
+    }
+    
+    console.log(`${logPrefix} ✅ Archivo procesado y listo: ${file.state}`);
+    
+    // Ahora analizar el video con Gemini
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" }); // Usando modelo más reciente
+    
+    const prompt = `
+      ACTÚA COMO: Reclutador Senior de Global Talent Connections.
+      TAREA: Analizar el video de presentación del candidato y generar una reseña profesional.
+      
+      CONTEXTO: Candidato postulando para el puesto de "${puesto}".
+      
+      ANALIZA EL VIDEO y genera una reseña que incluya:
+      1. Comunicación verbal (claridad, fluidez, profesionalismo)
+      2. Presentación personal (imagen, actitud)
+      3. Contenido del mensaje (qué dice sobre su experiencia/motivación)
+      4. Nivel de inglés (si habla en inglés)
+      5. Impresión general
+      
+      Formato: Párrafo de 3-5 líneas, profesional y objetivo.
+      NO incluyas score ni recomendaciones, solo la reseña descriptiva.
+    `;
+    
+    const parts = [
+      { text: prompt },
+      { 
+        fileData: {
+          mimeType: uploadResult.file.mimeType,
+          fileUri: uploadResult.file.uri
+        }
+      }
+    ];
+    
+    console.log(`${logPrefix} 🤖 Enviando a Gemini para análisis...`);
+    
+    try {
+      const result = await model.generateContent(parts);
+      const reseña = result.response.text().trim();
+      
+      console.log(`${logPrefix} ✅ Análisis completado`);
+      console.log(`${logPrefix} 📝 Reseña generada (${reseña.length} caracteres)`);
+      
+      // Eliminar el archivo del File API de Gemini para ahorrar espacio
+      try {
+        await fileManager.deleteFile(uploadResult.file.name);
+        console.log(`${logPrefix} 🗑️ Archivo eliminado del File API de Gemini`);
+      } catch (deleteError) {
+        console.warn(`${logPrefix} ⚠️ No se pudo eliminar archivo de Gemini: ${deleteError.message}`);
+      }
+      
+      console.log(`${logPrefix} ═══════════════════════════════════════════`);
+      
+      // Limpiar archivos temporales locales
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+        console.log(`${logPrefix} 🧹 Archivo temporal eliminado: ${tempFilePath}`);
+      }
+      if (compressedFilePath && fs.existsSync(compressedFilePath)) {
+        fs.unlinkSync(compressedFilePath);
+        console.log(`${logPrefix} 🧹 Archivo comprimido eliminado: ${compressedFilePath}`);
+      }
+      
+      return {
+        reseña: reseña,
+        error: null,
+        linkPublico: true
+      };
+      
+    } catch (geminiError) {
+      console.error(`${logPrefix} ❌ Error de Gemini: ${geminiError.message}`);
+      
+      // Intentar eliminar el archivo de Gemini en caso de error
+      try {
+        await fileManager.deleteFile(uploadResult.file.name);
+      } catch (e) {
+        // Ignorar errores al eliminar
+      }
+      
+      throw geminiError;
+    }
+    
+  } catch (error) {
+    console.error(`${logPrefix} ═══════════════════════════════════════════`);
+    console.error(`${logPrefix} ❌ ERROR EN PROCESAMIENTO DE VIDEO`);
+    console.error(`${logPrefix} Mensaje: ${error.message}`);
+    console.error(`${logPrefix} Stack: ${error.stack}`);
+    console.error(`${logPrefix} ═══════════════════════════════════════════`);
+    
+    // Limpiar archivos temporales en caso de error
+    try {
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+        console.log(`${logPrefix} 🧹 Archivo temporal eliminado (cleanup): ${tempFilePath}`);
+      }
+      if (compressedFilePath && fs.existsSync(compressedFilePath)) {
+        fs.unlinkSync(compressedFilePath);
+        console.log(`${logPrefix} 🧹 Archivo comprimido eliminado (cleanup): ${compressedFilePath}`);
+      }
+    } catch (cleanupError) {
+      console.error(`${logPrefix} ⚠️ Error limpiando archivos temporales: ${cleanupError.message}`);
+    }
+    
+    // Clasificar tipo de error
+    const errorMsg = error.message.toLowerCase();
+    
+    if (errorMsg.includes('403') || errorMsg.includes('permission') || errorMsg.includes('access')) {
+      return {
+        reseña: null,
+        error: "El link del video no es público o no es accesible. El candidato debe compartir el link como público.",
+        linkPublico: false
+      };
+    }
+    
+    if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
+      return {
+        reseña: null,
+        error: "Tiempo de espera agotado al descargar el video. El archivo puede ser demasiado grande o la conexión es lenta.",
+        linkPublico: null
+      };
+    }
+    
+    if (errorMsg.includes('html') || errorMsg.includes('google drive')) {
+      return {
+        reseña: null,
+        error: "No se pudo descargar el video de Google Drive. Verifica que el link sea público y que el archivo no sea demasiado grande.",
+        linkPublico: false
+      };
+    }
+    
+    return {
+      reseña: null,
+      error: `Error al procesar video: ${error.message}`,
+      linkPublico: null
+    };
+  }
+}
+
+// ==========================================
+// 🔧 HELPERS NECESARIOS
+// ==========================================
+
+/**
+ * Convierte un link de Google Drive a formato de descarga directa
+ */
+function convertirLinkDriveADescarga(driveUrl) {
+  // Si ya es un link de descarga, retornarlo tal cual
+  if (driveUrl.includes('/uc?export=download') || driveUrl.includes('/uc?id=')) {
+    return driveUrl;
+  }
+  
+  // Extraer el ID del archivo
+  let fileId = null;
+  
+  // Patrón 1: /file/d/FILE_ID
+  const match1 = driveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (match1) {
+    fileId = match1[1];
+  }
+  
+  // Patrón 2: /open?id=FILE_ID
+  const match2 = driveUrl.match(/\/open\?id=([a-zA-Z0-9_-]+)/);
+  if (match2) {
+    fileId = match2[1];
+  }
+  
+  // Patrón 3: ?id=FILE_ID
+  const match3 = driveUrl.match(/\?id=([a-zA-Z0-9_-]+)/);
+  if (match3) {
+    fileId = match3[1];
+  }
+  
+  if (fileId) {
+    // Usar el formato que maneja mejor los archivos grandes con confirm=t
+    return `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
+  }
+  
+  // Si no se pudo extraer el ID, retornar el original
+  console.warn(`⚠️ [VIDEO] No se pudo extraer ID de Drive desde: ${driveUrl}`);
+  return driveUrl;
+}
+
+/**
+ * Comprime un video a máximo 50MB usando ffmpeg
+ * REQUISITO: Tener ffmpeg instalado en el sistema
+ */
+function comprimirVideoA50MB(inputPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    // Verificar que ffmpeg esté disponible
+    if (typeof ffmpeg !== 'function') {
+      return reject(new Error('ffmpeg no está disponible. Instala el paquete fluent-ffmpeg y ffmpeg en el sistema.'));
+    }
+    
+    // Obtener metadata del video
+    ffmpeg.ffprobe(inputPath, (err, metadata) => {
+      if (err) {
+        return reject(new Error(`Error obteniendo metadata del video: ${err.message}`));
+      }
+      
+      const duracionSegundos = metadata.format.duration || 60;
+      const tamañoMaximoBytes = 50 * 1024 * 1024; // 50MB
+      const tamañoMaximoBits = tamañoMaximoBytes * 8;
+      
+      // Calcular bitrate objetivo (dejando espacio para audio ~128kbps)
+      const bitrateVideoKbps = Math.max(500, Math.floor((tamañoMaximoBits / duracionSegundos - 128000) / 1000));
+      
+      console.log(`📊 [COMPRESIÓN] Duración: ${duracionSegundos.toFixed(2)}s, Bitrate: ${bitrateVideoKbps}kbps`);
+      
+      // Comprimir
+      ffmpeg(inputPath)
+        .videoCodec('libx264')
+        .audioCodec('aac')
+        .videoBitrate(`${bitrateVideoKbps}k`)
+        .audioBitrate('128k')
+        .outputOptions([
+          '-preset medium',
+          '-crf 23',
+          '-movflags +faststart'
+        ])
+        .on('start', (commandLine) => {
+          console.log(`🎬 [COMPRESIÓN] Iniciando: ${commandLine}`);
+        })
+        .on('progress', (progress) => {
+          if (progress.percent) {
+            console.log(`📊 [COMPRESIÓN] Progreso: ${Math.round(progress.percent)}%`);
+          }
+        })
+        .on('end', () => {
+          const stats = fs.statSync(outputPath);
+          const sizeMB = stats.size / (1024 * 1024);
+          console.log(`✅ [COMPRESIÓN] Completado: ${sizeMB.toFixed(2)}MB`);
+          
+          resolve({
+            success: true,
+            sizeMB: sizeMB,
+            error: null
+          });
+        })
+        .on('error', (err) => {
+          console.error(`❌ [COMPRESIÓN] Error: ${err.message}`);
+          reject(new Error(`Error comprimiendo video: ${err.message}`));
+        })
+        .save(outputPath);
+    });
+  });
+}
+
 // ==========================================
 // 📧 ENDPOINT PARA ENVIAR EMAILS CON HTML (GESTIÓN)
 // ==========================================

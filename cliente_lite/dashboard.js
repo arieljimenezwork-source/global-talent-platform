@@ -2168,6 +2168,14 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                                     >
                                         <History size={14}/> Ver Cronología
                                     </button>
+                                    {onUpdate && (
+                                        <button 
+                                            onClick={() => onUpdate(c.id, { stage: 'stage_2' })}
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
+                                        >
+                                            <Undo2 size={14}/> Volver a Gestión
+                                        </button>
+                                    )}
                                     {c.informe_final_data ? (
                                         <button 
                                             onClick={() => handleOpenCandidate(c)}
@@ -2209,7 +2217,7 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
 // =========================================================
 // VISTA: BASE DE DATOS DE INFORMES GENERADOS
 // =========================================================
-function ReportsView({ candidates, setCurrentReport }) {
+function ReportsView({ candidates, setCurrentReport, onUpdate }) {
     // ⚡ ESTADO PARA CRONOLOGÍA
     const [selectedCandidateForHistory, setSelectedCandidateForHistory] = React.useState(null);
 
@@ -2417,6 +2425,14 @@ function ReportsView({ candidates, setCurrentReport }) {
                                         >
                                             <History size={14}/> Ver Cronología
                                         </button>
+                                        {onUpdate && (
+                                            <button 
+                                                onClick={() => onUpdate(c.id, { stage: 'stage_2' })}
+                                                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
+                                            >
+                                                <Undo2 size={14}/> Volver a Gestión
+                                            </button>
+                                        )}
                                         <button 
                                             onClick={() => handleViewReport(c)}
                                             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
@@ -4087,7 +4103,7 @@ const handleUpdateCandidate = async (id, updates) => {
             case 'stage_2':   return <ManageView candidates={candidates} onSelect={handleSelectCandidate} currentUser={currentUser} />;
             case 'stage_3':   return <ReportView candidates={candidates} onUpdate={handleUpdateCandidate} setCurrentReport={setCurrentReport} />;
             case 'search':    return <SearchView candidates={candidates} onSelect={handleSelectCandidate} />;
-            case 'reports':   return <ReportsView candidates={candidates} setCurrentReport={setCurrentReport} />;
+            case 'reports':   return <ReportsView candidates={candidates} setCurrentReport={setCurrentReport} onUpdate={handleUpdateCandidate} />;
             case 'trash':     return <TrashView candidates={candidates} onUpdate={handleUpdateCandidate} />;
             default:          return <DashboardView candidates={candidates} onNavigate={setActiveTab} />;
         }
