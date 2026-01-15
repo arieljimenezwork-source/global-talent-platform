@@ -3210,20 +3210,30 @@ async function generarResenaCV(textoCV, puesto) {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
     const prompt = `
-      ACTÚA COMO: Reclutador Senior de Global Talent Connections.
-      TAREA: Generar una reseña profesional y concisa del CV del candidato.
-      
-      CV DEL CANDIDATO (para el puesto de "${puesto}"):
-      ${textoCV.slice(0, 15000)}
-      
-      GENERA UNA RESEÑA que incluya:
-      1. Experiencia relevante (años, roles principales)
-      2. Habilidades técnicas destacadas
-      3. Fortalezas del perfil
-      4. Posibles debilidades o gaps
-      
-      Formato: Párrafo de 3-5 líneas, profesional y objetivo.
-      NO incluyas score ni recomendaciones, solo la reseña descriptiva.
+    ACTÚA COMO: Auditor de Talento Senior para Global Talent Connections.
+    TAREA: Realizar una "Due Diligence" rápida del CV para validar el Seniority real.
+    
+    CONTEXTO: El puesto a cubrir es "${puesto}".
+    CV DEL CANDIDATO:
+    ${textoCV.slice(0, 15000)}
+    
+    INSTRUCCIONES DE ANÁLISIS CRÍTICO (Filtro de Calidad):
+    No resumas el CV. Audita la relevancia real de la experiencia para un entorno corporativo/remoto.
+    
+    1. 📉 DEVALUACIÓN DE EXPERIENCIA NO AFÍN:
+       - Si el candidato suma años en sectores irrelevantes (Retail, Gastronomía, Operativo manual), etiquétalo como "Experiencia no transferible" o "Perfil Junior en transición". No sumes estos años como experiencia válida para el puesto.
+    
+    2. 🔍 VALIDACIÓN DE "FREELANCE":
+       - Si la experiencia reciente es 100% "Freelance/Autónomo" sin clientes o proyectos claros, márcalo como "Seniority no verificable" o "Posible gap laboral".
+    
+    3. 🛠️ CONSISTENCIA TÉCNICA:
+       - Diferencia entre "Menciona herramientas" (lista de palabras clave) y "Demuestra uso" (logros con esas herramientas). Si solo lista, menciónalo como "Conocimiento teórico sin aplicación probada".
+    
+    FORMATO DE SALIDA (Reseña de Auditoría):
+    Redacta un párrafo de 3-5 líneas con tono analítico y sobrio. Destaca las discrepancias entre lo que el candidato dice ser y lo que la experiencia demuestra.
+    
+    Ejemplo de Tono Esperado:
+    "El candidato presenta 10 años de trayectoria total, pero solo 2 son relevantes para el puesto objetivo, siendo el resto experiencia operativa en retail. Su etapa reciente como freelance carece de referencias corporativas sólidas. Aunque lista herramientas de gestión, su perfil es funcionalmente Junior para entornos remotos estructurados debido a la falta de experiencia continua en empresas establecidas."
     `;
     
     const result = await model.generateContent(prompt);
