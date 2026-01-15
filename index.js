@@ -3527,7 +3527,7 @@ async function procesarArchivoDesdeLink(url, tipo, safeId) {
 }
 
 // ==========================================
-// 🧠 CEREBRO IA: CLASIFICADOR VIVIANA/GLADYMAR/SANDRA (FINAL CON FLAGS)
+// 🧠 CEREBRO IA: CLASIFICADOR VIVIANA/GLADYMAR (FINAL CON FLAGS)
 // ==========================================
 async function verificaConocimientosMinimos(puesto, textoCandidato, declaraciones = "", reseñaCV = null, reseñaVideo = null) {
   try {
@@ -3965,9 +3965,8 @@ app.post("/candidatos/ingreso-manual", upload.single('cv'), async (req, res) => 
       const pdfData = await pdfParse(fileBuffer);
       const textoCV = pdfData.text.slice(0, 20000); // Límite de caracteres
 
-      // 3.5. Generar reseña del CV (igual que en ZOHO)
-      console.log("📝 Generando reseña del CV...");
-      const reseñaCV = await generarResenaCV(textoCV, puesto || "General");
+      // 3.5. NO generar reseña ni análisis automático - se hará manualmente cuando el reclutador presione "Analizar"
+      // Para carga manual, solo extraemos nombre y email automáticamente
 
       // 3.6. Si nombre o email no vienen del formulario, extraerlos con IA
       let nombreFinal = nombre;
@@ -3991,23 +3990,7 @@ app.post("/candidatos/ingreso-manual", upload.single('cv'), async (req, res) => 
       // Si el email cambió, regenerar el safeId
       const safeIdFinal = emailSafeFinal.replace(/[^a-z0-9]/g, "_") + "_" + Date.now().toString().slice(-4);
 
-      // 4. Ejecutar el Clasificador (IA) (Igual que Fuente 77-79)
-      // Usamos tu función existente 'verificaConocimientosMinimos' o el prompt directo
-      // Aquí reutilizo la lógica de Score que ya tienes implementada
-      console.log("🤖 Ejecutando Clasificador IA...");
-      
-      // NOTA: Reutilizamos la función verificaConocimientosMinimos que está en tu código (Fuente 176)
-      // Si no tienes esa función exportada, usamos la lógica directa.
-      const analisisIA = await verificaConocimientosMinimos(
-          puesto || "General", 
-          textoCV,
-          "", // declaraciones vacío
-          reseñaCV, // Reseña del CV generada
-          null // video (no hay en carga manual inicial)
-      );
-
-      // Limitar score inicial a máximo 70 para carga manual (antes de la entrevista)
-      analisisIA.score = Math.min(analisisIA.score, 70);
+      // 4. NO ejecutar análisis automático - el reclutador lo hará manualmente con el botón "Analizar"
 
       // 5. Guardar en Firestore (La Verdad Única - Fuente 80)
       const nombreUsuario = req.body.usuario_accion || req.body.responsable || "Admin";
@@ -4024,14 +4007,14 @@ app.post("/candidatos/ingreso-manual", upload.single('cv'), async (req, res) => 
           tiene_pdf: true,
           texto_extraido: textoCV, // Guardamos texto para no gastar OCR después
           
-          // Datos de IA (Clasificación Inicial)
-          ia_score: analisisIA.score || 50,
-          ia_motivos: analisisIA.motivos || "Ingresado manualmente",
-          ia_alertas: analisisIA.alertas || [],
-          ia_status: "processed",
+          // Datos de IA (Pendiente de análisis manual)
+          ia_score: null,
+          ia_motivos: null,
+          ia_alertas: [],
+          ia_status: "pending_analysis",
           
-          // Reseñas generadas por IA
-          reseña_cv: reseñaCV,
+          // Reseñas generadas por IA (pendiente)
+          reseña_cv: null,
           
           // Metadatos
           origen: "carga_manual",
@@ -4059,11 +4042,11 @@ app.post("/candidatos/ingreso-manual", upload.single('cv'), async (req, res) => 
       // Limpieza del archivo temporal local
       try { fs.unlinkSync(req.file.path); } catch(e) {}
 
-      console.log(`✅ Candidato manual guardado: ${safeIdFinal} - Score: ${analisisIA.score} - Origen: ${nuevoCandidato.origen}`);
+      console.log(`✅ Candidato manual guardado: ${safeIdFinal} - Análisis pendiente - Origen: ${nuevoCandidato.origen}`);
       res.json({ 
         ok: true, 
         id: safeIdFinal, 
-        score: analisisIA.score,
+        score: null,
         nombre: nombreFinal || "Candidato Manual",
         email: emailSafeFinal
       });
@@ -5609,6 +5592,86 @@ app.post("/candidatos/:id/analizar-entrevista", async (req, res) => {
 
   } catch (e) {
     console.error("Error re-analizando entrevista:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+// ==========================================
+// 🔍 ENDPOINT: ANÁLISIS MANUAL DE CANDIDATO (CARGA MANUAL)
+// ==========================================
+app.post("/candidatos/:id/analizar", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const responsable = req.body.responsable || req.body.usuario_accion || "Admin";
+
+    // 1. Obtener candidato de Firestore
+    const docRef = firestore.collection(MAIN_COLLECTION).doc(id);
+    const docSnap = await docRef.get();
+    
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: "Candidato no encontrado" });
+    }
+
+    const candidato = docSnap.data();
+
+    // 2. Validar que tenga texto extraído del CV
+    if (!candidato.texto_extraido) {
+      return res.status(400).json({ error: "El candidato no tiene texto de CV extraído" });
+    }
+
+    // 3. Generar reseña del CV si no existe
+    let reseñaCV = candidato.reseña_cv;
+    if (!reseñaCV) {
+      console.log("📝 Generando reseña del CV...");
+      reseñaCV = await generarResenaCV(candidato.texto_extraido, candidato.puesto || "General");
+    }
+
+    // 4. Preparar datos para el análisis (incluir respuestas_filtro si existen)
+    const datosParaAnalisis = candidato.respuestas_filtro 
+      ? JSON.stringify(candidato.respuestas_filtro)
+      : "";
+
+    // 5. Ejecutar análisis IA usando verificaConocimientosMinimos
+    console.log("🤖 Ejecutando análisis IA manual...");
+    const analisisIA = await verificaConocimientosMinimos(
+      candidato.puesto || "General",
+      candidato.texto_extraido, // Texto del CV
+      datosParaAnalisis, // Respuestas del filtro (Datos Clave y Skills) como JSON string
+      reseñaCV, // Reseña del CV
+      null // No hay video en análisis manual inicial
+    );
+
+    // Limitar score inicial a máximo 70 para carga manual (antes de la entrevista)
+    analisisIA.score = Math.min(analisisIA.score, 70);
+
+    // 6. Actualizar candidato en Firestore
+    await docRef.update({
+      ia_score: analisisIA.score,
+      ia_motivos: analisisIA.motivos || "Análisis manual completado",
+      ia_alertas: analisisIA.alertas || [],
+      ia_status: "processed",
+      reseña_cv: reseñaCV,
+      actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
+      
+      // HISTORIAL: Análisis manual realizado
+      historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+        date: new Date().toISOString(),
+        event: 'Análisis Manual',
+        detail: `Análisis manual completado. Score: ${analisisIA.score}/100`,
+        usuario: responsable
+      })
+    });
+
+    console.log(`✅ Análisis manual completado para candidato ${id} - Score: ${analisisIA.score}`);
+    res.json({ 
+      ok: true, 
+      score: analisisIA.score,
+      motivos: analisisIA.motivos,
+      alertas: analisisIA.alertas || [],
+      reseña_cv: reseñaCV
+    });
+
+  } catch (e) {
+    console.error("Error en análisis manual:", e);
     res.status(500).json({ error: e.message });
   }
 });
