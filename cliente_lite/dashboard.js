@@ -2168,6 +2168,14 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                                     >
                                         <History size={14}/> Ver Cronología
                                     </button>
+                                    {onUpdate && (
+                                        <button 
+                                            onClick={() => onUpdate(c.id, { stage: 'stage_2' })}
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
+                                        >
+                                            <Undo2 size={14}/> Volver a Gestión
+                                        </button>
+                                    )}
                                     {c.informe_final_data ? (
                                         <button 
                                             onClick={() => handleOpenCandidate(c)}
@@ -2412,22 +2420,19 @@ function ReportsView({ candidates, setCurrentReport, onUpdate }) {
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <button 
-                                            onClick={() => {
-                                                if (confirm(`¿Volver a ${c.nombre} a la sección de Gestión para agregar información faltante?`)) {
-                                                    onUpdate(c.id, { stage: 'stage_2' });
-                                                }
-                                            }}
-                                            className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
-                                            title="Volver el candidato a Gestión para completar información"
-                                        >
-                                            <Undo2 size={14}/> Volver a Gestión
-                                        </button>
-                                        <button 
                                             onClick={() => setSelectedCandidateForHistory(c)}
                                             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
                                         >
                                             <History size={14}/> Ver Cronología
                                         </button>
+                                        {onUpdate && (
+                                            <button 
+                                                onClick={() => onUpdate(c.id, { stage: 'stage_2' })}
+                                                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
+                                            >
+                                                <Undo2 size={14}/> Volver a Gestión
+                                            </button>
+                                        )}
                                         <button 
                                             onClick={() => handleViewReport(c)}
                                             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
@@ -2476,6 +2481,12 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     const [form2Status, setForm2Status] = useState(candidate.process_step_2_form || "pending"); // pending, sent, received
     const [finalResult, setFinalResult] = useState(candidate.process_step_3_result || null); // qualified, disqualified
 
+    // --- ESTADOS PARA EDICIÓN MANUAL DE DATOS CLAVE Y SKILLS (CARGA MANUAL) ---
+    const [salario, setSalario] = useState(candidate.respuestas_filtro?.salario || "");
+    const [monitoreo, setMonitoreo] = useState(candidate.respuestas_filtro?.monitoreo || "");
+    const [disponibilidad, setDisponibilidad] = useState(candidate.respuestas_filtro?.disponibilidad || "");
+    const [herramientas, setHerramientas] = useState(candidate.respuestas_filtro?.herramientas || "");
+    const [isAnalyzingManual, setIsAnalyzingManual] = useState(false);
 
     // 🔥 SINCRONIZAR ESTADOS CUANDO CANDIDATE CAMBIA (para que persistan después de F5)
     React.useEffect(() => {
@@ -2495,6 +2506,16 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
             setFinalResult(candidate.process_step_3_result);
         }
     }, [candidate.meet_link, candidate.interview_transcript, candidate.transcripcion_entrevista, candidate.process_step_2_form, candidate.process_step_3_result]);
+
+    // 🔥 SINCRONIZAR DATOS CLAVE Y SKILLS CUANDO CANDIDATE CAMBIA
+    React.useEffect(() => {
+        if (candidate.respuestas_filtro) {
+            setSalario(candidate.respuestas_filtro.salario || "");
+            setMonitoreo(candidate.respuestas_filtro.monitoreo || "");
+            setDisponibilidad(candidate.respuestas_filtro.disponibilidad || "");
+            setHerramientas(candidate.respuestas_filtro.herramientas || "");
+        }
+    }, [candidate.respuestas_filtro]);
 
     // Recuperar alertas y skills
     const flags = candidate.ia_alertas || candidate.alerts || [];
@@ -2668,6 +2689,46 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     // 2. Guardar Transcripción (misma lógica que saveLinks)
     const saveTranscript = () => {
         onUpdate(candidate.id, { interview_transcript: transcript });
+    };
+
+    // 3. Guardar Datos Clave y Skills (para cargas manuales)
+    const saveDatosClave = async () => {
+        const respuestasFiltroActualizadas = {
+            ...(candidate.respuestas_filtro || {}),
+            salario: salario,
+            monitoreo: monitoreo,
+            disponibilidad: disponibilidad,
+            herramientas: herramientas
+        };
+        await onUpdate(candidate.id, { respuestas_filtro: respuestasFiltroActualizadas });
+    };
+
+    // 4. Análisis manual (para cargas manuales)
+    const handleManualAnalyze = async () => {
+        if (isAnalyzingManual) return;
+        setIsAnalyzingManual(true);
+        try {
+            const responsable = window.currentUser?.nombre || window.currentUser?.email || 'Admin';
+            const result = await api.candidates.analizar(candidate.id, responsable);
+            if (result.ok) {
+                // Actualizar el candidato localmente para reflejar el análisis
+                await onUpdate(candidate.id, {
+                    ia_score: result.score,
+                    ia_motivos: result.motivos,
+                    ia_alertas: result.alertas || [],
+                    ia_status: 'processed',
+                    reseña_cv: result.reseña_cv || candidate.reseña_cv
+                });
+                alert('✅ Análisis completado exitosamente');
+            } else {
+                alert('❌ Error al analizar: ' + (result.error || 'Error desconocido'));
+            }
+        } catch (error) {
+            console.error('Error en análisis manual:', error);
+            alert('❌ Error al analizar: ' + error.message);
+        } finally {
+            setIsAnalyzingManual(false);
+        }
     };
 
 // ==========================================
@@ -3374,26 +3435,95 @@ const handleConfirmDisqualified = () => {
                     <div className="lg:col-span-8 space-y-6">
                         <Card className="p-8 bg-slate-900 border-slate-800 relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2 relative z-10"><Sparkles className="text-blue-400" size={20} /> Análisis del Perfil</h2>
+                            <div className="flex items-center justify-between mb-6 relative z-10">
+                                <h2 className="text-xl font-bold text-white flex items-center gap-2"><Sparkles className="text-blue-400" size={20} /> Análisis del Perfil</h2>
+                                {esCargaManual && (candidate.ia_status === 'pending_analysis' || !candidate.ia_score) && (
+                                    <button
+                                        onClick={handleManualAnalyze}
+                                        disabled={isAnalyzingManual}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isAnalyzingManual ? (
+                                            <>
+                                                <Loader2 size={16} className="animate-spin"/> Analizando...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Sparkles size={16}/> Analizar
+                                            </>
+                                        )}
+                                    </button>
+                                )}
+                            </div>
                             <div className="bg-slate-950/50 rounded-xl p-6 border border-slate-800 mb-6 relative z-10">
                                 <p className="text-sm text-slate-300 leading-relaxed">{candidate.ia_motivos || candidate.motivo || "Análisis pendiente..."}</p>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
                                 <div>
                                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-800 pb-2">Datos Clave</h3>
-                                    <ul className="space-y-3">
-                                        <li className="flex justify-between text-xs"><span className="text-slate-400">Salario:</span><span className={candidate.respuestas_filtro?.salario === 'Sí' ? "text-emerald-400" : "text-white"}>{candidate.respuestas_filtro?.salario || "N/A"}</span></li>
-                                        <li className="flex justify-between text-xs"><span className="text-slate-400">Monitoreo:</span><span className={candidate.respuestas_filtro?.monitoreo === 'Sí' ? "text-emerald-400" : "text-white"}>{candidate.respuestas_filtro?.monitoreo || "N/A"}</span></li>
-                                        <li className="flex justify-between text-xs"><span className="text-slate-400">Disponibilidad:</span><span className="text-white">{candidate.respuestas_filtro?.disponibilidad || "N/A"}</span></li>
-                                    </ul>
+                                    {esCargaManual ? (
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="text-xs text-slate-400 mb-1 block">Salario:</label>
+                                                <input
+                                                    type="text"
+                                                    value={salario}
+                                                    onChange={(e) => setSalario(e.target.value)}
+                                                    onBlur={saveDatosClave}
+                                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-blue-500"
+                                                    placeholder="Ej: Sí, No, $5000"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-slate-400 mb-1 block">Monitoreo:</label>
+                                                <input
+                                                    type="text"
+                                                    value={monitoreo}
+                                                    onChange={(e) => setMonitoreo(e.target.value)}
+                                                    onBlur={saveDatosClave}
+                                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-blue-500"
+                                                    placeholder="Ej: Sí, No"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-slate-400 mb-1 block">Disponibilidad:</label>
+                                                <input
+                                                    type="text"
+                                                    value={disponibilidad}
+                                                    onChange={(e) => setDisponibilidad(e.target.value)}
+                                                    onBlur={saveDatosClave}
+                                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-blue-500"
+                                                    placeholder="Ej: Inmediata, 2 semanas"
+                                                />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <ul className="space-y-3">
+                                            <li className="flex justify-between text-xs"><span className="text-slate-400">Salario:</span><span className={candidate.respuestas_filtro?.salario === 'Sí' ? "text-emerald-400" : "text-white"}>{candidate.respuestas_filtro?.salario || "N/A"}</span></li>
+                                            <li className="flex justify-between text-xs"><span className="text-slate-400">Monitoreo:</span><span className={candidate.respuestas_filtro?.monitoreo === 'Sí' ? "text-emerald-400" : "text-white"}>{candidate.respuestas_filtro?.monitoreo || "N/A"}</span></li>
+                                            <li className="flex justify-between text-xs"><span className="text-slate-400">Disponibilidad:</span><span className="text-white">{candidate.respuestas_filtro?.disponibilidad || "N/A"}</span></li>
+                                        </ul>
+                                    )}
                                 </div>
                                 <div>
                                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-800 pb-2">Skills</h3>
-                                    <div className="flex flex-wrap gap-2">
-                                        {hardSkills.map((skill, i) => <span key={i} className="px-3 py-1 bg-slate-800 text-slate-300 text-[11px] rounded border border-slate-700">{skill}</span>)}
-                                    </div>
+                                    {esCargaManual ? (
+                                        <div>
+                                            <textarea
+                                                value={herramientas}
+                                                onChange={(e) => setHerramientas(e.target.value)}
+                                                onBlur={saveDatosClave}
+                                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-blue-500 min-h-[100px]"
+                                                placeholder="Ej: React, Node.js, Python, MongoDB..."
+                                            />
+                                            <p className="text-xs text-slate-500 mt-2">Separa las herramientas con comas</p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-wrap gap-2">
+                                            {hardSkills.map((skill, i) => <span key={i} className="px-3 py-1 bg-slate-800 text-slate-300 text-[11px] rounded border border-slate-700">{skill}</span>)}
+                                        </div>
+                                    )}
                                 </div>
-
                             </div>
                         </Card>
 
@@ -3439,6 +3569,56 @@ const handleConfirmDisqualified = () => {
                                 </div>
                             </Card>
                         )}
+
+                        {/* 🔥 SECCIÓN DE GESTIÓN (SOLO SI ESTÁ EN ETAPA 2) 🔥 */}
+                        {candidate.stage === 'stage_2' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+                                
+                                {/* 1. AGENDAR Y TRANSCRIPCIÓN */}
+                                <div className="bg-slate-950 border border-blue-900/30 rounded-xl p-6 shadow-xl">
+                                    <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <Calendar size={16}/> 1. Gestión de Entrevista
+                                    </h3>
+                                    
+{/* BLOQUE NUEVO: BOTONES SEPARADOS (REGISTRAR + ENVIAR) */}
+<div className="grid grid-cols-1 gap-4 mb-6">
+   <label className="text-[10px] text-slate-500 font-bold uppercase mb-1 block">Link de Meet / Zoom</label>
+   <div className="flex gap-2 w-full">
+       {/* INPUT */}
+       <div className="relative flex-1">
+           <Video className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" size={16}/>
+           <input
+               type="text"
+               placeholder="Pegar link de reunión aquí..."
+               className={`w-full pl-10 pr-4 py-2.5 bg-slate-900 border rounded-lg text-sm text-white focus:outline-none transition-all placeholder-slate-600 ${candidate.meet_link ? 'border-emerald-500/50 text-emerald-400' : 'border-slate-700 focus:border-blue-500'}`}
+               value={candidate.meet_link || meetLink}
+               onChange={(e) => setMeetLink(e.target.value)}
+               onBlur={saveMeetLink}
+           />
+       </div>
+      
+       {/* BOTÓN 1: REGISTRAR (DISKETTE) */}
+       <button
+           onClick={saveMeetLink}
+           className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${candidate.meet_link ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+           title="Guardar link en la base de datos"
+       >
+           {candidate.meet_link ? <><CheckCircle size={14}/> GUARDADO</> : <><Save size={14}/> REGISTRAR</>}
+       </button>
+
+
+       {/* BOTÓN 2: ENVIAR MAIL (SOBRE) */}
+       <button
+           onClick={handleOpenMail}
+           disabled={!candidate.meet_link && !meetLink}
+           className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${!candidate.meet_link && !meetLink ? 'bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-lg'}`}
+           title="Abrir correo con invitación"
+       >
+           <Mail size={14}/> ENVIAR MAIL
+       </button>
+   </div>
+</div>
+
 
                                    {/* BLOQUE MEJORADO: TRANSCRIPCIÓN + IA */}
                                    <div className="border-t border-slate-800 pt-4 mt-4">
@@ -3627,6 +3807,7 @@ const handleConfirmDisqualified = () => {
                                    </div>
                                </div>
                            </div>
+                       )}
 
 
                        <Card className="bg-slate-900 border-slate-800 flex flex-col overflow-hidden">
@@ -3702,7 +3883,6 @@ const LoginView = ({ onLogin }) => {
     const [showPassword, setShowPassword] = useState(false);
     const team = [
         { name: "Gladymar", role: "Recursos Humanos", password: "Gladymar58741" },
-        { name: "Sandra", role: "Recursos Humanos", password: "Sandra39284" },
         { name: "Viviana", role: "Recursos Humanos", password: "Viviana74629" },
         { name: "Pilar", role: "Ventas / Closer", password: "Pilar18563" },
         { name: "Javier", role: "Marketing", password: "Javier42957" },

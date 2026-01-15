@@ -199,6 +199,24 @@ const api = {
                         console.error("Error reparando CV:", e);
                         return { ok: false, error: e.message };
                     }
+                },
+                analizar: async (id, responsable) => {
+                    try {
+                        const headers = await getHeaders({ 'Content-Type': 'application/json' });
+                        const res = await fetch(`${API_URL}/candidatos/${id}/analizar`, {
+                            method: 'POST',
+                            headers: headers,
+                            body: JSON.stringify({ responsable: responsable || 'Admin' })
+                        });
+                        const data = await res.json();
+                        if (!res.ok) {
+                            throw new Error(data.error || 'Error al analizar candidato');
+                        }
+                        return data;
+                    } catch (e) {
+                        console.error("Error analizando candidato:", e);
+                        return { ok: false, error: e.message };
+                    }
                 }
             },
             metrics: {
