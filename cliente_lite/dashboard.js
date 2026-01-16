@@ -567,6 +567,12 @@
     const [nombreExtraido, setNombreExtraido] = React.useState("");
     const [emailExtraido, setEmailExtraido] = React.useState("");
     
+    // Estados para datos clave
+    const [salario, setSalario] = React.useState('');
+    const [monitoreo, setMonitoreo] = React.useState('');
+    const [disponibilidad, setDisponibilidad] = React.useState('');
+    const [herramientas, setHerramientas] = React.useState('');
+    
     // Lista de puestos disponibles
     const puestosDisponibles = [
         "Asistente Administrativo Inteligente",
@@ -649,9 +655,15 @@
         formData.append('email', emailExtraido.trim());
         formData.append('usuario_accion', currentUser || 'Sistema');
         
+        // Agregar datos clave
+        formData.append('salario', salario);
+        formData.append('monitoreo', monitoreo);
+        formData.append('disponibilidad', disponibilidad);
+        formData.append('herramientas', herramientas);
+        
         const result = await api.candidates.manualUpload(formData);
         if (result.ok || result.id) {
-            alert("✅ Candidato cargado con éxito");
+            alert("✅ Candidato cargado y analizado con éxito");
             onUploadSuccess();
             onClose();
             // Resetear estado
@@ -660,6 +672,10 @@
             setPuesto("");
             setNombreExtraido("");
             setEmailExtraido("");
+            setSalario("");
+            setMonitoreo("");
+            setDisponibilidad("");
+            setHerramientas("");
         } else {
             alert("❌ Error: " + (result.error || "No se pudo subir"));
         }
@@ -673,12 +689,19 @@
         setPuesto("");
         setNombreExtraido("");
         setEmailExtraido("");
+        setSalario("");
+        setMonitoreo("");
+        setDisponibilidad("");
+        setHerramientas("");
+        setLogroDestacado("");
+        setCompetenciasTecnicas([{ competencia: "", nivel: "" }]);
+        setHabilidadesBlandas([{ habilidad: "", nivel: "" }]);
         onClose();
     };
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in duration-200">
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-2xl max-h-[90vh] shadow-2xl animate-in zoom-in duration-200 flex flex-col">
                 <h2 className="text-xl font-bold text-white mb-4">Carga Manual de Candidato</h2>
                 
                 {step === 1 ? (
@@ -715,36 +738,86 @@
                         </div>
                     </form>
                 ) : (
-                    // PASO 2: Mostrar datos extraídos y confirmar
-                    <form onSubmit={handleConfirmar} className="space-y-4">
-                        <div>
-                            <label className="block text-sm text-slate-400 mb-2">Nombre Completo</label>
-                            <input 
-                                type="text" 
-                                value={nombreExtraido} 
-                                onChange={e => setNombreExtraido(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
-                                placeholder="Nombre Completo"
-                            />
+                    // PASO 2: Mostrar datos extraídos, datos clave, skills y confirmar
+                    <form onSubmit={handleConfirmar} className="flex flex-col flex-1 min-h-0">
+                        <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-2">Nombre Completo</label>
+                                <input 
+                                    type="text" 
+                                    value={nombreExtraido} 
+                                    onChange={e => setNombreExtraido(e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
+                                    placeholder="Nombre Completo"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-2">Email <span className="text-yellow-400">* Este es el ID del candidato, presta atención</span></label>
+                                <input 
+                                    type="email" 
+                                    value={emailExtraido} 
+                                    onChange={e => setEmailExtraido(e.target.value)}
+                                    required
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
+                                    placeholder="Email"
+                                />
+                            </div>
+                            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-xs text-blue-400">
+                                <strong>Puesto seleccionado:</strong> {puesto}
+                            </div>
+                            
+                            {/* Datos Clave */}
+                            <div className="border-t border-slate-800 pt-4">
+                                <h3 className="text-sm font-bold text-white mb-3">Datos Clave</h3>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs text-slate-400 mb-1">Salario</label>
+                                        <input 
+                                            type="text" 
+                                            value={salario} 
+                                            onChange={e => setSalario(e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
+                                            placeholder="Ej: 100-800$"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-400 mb-1">Monitoreo</label>
+                                        <input 
+                                            type="text" 
+                                            value={monitoreo} 
+                                            onChange={e => setMonitoreo(e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
+                                            placeholder="Ej: Si, No"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-400 mb-1">Disponibilidad</label>
+                                        <input 
+                                            type="text" 
+                                            value={disponibilidad} 
+                                            onChange={e => setDisponibilidad(e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
+                                            placeholder="Ej: Inmediata"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-400 mb-1">Herramientas (separar con coma)</label>
+                                        <input 
+                                            type="text" 
+                                            value={herramientas} 
+                                            onChange={e => setHerramientas(e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
+                                            placeholder="Ej: React, Node.js, MongoDB"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-sm text-slate-400 mb-2">Email <span className="text-yellow-400">* Este es el ID del candidato, presta atención</span></label>
-                            <input 
-                                type="email" 
-                                value={emailExtraido} 
-                                onChange={e => setEmailExtraido(e.target.value)}
-                                required
-                                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
-                                placeholder="Email"
-                            />
-                        </div>
-                        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-xs text-blue-400">
-                            <strong>Puesto seleccionado:</strong> {puesto}
-                        </div>
-                        <div className="flex gap-3 mt-6">
+                        
+                        <div className="flex gap-3 mt-6 pt-4 border-t border-slate-800">
                             <button type="button" onClick={() => setStep(1)} className="flex-1 px-4 py-2 bg-slate-800 text-slate-400 rounded-lg text-sm font-bold">Volver</button>
                             <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold disabled:opacity-50">
-                                {loading ? "Creando..." : "Confirmar y Crear"}
+                                {loading ? "Creando y Analizando..." : "Confirmar y Analizar"}
                             </button>
                         </div>
                     </form>
@@ -2481,13 +2554,6 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     const [form2Status, setForm2Status] = useState(candidate.process_step_2_form || "pending"); // pending, sent, received
     const [finalResult, setFinalResult] = useState(candidate.process_step_3_result || null); // qualified, disqualified
 
-    // --- ESTADOS PARA EDICIÓN MANUAL DE DATOS CLAVE Y SKILLS (CARGA MANUAL) ---
-    const [salario, setSalario] = useState(candidate.respuestas_filtro?.salario || "");
-    const [monitoreo, setMonitoreo] = useState(candidate.respuestas_filtro?.monitoreo || "");
-    const [disponibilidad, setDisponibilidad] = useState(candidate.respuestas_filtro?.disponibilidad || "");
-    const [herramientas, setHerramientas] = useState(candidate.respuestas_filtro?.herramientas || "");
-    const [isAnalyzingManual, setIsAnalyzingManual] = useState(false);
-
     // 🔥 SINCRONIZAR ESTADOS CUANDO CANDIDATE CAMBIA (para que persistan después de F5)
     React.useEffect(() => {
         if (candidate.meet_link) {
@@ -2506,16 +2572,6 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
             setFinalResult(candidate.process_step_3_result);
         }
     }, [candidate.meet_link, candidate.interview_transcript, candidate.transcripcion_entrevista, candidate.process_step_2_form, candidate.process_step_3_result]);
-
-    // 🔥 SINCRONIZAR DATOS CLAVE Y SKILLS CUANDO CANDIDATE CAMBIA
-    React.useEffect(() => {
-        if (candidate.respuestas_filtro) {
-            setSalario(candidate.respuestas_filtro.salario || "");
-            setMonitoreo(candidate.respuestas_filtro.monitoreo || "");
-            setDisponibilidad(candidate.respuestas_filtro.disponibilidad || "");
-            setHerramientas(candidate.respuestas_filtro.herramientas || "");
-        }
-    }, [candidate.respuestas_filtro]);
 
     // Recuperar alertas y skills
     const flags = candidate.ia_alertas || candidate.alerts || [];
@@ -2689,46 +2745,6 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     // 2. Guardar Transcripción (misma lógica que saveLinks)
     const saveTranscript = () => {
         onUpdate(candidate.id, { interview_transcript: transcript });
-    };
-
-    // 3. Guardar Datos Clave y Skills (para cargas manuales)
-    const saveDatosClave = async () => {
-        const respuestasFiltroActualizadas = {
-            ...(candidate.respuestas_filtro || {}),
-            salario: salario,
-            monitoreo: monitoreo,
-            disponibilidad: disponibilidad,
-            herramientas: herramientas
-        };
-        await onUpdate(candidate.id, { respuestas_filtro: respuestasFiltroActualizadas });
-    };
-
-    // 4. Análisis manual (para cargas manuales)
-    const handleManualAnalyze = async () => {
-        if (isAnalyzingManual) return;
-        setIsAnalyzingManual(true);
-        try {
-            const responsable = window.currentUser?.nombre || window.currentUser?.email || 'Admin';
-            const result = await api.candidates.analizar(candidate.id, responsable);
-            if (result.ok) {
-                // Actualizar el candidato localmente para reflejar el análisis
-                await onUpdate(candidate.id, {
-                    ia_score: result.score,
-                    ia_motivos: result.motivos,
-                    ia_alertas: result.alertas || [],
-                    ia_status: 'processed',
-                    reseña_cv: result.reseña_cv || candidate.reseña_cv
-                });
-                alert('✅ Análisis completado exitosamente');
-            } else {
-                alert('❌ Error al analizar: ' + (result.error || 'Error desconocido'));
-            }
-        } catch (error) {
-            console.error('Error en análisis manual:', error);
-            alert('❌ Error al analizar: ' + error.message);
-        } finally {
-            setIsAnalyzingManual(false);
-        }
     };
 
 // ==========================================
@@ -3437,23 +3453,6 @@ const handleConfirmDisqualified = () => {
                             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
                             <div className="flex items-center justify-between mb-6 relative z-10">
                                 <h2 className="text-xl font-bold text-white flex items-center gap-2"><Sparkles className="text-blue-400" size={20} /> Análisis del Perfil</h2>
-                                {esCargaManual && (candidate.ia_status === 'pending_analysis' || !candidate.ia_score) && (
-                                    <button
-                                        onClick={handleManualAnalyze}
-                                        disabled={isAnalyzingManual}
-                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {isAnalyzingManual ? (
-                                            <>
-                                                <Loader2 size={16} className="animate-spin"/> Analizando...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Sparkles size={16}/> Analizar
-                                            </>
-                                        )}
-                                    </button>
-                                )}
                             </div>
                             <div className="bg-slate-950/50 rounded-xl p-6 border border-slate-800 mb-6 relative z-10">
                                 <p className="text-sm text-slate-300 leading-relaxed">{candidate.ia_motivos || candidate.motivo || "Análisis pendiente..."}</p>
@@ -3461,68 +3460,17 @@ const handleConfirmDisqualified = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
                                 <div>
                                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-800 pb-2">Datos Clave</h3>
-                                    {esCargaManual ? (
-                                        <div className="space-y-3">
-                                            <div>
-                                                <label className="text-xs text-slate-400 mb-1 block">Salario:</label>
-                                                <input
-                                                    type="text"
-                                                    value={salario}
-                                                    onChange={(e) => setSalario(e.target.value)}
-                                                    onBlur={saveDatosClave}
-                                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-blue-500"
-                                                    placeholder="Ej: Sí, No, $5000"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-xs text-slate-400 mb-1 block">Monitoreo:</label>
-                                                <input
-                                                    type="text"
-                                                    value={monitoreo}
-                                                    onChange={(e) => setMonitoreo(e.target.value)}
-                                                    onBlur={saveDatosClave}
-                                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-blue-500"
-                                                    placeholder="Ej: Sí, No"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-xs text-slate-400 mb-1 block">Disponibilidad:</label>
-                                                <input
-                                                    type="text"
-                                                    value={disponibilidad}
-                                                    onChange={(e) => setDisponibilidad(e.target.value)}
-                                                    onBlur={saveDatosClave}
-                                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-blue-500"
-                                                    placeholder="Ej: Inmediata, 2 semanas"
-                                                />
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <ul className="space-y-3">
-                                            <li className="flex justify-between text-xs"><span className="text-slate-400">Salario:</span><span className={candidate.respuestas_filtro?.salario === 'Sí' ? "text-emerald-400" : "text-white"}>{candidate.respuestas_filtro?.salario || "N/A"}</span></li>
-                                            <li className="flex justify-between text-xs"><span className="text-slate-400">Monitoreo:</span><span className={candidate.respuestas_filtro?.monitoreo === 'Sí' ? "text-emerald-400" : "text-white"}>{candidate.respuestas_filtro?.monitoreo || "N/A"}</span></li>
-                                            <li className="flex justify-between text-xs"><span className="text-slate-400">Disponibilidad:</span><span className="text-white">{candidate.respuestas_filtro?.disponibilidad || "N/A"}</span></li>
-                                        </ul>
-                                    )}
+                                    <ul className="space-y-3">
+                                        <li className="flex justify-between text-xs"><span className="text-slate-400">Salario:</span><span className={candidate.respuestas_filtro?.salario === 'Sí' ? "text-emerald-400" : "text-white"}>{candidate.respuestas_filtro?.salario || "N/A"}</span></li>
+                                        <li className="flex justify-between text-xs"><span className="text-slate-400">Monitoreo:</span><span className={candidate.respuestas_filtro?.monitoreo === 'Sí' ? "text-emerald-400" : "text-white"}>{candidate.respuestas_filtro?.monitoreo || "N/A"}</span></li>
+                                        <li className="flex justify-between text-xs"><span className="text-slate-400">Disponibilidad:</span><span className="text-white">{candidate.respuestas_filtro?.disponibilidad || "N/A"}</span></li>
+                                    </ul>
                                 </div>
                                 <div>
                                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-800 pb-2">Skills</h3>
-                                    {esCargaManual ? (
-                                        <div>
-                                            <textarea
-                                                value={herramientas}
-                                                onChange={(e) => setHerramientas(e.target.value)}
-                                                onBlur={saveDatosClave}
-                                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-xs focus:outline-none focus:border-blue-500 min-h-[100px]"
-                                                placeholder="Ej: React, Node.js, Python, MongoDB..."
-                                            />
-                                            <p className="text-xs text-slate-500 mt-2">Separa las herramientas con comas</p>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-wrap gap-2">
-                                            {hardSkills.map((skill, i) => <span key={i} className="px-3 py-1 bg-slate-800 text-slate-300 text-[11px] rounded border border-slate-700">{skill}</span>)}
-                                        </div>
-                                    )}
+                                    <div className="flex flex-wrap gap-2">
+                                        {hardSkills.map((skill, i) => <span key={i} className="px-3 py-1 bg-slate-800 text-slate-300 text-[11px] rounded border border-slate-700">{skill}</span>)}
+                                    </div>
                                 </div>
                             </div>
                         </Card>
