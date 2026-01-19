@@ -5416,7 +5416,43 @@ app.post("/enviar-email", async (req, res) => {
     });
   }
 });
-
+// ==========================================
+// 🗑️ FUNCIÓN: MOVER ARCHIVOS ENTRE CARPETAS EN STORAGE
+// ==========================================
+async function moverArchivoStorage(rutaOrigen, rutaDestino) {
+  try {
+      const archivoOrigen = bucket.file(rutaOrigen);
+      const archivoDestino = bucket.file(rutaDestino);
+      
+      // Verificar que el archivo origen existe
+      const [existe] = await archivoOrigen.exists();
+      if (!existe) {
+          console.log(`⚠️ [STORAGE] Archivo no existe en origen: ${rutaOrigen}`);
+          return { success: false, error: 'Archivo no encontrado' };
+      }
+      
+      // Copiar a destino
+      await archivoOrigen.copy(archivoDestino);
+      console.log(`📦 [STORAGE] Archivo copiado: ${rutaOrigen} → ${rutaDestino}`);
+      
+      // Eliminar original
+      await archivoOrigen.delete();
+      console.log(`🗑️ [STORAGE] Archivo original eliminado: ${rutaOrigen}`);
+      
+      // Generar nueva URL firmada
+      const [nuevaUrl] = await archivoDestino.getSignedUrl({ 
+          action: 'read', 
+          expires: '01-01-2035' 
+      });
+      
+      console.log(`✅ [STORAGE] Archivo movido exitosamente a: ${rutaDestino}`);
+      return { success: true, nuevaUrl, rutaFinal: rutaDestino };
+      
+  } catch (error) {
+      console.error(`❌ [STORAGE] Error moviendo archivo:`, error.message);
+      return { success: false, error: error.message };
+  }
+}
 // ==========================================
 // 🛠️ ENDPOINT INTELIGENTE (PATCH) - ACTUALIZA Y GUARDA HISTORIAL
 // ==========================================
@@ -5491,22 +5527,110 @@ app.patch("/candidatos/:id", async (req, res) => {
         };
     } 
     else if (updates.stage === 'trash') {
-        nuevoEvento = {
-            date: new Date().toISOString(),
-            event: 'Movido a Papelera',
-            detail: 'Descartado manualmente',
-            usuario: nombreAccion
-        };
-    } 
-    else if (updates.stage === 'stage_1' && docSnap.data().stage === 'trash') {
-        // Solo trackear "Restaurado" si venía de papelera
-        nuevoEvento = {
-            date: new Date().toISOString(),
-            event: 'Restaurado',
-            detail: 'Recuperado de Papelera a Exploración',
-            usuario: nombreAccion
-        };
-    } 
+      nuevoEvento = {
+          date: new Date().toISOString(),
+          event: 'Movido a Papelera',
+          detail: updates.motivo || 'Descartado manualmente',
+          usuario: nombreAccion
+      };
+      
+      // 🗑️ MOVER ARCHIVOS A CV_garbage
+      const datosActuales = docSnap.data();
+      
+      // Mover CV si existe en Storage
+      if (datosActuales.cv_storage_path) {
+          const rutaOriginalCV = datosActuales.cv_storage_path;
+          const nombreArchivoCV = rutaOriginalCV.split('/').pop();
+          const rutaGarbageCV = `CV_garbage/files/${nombreArchivoCV}`;
+          
+          console.log(`🗑️ [TRASH] Moviendo CV: ${rutaOriginalCV} → ${rutaGarbageCV}`);
+          const resultadoCV = await moverArchivoStorage(rutaOriginalCV, rutaGarbageCV);
+          
+          if (resultadoCV.success) {
+              finalUpdate.cv_storage_path = rutaGarbageCV;
+              finalUpdate.cv_storage_path_original = rutaOriginalCV; // Guardar para poder restaurar
+              finalUpdate.cv_url = resultadoCV.nuevaUrl;
+              console.log(`✅ [TRASH] CV movido a papelera`);
+          }
+      }
+      
+      // Mover Video si existe en Storage
+      const posiblesRutasVideo = [
+          `CVs_staging/videos/${id}_video.mp4`,
+          `CVs_staging/videos/${id}_video.webm`,
+          `CVs_staging/videos/${id}_video.mov`
+      ];
+      
+      for (const rutaVideo of posiblesRutasVideo) {
+          try {
+              const [existeVideo] = await bucket.file(rutaVideo).exists();
+              if (existeVideo) {
+                  const nombreArchivoVideo = rutaVideo.split('/').pop();
+                  const rutaGarbageVideo = `CV_garbage/videos/${nombreArchivoVideo}`;
+                  
+                  console.log(`🗑️ [TRASH] Moviendo Video: ${rutaVideo} → ${rutaGarbageVideo}`);
+                  const resultadoVideo = await moverArchivoStorage(rutaVideo, rutaGarbageVideo);
+                  
+                  if (resultadoVideo.success) {
+                      finalUpdate.video_storage_path = rutaGarbageVideo;
+                      finalUpdate.video_storage_path_original = rutaVideo;
+                      finalUpdate.video_url = resultadoVideo.nuevaUrl;
+                      console.log(`✅ [TRASH] Video movido a papelera`);
+                  }
+                  break; // Solo puede haber un video, salir del loop
+              }
+          } catch (e) {
+              console.log(`⚠️ [TRASH] No se encontró video en: ${rutaVideo}`);
+          }
+      }
+  }
+  else if (updates.stage === 'stage_1' && docSnap.data().stage === 'trash') {
+    // Solo trackear "Restaurado" si venía de papelera
+    nuevoEvento = {
+        date: new Date().toISOString(),
+        event: 'Restaurado',
+        detail: 'Recuperado de Papelera a Exploración',
+        usuario: nombreAccion
+    };
+    
+    // 🔄 RESTAURAR ARCHIVOS DESDE CV_garbage
+    const datosActuales = docSnap.data();
+    
+    // Restaurar CV si tiene ruta original guardada
+    if (datosActuales.cv_storage_path_original) {
+        const rutaGarbageCV = datosActuales.cv_storage_path;
+        const rutaOriginalCV = datosActuales.cv_storage_path_original;
+        
+        console.log(`🔄 [RESTORE] Restaurando CV: ${rutaGarbageCV} → ${rutaOriginalCV}`);
+        const resultadoCV = await moverArchivoStorage(rutaGarbageCV, rutaOriginalCV);
+        
+        if (resultadoCV.success) {
+            finalUpdate.cv_storage_path = rutaOriginalCV;
+            finalUpdate.cv_url = resultadoCV.nuevaUrl;
+            // Limpiar el campo de ruta original
+            finalUpdate.cv_storage_path_original = admin.firestore.FieldValue.delete();
+            console.log(`✅ [RESTORE] CV restaurado a ubicación original`);
+        }
+    }
+    
+    // Restaurar Video si tiene ruta original guardada
+    if (datosActuales.video_storage_path_original) {
+        const rutaGarbageVideo = datosActuales.video_storage_path;
+        const rutaOriginalVideo = datosActuales.video_storage_path_original;
+        
+        console.log(`🔄 [RESTORE] Restaurando Video: ${rutaGarbageVideo} → ${rutaOriginalVideo}`);
+        const resultadoVideo = await moverArchivoStorage(rutaGarbageVideo, rutaOriginalVideo);
+        
+        if (resultadoVideo.success) {
+            finalUpdate.video_storage_path = rutaOriginalVideo;
+            finalUpdate.video_url = resultadoVideo.nuevaUrl;
+            // Limpiar el campo de ruta original
+            finalUpdate.video_storage_path_original = admin.firestore.FieldValue.delete();
+            console.log(`✅ [RESTORE] Video restaurado a ubicación original`);
+        }
+    }
+}
+
     else if (updates.stage === 'stage_3') {
         nuevoEvento = {
             date: new Date().toISOString(),
