@@ -21,6 +21,7 @@ const fs = require("fs");
 const { google } = require("googleapis");
 const nodemailer = require("nodemailer");
 require("dotenv").config();
+const fichaGenerator = require("./services/fichaGenerator");
 
 // ========================================================================
 // 📧 CONFIGURACIÓN DE NODEMAILER (PARA ENVÍO DE EMAILS CON HTML)
@@ -63,9 +64,7 @@ const verifyToken = require("./authMiddleware");
 const mammoth = require("mammoth");
 const { v4: uuidv4 } = require("uuid");
 const tempBase = path.join(os.tmpdir(), "cvs-en-proceso");
-const PYTHON_BIN = process.env.PYTHON_BIN || "python";
 
-const { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, BorderStyle, TextRun, AlignmentType, ImageRun } = require("docx");
 
 // === Gemini AI ===
 const { GoogleGenerativeAI } = require("@google/generative-ai");
@@ -835,151 +834,6 @@ function parsearCorreoEstandar(raw) {
 
   return { textoPlano, jsonParcial: result };
 }
-
-
-
-//////////////////////////////////////////////////////////////////
-async function mapAreaToFolder(areaReal = "") {
-  const categoriasPrincipales = [
-    "Administración",
-    "Financiero y Contable",
-    "Ventas y Comercio Electrónico",
-    "Marketing Digital",
-    "Comunicaciones",
-    "Arquitectura",
-    "Diseño Gráfico",
-    "Desarrollo Web",
-    "Gestión y Calidad",
-    "Automatizaciones e IA",
-    "Recursos Humanos",
-    "Edición Audiovisual"
-  ];
-
-  const ejemplos = {
-    "Administración": [
-      "Asistente Administrativo",
-      "Asistente Virtual",
-      "Atención al cliente",
-      "Project Manager",
-      "Control documental"
-    ],
-    "Financiero y Contable": [
-      "Contabilidad",
-      "Auditoría",
-      "Nómina",
-      "Analista financiero"
-    ],
-    "Ventas y Comercio Electrónico": [
-      "Ventas",
-      "E-commerce",
-      "Customer Success",
-      "Relaciones comerciales",
-      "Asesor comercial"
-    ],
-    "Marketing Digital": [
-      "SEO",
-      "Community Manager",
-      "Growth",
-      "Copywriter",
-      "Publicidad"
-    ],
-    "Comunicaciones": [
-      "Relaciones públicas",
-      "Redacción",
-      "Comunicación corporativa"
-    ],
-    "Arquitectura": [
-      "Delineante",
-      "Tasaciones",
-      "Ingeniero de caminos"
-    ],
-    "Diseño Gráfico": [
-      "UX/UI",
-      "Branding",
-      "Motion Graphics",
-      "Diseño de producto"
-    ],
-    "Desarrollo Web": [
-      "Desarrollador",
-      "Frontend",
-      "Backend",
-      "Full stack",
-      "QA tester",
-      "CMS"
-    ],
-    "Gestión y Calidad": [
-      "Calidad",
-      "Auditoría interna",
-      "PMO",
-      "SOP"
-    ],
-    "Automatizaciones e IA": [
-      "RPA",
-      "IA",
-      "Chatbots",
-      "Zoho",
-      "Zapier",
-      "Make",
-      "Integraciones"
-    ],
-    "Recursos Humanos": [
-      "Reclutador",
-      "Seleccionador",
-      "Generalista",
-      "People"
-    ],
-    "Edición Audiovisual": [
-      "Edición de video",
-      "Producción",
-      "Motion graphics",
-      "Contenido para redes"
-    ]
-  };
-
-  const prompt = `
-Clasifica el área del candidato en UNA de las siguientes 12 categorías principales.
-
-AREA DEL CANDIDATO:
-"${areaReal}"
-
-CATEGORÍAS PRINCIPALES:
-${JSON.stringify(categoriasPrincipales, null, 2)}
-
-EJEMPLOS:
-${JSON.stringify(ejemplos, null, 2)}
-
-REGLAS:
-- No inventes categorías nuevas.
-- Si el área es desconocida, clasifica por similitud semántica.
-- Si no encaja en ninguna, devuelve "Otros".
-- Responde SOLO en este JSON:
-{"categoria": "Nombre"}
-`;
-
-  try {
-    const completion = await openai.chat.completions.create({
-      model: process.env.AI_MODEL || "gpt-4o-mini",
-      temperature: 0.1,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: "Devuelve únicamente JSON válido" },
-        { role: "user", content: prompt }
-      ],
-    });
-
-    const parsed = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
-
-    const cat = parsed?.categoria || "";
-
-    if (categoriasPrincipales.includes(cat)) return cat;
-    return "Otros";
-
-  } catch (err) {
-    console.error("⚠️ Error en mapAreaToFolder:", err.message);
-    return "Otros";
-  }
-}
-
 
 // ========================================================================
 // 📩 ANALIZADOR DE CORREOS (VERSIÓN FINAL OPTIMIZADA)
@@ -1802,87 +1656,6 @@ app.get("/entrevistas/:nombre/puntaje", async (req, res) => {
     res.status(400).json({ error: err.message || "No fue posible obtener el puntaje" });
   }
 });
-/////// ENDPOINT: Obtener motivos de los candidatos (mejorado)///7
-// ❌ DESHABILITADO - cv_revisados es una colección vieja, ahora todo está en CVs_staging
-/*
-app.get('/motivos', async (req, res) => {
-  try {
-    const { nombre = '', estado = '' } = req.query;
-
-    // Usa admin.firestore() directamente
-    let query = admin.firestore().collection('cv_revisados');
-
-    // Filtrar por estado si se especifica
-    if (estado) {
-      query = query.where('estado', '==', estado);
-    }
-
-    const snapshot = await query.get();
-    if (snapshot.empty) {
-      return res.json([]);
-    }
-
-    const motivos = [];
-
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-
-      // 🔍 Búsqueda más flexible: por correo, nombre_archivo, area, o dentro del texto del motivo
-      const textoBusqueda = nombre.toLowerCase();
-
-      const coincide =
-        !nombre ||
-        (data.applicant_email &&
-          data.applicant_email.toLowerCase().includes(textoBusqueda)) ||
-        (data.nombre &&
-          data.nombre.toLowerCase().includes(textoBusqueda)) ||
-        (data.nombre_archivo &&
-          data.nombre_archivo.toLowerCase().includes(textoBusqueda)) ||
-        (data.area &&
-          data.area.toLowerCase().includes(textoBusqueda)) ||
-        (data.motivos &&
-          data.motivos.toLowerCase().includes(textoBusqueda)) ||
-        (data.ia?.motivos &&
-          data.ia.motivos.toLowerCase().includes(textoBusqueda));
-
-      if (coincide) {
-        motivos.push({
-          id: doc.id,
-          nombre:
-            data.nombre_archivo ||
-            data.applicant_email ||
-            data.nombre ||
-            'Desconocido',
-          estado: data.estado || 'sin_estado',
-          motivos:
-            data.motivo ||
-            data.ia?.motivos ||
-            data.motivos ||
-            'Sin motivo registrado',
-          fecha:
-            data.fecha ||
-            data.createdAt ||
-            (data.timestamp ? data.timestamp.toDate() : null) ||
-            '',
-        });
-      }
-    });
-
-    // Ordenar por fecha (más recientes primero)
-    motivos.sort(
-      (a, b) =>
-        new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime()
-    );
-
-    res.json(motivos);
-  } catch (error) {
-    console.error('❌ Error obteniendo motivos:', error);
-    res
-      .status(500)
-      .json({ error: 'Error al obtener los motivos de revisión' });
-  }
-});
-*/
 
 //////////mostrar carpetas de la bbase de datos////////
 
@@ -1998,9 +1771,6 @@ app.get('/firebase-storage/carpetas', verifyToken, async (req, res) => {
   }
 });
 
-
-
-
 //////////////////////// generador de fichas tecnicas ///////////////////////
 
 function safeUnlink(p) {
@@ -2013,54 +1783,15 @@ const upload = multer({
   dest: os.tmpdir(),
   limits: { fileSize: 50 * 1024 * 1024 }
 });
-const { execFile } = require("child_process");
-const TEMPLATE_PATH = process.env.FICHA_TEMPLATE_PATH
-  || path.join(__dirname, "plantillas", "Ficha_Template.docx");
-
-function makeTmpDir(prefix = "ficha-") {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-  return dir;
-}
-
-function countLines(s = '') {
-  return (String(s).match(/\n/g) || []).length + (s ? 1 : 0);
-}
-
-
-function printLarge(label, s = '', preview = 1000) {
-  console.log(label, {
-    chars: s.length,
-    lines: countLines(s),
-    preview: s.slice(0, preview)
-  });
-}
 
 app.post("/ficha_subida", upload.single("cv"), async (req, res) => {
-  console.log("\n=== [/ficha_subida] INICIO ===");
-
-  console.log("[REQ.body]", {
-    keys: Object.keys(req.body || {}),
-    conLogo: req.body?.conLogo,
-    textoPegado_len: (req.body?.textoPegado || "").length,
-  });
-
-  console.log("[REQ.file]", {
-    fieldname: req.file?.fieldname,
-    originalname: req.file?.originalname,
-    mimetype: req.file?.mimetype,
-    path: req.file?.path,
-    size: req.file?.size,
-  });
+  console.log("\n=== [/ficha_subida] INICIO (Node.js) ===");
 
   if (!STORAGE_READY) {
     return res.status(503).json({ error: "Storage no disponible." });
   }
 
-  // 🛡️ AIRBAG: Si el usuario no escribe nada, enviamos un texto por defecto
-  // para evitar que el script de Python falle por "texto vacío".
-  const textoPegado = (req.body?.textoPegado || "").trim() || "Informe generado sin notas adicionales del reclutador.";
-
-  // Separamos esta línea para que quede ordenado
+  const textoPegado = (req.body?.textoPegado || "").trim() || "Informe generado sin notas adicionales.";
   const conLogo = String(req.body?.conLogo || "true").toLowerCase() !== "false";
   const file = req.file;
 
@@ -2068,158 +1799,96 @@ app.post("/ficha_subida", upload.single("cv"), async (req, res) => {
     return res.status(400).json({ error: "Falta el archivo PDF ('cv')." });
   }
 
-  const tmpToClean = [];
-  const cleanAll = () => tmpToClean.forEach(safeUnlink);
-
   try {
-    // Crear carpeta temporal
-    const tmpDir = makeTmpDir("ficha-up-");
-    tmpToClean.push(tmpDir);
+    // Crear carpetas temporales
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ficha-up-"));
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "ficha-out-"));
 
-    const extraTxtPath = path.join(tmpDir, "extra.txt");
-    fs.writeFileSync(extraTxtPath, textoPegado || "", "utf8");
-
-    // Carpeta de salida para el DOCX
-    const outdir = makeTmpDir("ficha-out-");
-    tmpToClean.push(outdir);
-
-    // Nombre base del archivo (sin extensión)
+    // Nombre base del archivo
     const baseRaw = path.basename(file.originalname).replace(/\.pdf$/i, "");
     const base = baseRaw.replace(/[\\/:*?"<>|]/g, "_").slice(0, 60);
 
-    // Construir argumentos EXACTOS que ficha2.py espera
-    const PYTHON_BIN = process.env.PYTHON_BIN || "python";
+    // Logo path (opcional)
+    const logoPath = conLogo ? path.join(__dirname, "logo.png") : null;
 
-    const args = [
-      path.join(__dirname, "ficha2.py"),
-      "--outdir", outdir,
-      "--basename", base,
-      "--extra_file", extraTxtPath,
-      "--cv", file.path
-    ];
+    // ✅ LLAMAR AL NUEVO MÓDULO NODE.JS
+    const result = await fichaGenerator.generarFicha({
+      cvPath: file.path,
+      extraText: textoPegado,
+      outputDir: outDir,
+      baseName: base,
+      logoPath: fs.existsSync(logoPath) ? logoPath : null
+    });
 
-    // Añadir logo si corresponde
-    if (conLogo) {
-      const logoPath = path.join(__dirname, "logo.png");
-      if (fs.existsSync(logoPath)) args.push("--logo", logoPath);
+    if (!result.ok || !result.docx || !fs.existsSync(result.docx)) {
+      return res.status(500).json({ error: "No se generó el archivo .docx." });
     }
 
-    console.log("[EJECUTANDO Python]", { PYTHON_BIN, args });
+    // Subir DOCX a Firebase
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const dest = `fichas-generadas/${base}/${ts}/${path.basename(result.docx)}`;
 
-    const execOpts = {
-      cwd: __dirname,
-      windowsHide: true,
-      maxBuffer: 1024 * 1024 * 16,
-      env: { ...process.env, PYTHONIOENCODING: "utf-8" },
-    };
+    await bucket.upload(result.docx, {
+      destination: dest,
+      metadata: {
+        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      },
+    });
 
-    // Ejecutar Python
-    await new Promise((resolve) => {
-      const child = child_process.spawn(PYTHON_BIN, args, execOpts);
-      let stdout = "",
-        stderr = "";
+    // URL firmada 10 min
+    const [urlDocx] = await bucket.file(dest).getSignedUrl({
+      version: "v4",
+      action: "read",
+      expires: Date.now() + 10 * 60 * 1000,
+      responseDisposition: `attachment; filename="${path.basename(dest)}"`,
+    });
 
-      child.stdout.on("data", (d) => (stdout += d.toString("utf8")));
-      child.stderr.on("data", (d) => (stderr += d.toString("utf8")));
+    // Limpiar temporales
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      fs.rmSync(outDir, { recursive: true, force: true });
+      if (file.path) fs.unlinkSync(file.path);
+    } catch (e) { /* ignorar errores de limpieza */ }
 
-      child.on("close", async (code) => {
-        console.log("[ficha2.py exit]", { code, stderr });
-
-        try {
-          if (code !== 0) throw new Error("ficha2.py no terminó OK");
-
-          const result = JSON.parse(stdout || "{}");
-
-          const localDocx = result.docx && fs.existsSync(result.docx)
-            ? result.docx
-            : null;
-
-          if (!localDocx) {
-            cleanAll();
-            return res.status(500).json({ error: "No se generó el archivo .docx." });
-          }
-
-          // Subir DOCX a Firebase
-          const ts = new Date().toISOString().replace(/[:.]/g, "-");
-          const dest = `fichas-generadas/${base}/${ts}/${path.basename(localDocx)}`;
-
-          await bucket.upload(localDocx, {
-            destination: dest,
-            metadata: {
-              contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            },
-          });
-
-          // URL firmada 10 min
-          const [urlDocx] = await bucket.file(dest).getSignedUrl({
-            version: "v4",
-            action: "read",
-            expires: Date.now() + 10 * 60 * 1000,
-            responseDisposition: `attachment; filename="${path.basename(dest)}"`,
-          });
-
-          cleanAll();
-
-          return res.json({
-            message: "✅ Ficha generada (Word)",
-            url: urlDocx,
-            storagePath: dest,
-          });
-
-        } catch (e) {
-          console.error("[ERROR procesando salida ficha2.py]", e);
-          cleanAll();
-          return res.status(500).json({ error: "Error generando la ficha." });
-        }
-
-        resolve();
-      });
+    return res.json({
+      message: "✅ Ficha generada (Node.js)",
+      url: urlDocx,
+      storagePath: dest,
     });
 
   } catch (e) {
-    console.error("[ERROR interno /ficha_subida]", e);
-    cleanAll();
-    return res.status(500).json({ error: "Error interno del servidor." });
+    console.error("[ERROR /ficha_subida]", e);
+    return res.status(500).json({ error: "Error generando la ficha: " + e.message });
   }
 });
 
 
 
 app.post('/ficha_recibida', async (req, res) => {
-  console.log('== [/ficha_recibida] INICIO ===');
+  console.log('=== [/ficha_recibida] INICIO (Node.js) ===');
+  
   try {
     const { textoPegado, nombreCV, conLogo } = req.body || {};
     if (!nombreCV) return res.status(400).json({ error: 'Falta el nombre del CV.' });
 
-    // Limpieza y normalización del nombre
+    // Normalizar nombre para búsqueda
     const cleanName = nombreCV.trim().toLowerCase().replace(/\s+/g, ' ');
     console.log('[REQ.body]', { textoPegado_preview: textoPegado?.slice(0, 200), nombreCV });
 
-    // Crear carpeta temporal
-    const tmpDir = makeTmpDir('ficha-recibida-');
-    console.log('[Temp dir creado]', { tmpDir });
-
-    const bucket = getStorage().bucket();
-    const searchPrefix = `${ROOT_PREFIX}`; // Buscar en todo el prefijo raíz (no solo cv-subidos)
-    console.log('[Buscando en prefijo]', { searchPrefix });
-
-    // 🔹 Buscar TODOS los archivos PDF dentro del prefijo
+    // Buscar el PDF en Storage
+    const searchPrefix = `${ROOT_PREFIX}`;
     const [files] = await bucket.getFiles({ prefix: searchPrefix });
     const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
 
-    // 🔹 Normalizar nombres para comparación flexible
-    const normalize = s =>
-      s.toLowerCase()
-        .replace(/[_\-\.]+/g, ' ') // reemplaza guiones, underscores y puntos
-        .replace(/\.pdf$/, '')     // quita extensión
-        .trim();
+    const normalize = s => s.toLowerCase()
+      .replace(/[_\-\.]+/g, ' ')
+      .replace(/\.pdf$/, '')
+      .trim();
 
-    // 🔹 Buscar coincidencia más cercana
     let matchedFile = null;
     for (const file of pdfs) {
       const base = file.name.split('/').pop();
       if (!base) continue;
-
       const normBase = normalize(base);
       if (normBase.includes(cleanName) || cleanName.includes(normBase)) {
         matchedFile = file;
@@ -2228,100 +1897,66 @@ app.post('/ficha_recibida', async (req, res) => {
     }
 
     if (!matchedFile) {
-      console.error('[ERROR] No se encontró archivo que coincida con', nombreCV);
       return res.status(404).json({
-        error: `No se encontró ningún PDF en Storage que coincida con "${nombreCV}".`
+        error: `No se encontró ningún PDF que coincida con "${nombreCV}".`
       });
     }
 
     console.log('[Archivo encontrado]', { matchedName: matchedFile.name });
 
-    // Descargar el archivo
+    // Crear carpetas temporales
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ficha-recibida-'));
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ficha-out-'));
+
+    // Descargar el PDF
     const tmpPdfPath = path.join(tmpDir, path.basename(matchedFile.name));
     await matchedFile.download({ destination: tmpPdfPath });
     console.log('[Descarga completada]', { tmpPdfPath });
 
-    // Escribir el texto adicional
-    const extraTxtPath = path.join(tmpDir, 'extra.txt');
-    fs.writeFileSync(extraTxtPath, textoPegado || '');
-    console.log('[Extra escrito]', { extraTxtPath });
+    // Logo path (opcional)
+    const logoPath = conLogo ? path.join(__dirname, 'logo.png') : null;
 
-    // Crear carpeta de salida
-    const outDir = makeTmpDir('ficha-out-');
+    // ✅ LLAMAR AL NUEVO MÓDULO NODE.JS
+    const result = await fichaGenerator.generarFicha({
+      cvPath: tmpPdfPath,
+      extraText: textoPegado || '',
+      outputDir: outDir,
+      baseName: path.basename(matchedFile.name, '.pdf'),
+      logoPath: fs.existsSync(logoPath) ? logoPath : null
+    });
 
-    // Ejecutar Python
-    const PYTHON_BIN = process.env.PYTHON_BIN || 'python3';
-    const args = [
-      path.join(__dirname, 'ficha.py'),
-      '--outdir', outDir,
-      '--basename', path.basename(matchedFile.name, '.pdf'),
-      '--cv', tmpPdfPath,
-      '--extra_file', extraTxtPath,
-      '--no-pdf'
-    ];
-
-    if (conLogo) {
-      const logoPath = path.join(__dirname, 'logo.png');
-      if (fs.existsSync(logoPath)) args.push('--logo', logoPath);
+    if (!result.ok || !result.docx || !fs.existsSync(result.docx)) {
+      return res.status(500).json({ error: 'No se generó ningún archivo .docx.' });
     }
 
-    console.log('[EJECUTANDO Python]', { PYTHON_BIN, args });
+    // Subir a Storage
+    const destName = `fichas-generadas/${Date.now()}-${path.basename(result.docx)}`;
+    await bucket.upload(result.docx, { destination: destName });
+    console.log('[DOCX subido al bucket]', { destName });
 
-    const { spawn } = require('child_process');
-    const child = spawn(PYTHON_BIN, args, { cwd: __dirname, env: process.env });
-
-    let stdout = '', stderr = '';
-    child.stdout.on('data', d => (stdout += d.toString()));
-    child.stderr.on('data', d => (stderr += d.toString()));
-
-    child.on('close', async code => {
-      if (code !== 0) {
-        console.error('[ERROR Python]', { code, stderr });
-        return res.status(500).json({ error: 'Error al generar la ficha (Python falló).' });
-      }
-
-      console.log('[Python completado OK]');
-      const docxFiles = fs.readdirSync(outDir).filter(f => f.endsWith('.docx'));
-      if (docxFiles.length === 0) {
-        return res.status(500).json({ error: 'No se generó ningún archivo .docx.' });
-      }
-
-      const finalDocxPath = path.join(outDir, docxFiles[0]);
-      const destName = `fichas-generadas/${Date.now()}-${docxFiles[0]}`;
-      const destFile = bucket.file(destName);
-      await bucket.upload(finalDocxPath, { destination: destName });
-      console.log('[DOCX subido al bucket]', { destName });
-
-      // URL firmada para descarga y previsualización
-      const [url] = await destFile.getSignedUrl({
-        version: 'v4',
-        action: 'read',
-        expires: Date.now() + 15 * 60 * 1000
-      });
-
-      res.json({ url });
+    // URL firmada
+    const [url] = await bucket.file(destName).getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: Date.now() + 15 * 60 * 1000
     });
+
+    // Limpiar temporales
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      fs.rmSync(outDir, { recursive: true, force: true });
+    } catch (e) { /* ignorar */ }
+
+    res.json({ url });
+
   } catch (e) {
-    console.error('[ERROR interno /ficha_recibida]', { e, stack: e.stack });
-    res.status(500).json({ error: e.message || 'Error interno en /ficha_recibida' });
+    console.error('[ERROR /ficha_recibida]', e);
+    res.status(500).json({ error: e.message || 'Error interno' });
   }
 });
 
-
-
-
-
-
-
-
-
 const calendarRoutes = require("./calendar");
 app.use("/calendar", calendarRoutes);
-
-
-
-
-
 
 app.get("/firebase-storage/carpetas", async (req, res) => {
   try {
@@ -2375,171 +2010,7 @@ app.get("/firebase-storage/archivos", async (req, res) => {
   }
 });
 
-
-
-
-
-
-//////////////////////// botones para mover entre listas ///////////////////////////////////
-
-/////////////////////////////////////  LISTAS: en_proceso / contratados / descartados  ////////////////////////
-// ❌ DESHABILITADO - Estas colecciones son viejas, ahora todo está en CVs_staging
-// Los endpoints /listas y /listas/mover están comentados porque usan colecciones viejas
-/*
-const LIST_COLLECTIONS = ["en_proceso", "contratados", "descartados"];
-
-function ensureListName(name) {
-  if (!LIST_COLLECTIONS.includes(name)) {
-    throw new Error(`Lista inválida: ${name}`);
-  }
-  return name;
-}
-
-// GET /listas - query: lista (opcional)
-app.get("/listas", async (req, res) => {
-  try {
-    const { lista } = req.query;
-
-    const listasAConsultar = lista
-      ? [ensureListName(lista)]
-      : LIST_COLLECTIONS;
-
-    const resultado = {};
-
-    for (const col of listasAConsultar) {
-      const snap = await firestore.collection(col).get();
-      const items = [];
-
-      snap.forEach((doc) => {
-        const data = doc.data();
-        items.push({
-          id: doc.id,
-          nombre: data.nombre_archivo || data.nombre || data.applicant_email,
-          oferta: data.oferta || data.area,
-          correo: data.applicant_email,
-          lista: col,
-          motivo: data.motivo || null,
-          fecha: data.fecha || data.fecha_correo || null,
-          movido_por: data.movido_por || null,
-          movido_en: data.movido_en || null,
-        });
-      });
-
-      resultado[col] = items;
-    }
-
-    res.json(resultado);
-  } catch (err) {
-    console.error("❌ GET /listas:", err);
-    res.status(500).json({ error: "Error obteniendo listas" });
-  }
-});
-
-// * POST /listas/mover
-// * Mueve candidato entre listas y registra usuario que movió.
-app.post("/listas/mover", async (req, res) => {
-  try {
-    const { id, from, to, motivo = "", usuario = "" } = req.body;
-
-    if (!id || !from || !to) {
-      return res.status(400).json({ error: "Faltan datos obligatorios" });
-    }
-
-    const fromCol = ensureListName(from);
-    const toCol = ensureListName(to);
-
-    // --- CAMBIO CLAVE AQUÍ ---
-    // En lugar de usar serverTimestamp (que da problemas al leer),
-    // usamos una fecha de texto universal (ISO) que el navegador entiende perfecto.
-    const nowISO = new Date().toISOString();
-    // -------------------------
-
-    const refFrom = firestore.collection(fromCol).doc(id);
-    const snap = await refFrom.get();
-
-    let data = {};
-
-    if (snap.exists) {
-      // Caso normal: el candidato YA existe.
-      if (fromCol === toCol) {
-        return res.status(400).json({ error: "Origen y destino iguales" });
-      }
-      data = snap.data();
-    } else {
-      // Caso Gestión Manual: creamos registro mínimo.
-      data = {
-        id,
-        nombre_archivo: id,
-        creado_desde: "manual",
-        creado_en: nowISO, // Usamos la fecha texto
-      };
-    }
-
-    const newData = {
-      ...data,
-      origen_lista: fromCol,
-      movido_por: usuario || "desconocido",
-      movido_en: nowISO,      // ✅ Fecha texto (arregla el Invalid Date)
-      actualizado_en: nowISO, // ✅ Fecha texto
-    };
-
-    // Si destino es descartados, requiere motivo
-    if (toCol === "descartados") {
-      if (!motivo.trim()) {
-        return res.status(400).json({ error: "Motivo requerido" });
-      }
-      newData.motivo = motivo.trim();
-    }
-
-    // Si destino es contratados, registrar fecha
-    if (toCol === "contratados" && !newData.fecha_contratacion) {
-      newData.fecha_contratacion = nowISO;
-    }
-
-    const historialPrevio = Array.isArray(data.historial_movimientos)
-      ? data.historial_movimientos
-      : [];
-
-    // Historial de movimientos
-    newData.historial_movimientos = [
-      ...historialPrevio,
-      {
-        usuario: usuario || "desconocido",
-        de: fromCol,
-        a: toCol,
-        motivo: toCol === "descartados" ? motivo.trim() : null,
-        fecha: nowISO, // ✅ Fecha texto para el historial también
-      },
-    ];
-
-    // Guardamos en la lista destino
-    await firestore.collection(toCol).doc(id).set(newData, { merge: true });
-
-    // Borramos de la lista origen si existía
-    if (snap.exists) {
-      await refFrom.delete();
-    }
-
-    res.json({
-      ok: true,
-      id,
-      from: fromCol,
-      to: toCol,
-      creadoDesdeManual: !snap.exists,
-    });
-  } catch (err) {
-    console.error("❌ POST /listas/mover:", err);
-    res.status(500).json({ error: "Error moviendo candidato" });
-  }
-});
-*/
-
-
 ///////////////////////boton buscar candidato//////////////////////
-
-
-
-
 
 async function registrarConsultaCandidato(usuario, candidatoId) {
   await firestore.collection("metricas_consultas").add({
@@ -2816,8 +2287,6 @@ app.get("/panel/metrics", async (req, res) => {
     res.status(500).json({ error: "Error obteniendo métricas" });
   }
 });
-
-
 
 
 async function parsearBusquedaIA(query) {
@@ -3309,7 +2778,6 @@ async function generarResenaCV(textoCV, puesto) {
     return "Error al generar reseña del CV. Revisar manualmente.";
   }
 }
-
 
 // ==========================================
 // 🎥 HELPER: DESCARGAR VIDEO DE GOOGLE DRIVE

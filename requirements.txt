@@ -1,8 +1,0 @@
-python-docx
-docxtpl
-jinja2
-openai>=1.0.0
-python-dotenv
-pdfminer.six
-docx2txt
-docx2pdf; sys_platform == "win32"
