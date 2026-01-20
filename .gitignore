@@ -13,3 +13,8 @@ backups/
 backup-firestore.js
 verificar-colecciones.js
 eliminar-colecciones.js
+
+# Repomix
+
+repomix-output.txt
+repomix-output.xml
