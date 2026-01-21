@@ -2691,9 +2691,25 @@ async function generarResenaCV(textoCV, puesto) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
+    // Obtener fecha actual para contexto temporal
+    const ahora = new Date();
+    const añoActual = ahora.getFullYear();
+    const mesActual = ahora.getMonth() + 1; // getMonth() retorna 0-11
+    const fechaActualTexto = `${añoActual}-${String(mesActual).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
+    
     const prompt = `
     ACTÚA COMO: Auditor Senior de Talento para Global Talent Connections.
     OBJETIVO: Realizar una "Due Diligence" de CALIDAD y VERACIDAD del CV para el puesto de "${puesto}".
+    
+    ⏰ CONTEXTO TEMPORAL CRÍTICO:
+    - FECHA ACTUAL: ${fechaActualTexto} (Año: ${añoActual}, Mes: ${mesActual})
+    - IMPORTANTE: Las fechas de ${añoActual} NO son futuras, son fechas ACTUALES o PASADAS.
+    - Al analizar fechas en el CV:
+      * Fechas de ${añoActual}: Considerarlas como ACTUALES o PASADAS, nunca como futuras.
+      * Fechas anteriores a ${añoActual}: Son PASADAS.
+      * Solo considerar como FUTURAS fechas posteriores a ${añoActual} o fechas de ${añoActual + 1} en adelante.
+    - NO penalizar por fechas de ${añoActual} interpretándolas como futuras.
+    - Al calcular duración de empleos o gaps temporales, usar ${añoActual} como año de referencia actual.
     
     CV DEL CANDIDATO:
     ${textoCV.slice(0, 15000)}
@@ -3075,6 +3091,12 @@ async function verificaConocimientosMinimos(puesto, textoCandidato, declaracione
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); 
 
+    // Obtener fecha actual para contexto temporal
+    const ahora = new Date();
+    const añoActual = ahora.getFullYear();
+    const mesActual = ahora.getMonth() + 1;
+    const fechaActualTexto = `${añoActual}-${String(mesActual).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
+
     // Construir el prompt con las reseñas si están disponibles
     let fuentesInfo = `[DATOS TÉCNICOS Y RESPUESTAS DEL FORMULARIO]:\n${textoCandidato.slice(0, 15000)}`;
     
@@ -3089,6 +3111,16 @@ async function verificaConocimientosMinimos(puesto, textoCandidato, declaracione
     const prompt = `
       ACTÚA COMO: Reclutador Senior de Global Talent Connections (Criterio Unificado).
       TU OBJETIVO: Evaluar a este candidato para el puesto de "${puesto}" y asignar Score + Alertas.
+      
+      ⏰ CONTEXTO TEMPORAL CRÍTICO:
+      - FECHA ACTUAL: ${fechaActualTexto} (Año: ${añoActual}, Mes: ${mesActual})
+      - IMPORTANTE: Las fechas de ${añoActual} NO son futuras, son fechas ACTUALES o PASADAS.
+      - Al evaluar experiencia y seniority:
+        * Fechas de ${añoActual}: Considerarlas como ACTUALES o PASADAS, nunca como futuras.
+        * Fechas anteriores a ${añoActual}: Son PASADAS.
+        * Solo considerar como FUTURAS fechas posteriores a ${añoActual} o fechas de ${añoActual + 1} en adelante.
+      - NO penalizar por fechas de ${añoActual} interpretándolas como futuras.
+      - Al calcular años de experiencia, usar ${añoActual} como año de referencia actual.
       
       === FUENTES DE INFORMACIÓN ===
       ${fuentesInfo}
