@@ -986,34 +986,29 @@ async function analizarCorreos() {
       console.log("📝 Generando reseña del CV...");
       const reseñaCV = await generarResenaCV(pdfText, datosZoho.puesto || "General");
       
-      let reseñaVideo = null;
-      let videoError = null;
-      let videoLinkPublico = null;
-      
-      // Si hay video (del email o del webhook), procesarlo
+      // 🎥 NUEVA LÓGICA: Video se procesa en background (NO bloquea)
       const videoUrlParaAnalizar = videoUrl || datosZoho.video_url;
+      let videoStatus = "none";
+      
       if (videoUrlParaAnalizar) {
         const origenVideo = videoUrl ? "adjunto en email (subido a Storage)" : "link del webhook";
-        console.log(`🎥 Procesando video y generando reseña... (Origen: ${origenVideo})`);
-        const resultadoVideo = await generarResenaVideo(videoUrlParaAnalizar, datosZoho.puesto || "General");
+        console.log(`🎥 Video detectado (${origenVideo}). Se procesará en background...`);
+        videoStatus = "pending";
         
-        if (resultadoVideo.reseña) {
-          reseñaVideo = resultadoVideo.reseña;
-          console.log("✅ Reseña del video generada correctamente");
-        } else {
-          videoError = resultadoVideo.error;
-          videoLinkPublico = resultadoVideo.linkPublico;
-          console.log(`⚠️ ${videoError}`);
-        }
+        // Disparar procesamiento en background (NO bloquea el ciclo IMAP)
+        procesarVideoEnBackground(safeId, videoUrlParaAnalizar, datosZoho.puesto || "General")
+          .catch(error => {
+            console.error(`❌ Error procesando video en background para ${safeId}:`, error.message);
+          });
       }
 
-      // 11. IA CALIBRADA (Cruce de Datos: Formulario + CV + Video)
-      console.log("🤖 Calibrando Score (Formulario + CV + Video)...");
+      // 11. IA CALIBRADA (Cruce de Datos: Formulario + CV) - SIN VIDEO por ahora
+      console.log("🤖 Calibrando Score (Formulario + CV)...");
       
       // Preparar datos del formulario para el análisis
       const datosFormulario = JSON.stringify(datosZoho.respuestas_filtro || "Vacio");
       
-      // Llamar a la función mejorada que acepta reseñas
+      // Llamar a la función mejorada que acepta reseñas (solo CV por ahora)
       let analisisIA = { score: 50, motivos: "Pendiente", alertas: [] };
       try {
           analisisIA = await verificaConocimientosMinimos(
@@ -1021,24 +1016,19 @@ async function analizarCorreos() {
             datosFormulario, // Respuestas del formulario
             "", // declaraciones (vacío por ahora)
             reseñaCV, // Reseña del CV
-            reseñaVideo // Reseña del video (puede ser null)
+            null // Reseña del video (null porque se procesa en background)
           );
           
-          // Limitar score según si el video se procesó exitosamente
-          if (reseñaVideo) {
-              // Si el video se procesó correctamente, límite de 80
-              analisisIA.score = Math.min(analisisIA.score, 80);
-          } else {
-              // Si NO hay video procesado (falló o no existe), límite de 75
+          // Limitar score cuando NO hay video procesado aún (máximo 75)
+          if (videoStatus === "pending") {
               analisisIA.score = Math.min(analisisIA.score, 75);
-          }
-          
-          // Si hay error con el video, agregar alerta
-          if (videoError) {
-            if (!Array.isArray(analisisIA.alertas)) {
-              analisisIA.alertas = [];
-            }
-            analisisIA.alertas.push(`Video no procesado: ${videoError}`);
+              if (!Array.isArray(analisisIA.alertas)) {
+                analisisIA.alertas = [];
+              }
+              analisisIA.alertas.push("Video pendiente de análisis");
+          } else {
+              // Si NO hay video, límite de 75
+              analisisIA.score = Math.min(analisisIA.score, 75);
           }
       } catch (e) { 
           console.error("Error IA:", e.message);
@@ -1061,9 +1051,9 @@ async function analizarCorreos() {
         
         // Reseñas generadas por IA
         reseña_cv: reseñaCV,
-        reseña_video: reseñaVideo || null,
-        video_error: videoError || null, // Error si el video no se pudo procesar
-        video_link_publico: videoLinkPublico, // Si el link es público o no
+        reseña_video: null, // Se actualizará cuando termine el procesamiento del video
+        video_status: videoStatus, // "pending", "none", o "completed" (se actualiza después)
+        video_error: null, // Se actualizará si hay error en el procesamiento
         
         actualizado_en: admin.firestore.FieldValue.serverTimestamp()
       };
@@ -1075,8 +1065,14 @@ async function analizarCorreos() {
         updateData.video_tipo = "archivo";
         console.log(`✅ Video URL actualizado desde email: ${videoUrl.substring(0, 50)}...`);
       } else if (videoUrl && datosZoho.video_url) {
-        // Si ya había un video_url del webhook (link pegado), lo mantenemos
+        // Si ya había un video_url del webhook (link pegado), lo mantenemos y guardamos
+        updateData.video_url = datosZoho.video_url;
+        updateData.video_tipo = datosZoho.video_tipo || "link";
         console.log(`ℹ️ Video URL ya existe desde webhook, manteniendo: ${datosZoho.video_url.substring(0, 50)}...`);
+      } else if (datosZoho.video_url && !videoUrl) {
+        // Si el video viene del webhook pero no del email, guardarlo también
+        updateData.video_url = datosZoho.video_url;
+        updateData.video_tipo = datosZoho.video_tipo || "link";
       }
       
       await docRef.set(updateData, { merge: true }); // 'merge: true' cuida de no borrar el nombre ni el email
@@ -4745,6 +4741,177 @@ async function generarResenaVideo(videoUrl, puesto) {
       error: `Error al procesar video: ${error.message}`,
       linkPublico: null
     };
+  }
+}
+
+// ==========================================
+// 🎥 PROCESAMIENTO ASÍNCRONO DE VIDEOS
+// ==========================================
+
+/**
+ * Procesa un video en background sin bloquear el hilo principal
+ * Esta función se ejecuta de forma asíncrona después de guardar el candidato inicial
+ * 
+ * @param {string} candidatoId - ID del candidato (safeId)
+ * @param {string} videoUrl - URL del video a procesar
+ * @param {string} puesto - Puesto al que aplica el candidato
+ */
+async function procesarVideoEnBackground(candidatoId, videoUrl, puesto) {
+  const logPrefix = '🎥 [BACKGROUND]';
+  
+  try {
+    console.log(`${logPrefix} ═══════════════════════════════════════════`);
+    console.log(`${logPrefix} Iniciando procesamiento de video en background`);
+    console.log(`${logPrefix} Candidato ID: ${candidatoId}`);
+    console.log(`${logPrefix} Video URL: ${videoUrl.substring(0, 100)}...`);
+    console.log(`${logPrefix} Puesto: ${puesto}`);
+    
+    // Actualizar estado a "processing" para indicar que está en proceso
+    const docRef = firestore.collection(MAIN_COLLECTION).doc(candidatoId);
+    await docRef.set({
+      video_status: "processing",
+      actualizado_en: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    
+    // Procesar el video (esto puede tomar varios minutos)
+    const resultadoVideo = await generarResenaVideo(videoUrl, puesto);
+    
+    if (resultadoVideo.reseña) {
+      console.log(`${logPrefix} ✅ Reseña del video generada correctamente`);
+      
+      // Actualizar candidato con la reseña del video y regenerar score
+      await actualizarCandidatoConVideo(
+        candidatoId,
+        resultadoVideo.reseña,
+        resultadoVideo.linkPublico,
+        null // sin error
+      );
+      
+      console.log(`${logPrefix} ✅ Candidato ${candidatoId} actualizado con video procesado`);
+    } else {
+      console.error(`${logPrefix} ❌ Error procesando video: ${resultadoVideo.error}`);
+      
+      // Actualizar candidato con el error
+      await actualizarCandidatoConVideo(
+        candidatoId,
+        null, // sin reseña
+        resultadoVideo.linkPublico,
+        resultadoVideo.error
+      );
+      
+      console.log(`${logPrefix} ⚠️ Candidato ${candidatoId} actualizado con error de video`);
+    }
+    
+  } catch (error) {
+    console.error(`${logPrefix} ❌ Error crítico en procesamiento de video:`, error);
+    
+    // Actualizar estado a "error" en caso de fallo crítico
+    try {
+      const docRef = firestore.collection(MAIN_COLLECTION).doc(candidatoId);
+      await docRef.set({
+        video_status: "error",
+        video_error: `Error crítico: ${error.message}`,
+        actualizado_en: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } catch (updateError) {
+      console.error(`${logPrefix} ❌ No se pudo actualizar estado de error:`, updateError);
+    }
+  }
+}
+
+/**
+ * Actualiza la ficha del candidato con la reseña del video y regenera el score
+ * 
+ * @param {string} candidatoId - ID del candidato (safeId)
+ * @param {string|null} reseñaVideo - Reseña generada del video (null si hubo error)
+ * @param {boolean|null} videoLinkPublico - Si el link del video es público
+ * @param {string|null} videoError - Mensaje de error si hubo problema (null si éxito)
+ */
+async function actualizarCandidatoConVideo(candidatoId, reseñaVideo, videoLinkPublico, videoError) {
+  const logPrefix = '🔄 [ACTUALIZAR]';
+  
+  try {
+    console.log(`${logPrefix} Actualizando candidato ${candidatoId} con resultado del video...`);
+    
+    const docRef = firestore.collection(MAIN_COLLECTION).doc(candidatoId);
+    const docSnap = await docRef.get();
+    
+    if (!docSnap.exists) {
+      console.error(`${logPrefix} ❌ Candidato ${candidatoId} no encontrado`);
+      return;
+    }
+    
+    const datosActuales = docSnap.data();
+    
+    // Preparar datos para actualización
+    const updateData = {
+      reseña_video: reseñaVideo || null,
+      video_error: videoError || null,
+      video_link_publico: videoLinkPublico || null,
+      video_status: reseñaVideo ? "completed" : "error",
+      actualizado_en: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    // Si tenemos reseña del video, regenerar el score con CV + Video
+    if (reseñaVideo) {
+      console.log(`${logPrefix} Regenerando score con CV + Video...`);
+      
+      const reseñaCV = datosActuales.reseña_cv || null;
+      const respuestasFiltro = datosActuales.respuestas_filtro || {};
+      const datosFormulario = JSON.stringify(respuestasFiltro);
+      const puesto = datosActuales.puesto || "General";
+      
+      try {
+        const analisisIA = await verificaConocimientosMinimos(
+          puesto,
+          datosFormulario,
+          "", // declaraciones vacío
+          reseñaCV,
+          reseñaVideo // Ahora sí tenemos la reseña del video
+        );
+        
+        // Si el video se procesó correctamente, límite de 80
+        analisisIA.score = Math.min(analisisIA.score, 80);
+        
+        // Actualizar score y motivos
+        updateData.ia_score = analisisIA.score;
+        updateData.ia_motivos = analisisIA.motivos;
+        
+        // Actualizar alertas (remover la alerta de "Video pendiente" si existe)
+        if (Array.isArray(analisisIA.alertas)) {
+          updateData.ia_alertas = analisisIA.alertas.filter(
+            alerta => !alerta.includes("Video pendiente")
+          );
+        } else {
+          updateData.ia_alertas = [];
+        }
+        
+        console.log(`${logPrefix} ✅ Score regenerado: ${analisisIA.score}`);
+      } catch (scoreError) {
+        console.error(`${logPrefix} ❌ Error regenerando score:`, scoreError.message);
+        // No actualizamos el score si falla, pero sí guardamos la reseña del video
+      }
+    } else {
+      // Si hubo error, mantener el score actual pero agregar alerta
+      const alertasActuales = datosActuales.ia_alertas || [];
+      if (!Array.isArray(alertasActuales)) {
+        updateData.ia_alertas = [`Video no procesado: ${videoError}`];
+      } else {
+        updateData.ia_alertas = [
+          ...alertasActuales.filter(a => !a.includes("Video pendiente") && !a.includes("Video no procesado")),
+          `Video no procesado: ${videoError}`
+        ];
+      }
+    }
+    
+    // Actualizar en Firestore
+    await docRef.set(updateData, { merge: true });
+    
+    console.log(`${logPrefix} ✅ Candidato ${candidatoId} actualizado correctamente`);
+    
+  } catch (error) {
+    console.error(`${logPrefix} ❌ Error actualizando candidato:`, error);
+    throw error; // Re-lanzar para que se maneje en procesarVideoEnBackground
   }
 }
 
