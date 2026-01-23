@@ -133,6 +133,21 @@ const api = {
                         return { candidatos: [], hasMore: false, lastDoc: null, total: 0 }; 
                     }
                 },
+                // 🔍 Obtener un candidato por ID (optimizado para polling)
+                get: async (id) => {
+                    try {
+                        const headers = await getHeaders();
+                        const res = await fetch(`${API_URL}/candidatos/${id}`, {
+                            method: 'GET',
+                            headers: headers
+                        });
+                        if (!res.ok) throw new Error("Error obteniendo candidato");
+                        return await res.json();
+                    } catch (e) {
+                        console.error("Error obteniendo candidato:", e);
+                        return null;
+                    }
+                },
                 // 🚀 EL ARREGLO DEL BOTÓN (USANDO PATCH)
                 update: async (id, updates) => {
                     try {
@@ -264,6 +279,18 @@ const api = {
                         const data = await res.json();
                         return { totals: data.totals }; 
                     } catch (e) { return { totals: {} }; }
+                },
+                // 🔥 NUEVO: Métricas de lecturas Firebase
+                getLecturas: async () => {
+                    try {
+                        const headers = await getHeaders();
+                        const res = await fetch(`${API_URL}/metrics/lecturas`, { headers });
+                        if (!res.ok) throw new Error("Error obteniendo métricas");
+                        return await res.json();
+                    } catch (e) { 
+                        console.error("Error en métricas de lecturas:", e);
+                        return { error: e.message }; 
+                    }
                 }
             },
             // Para el ReportView modo manual
@@ -318,6 +345,3 @@ const api = {
         // --- HACER API GLOBAL ---
 window.api = api;
 window.API_URL = API_URL;
-            
-        
-

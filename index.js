@@ -168,6 +168,181 @@ admin.initializeApp({
   storageBucket: process.env.FIREBASE_STORAGE_BUCKET
 });
 
+// ==========================================
+// 📊 SISTEMA DE MÉTRICAS DE LECTURAS FIREBASE
+// ==========================================
+const firebaseMetrics = {
+  // Contador de lecturas por endpoint/función
+  reads: new Map(),
+  // Contador total de lecturas
+  totalReads: 0,
+  // Timestamp de inicio
+  startTime: Date.now(),
+  
+  // Registrar una lectura
+  recordRead(source, count = 1) {
+    const key = source || 'unknown';
+    const current = this.reads.get(key) || 0;
+    this.reads.set(key, current + count);
+    this.totalReads += count;
+  },
+  
+  // Obtener estadísticas
+  getStats() {
+    const uptime = Math.floor((Date.now() - this.startTime) / 1000); // segundos
+    const readsPerSecond = uptime > 0 ? (this.totalReads / uptime).toFixed(4) : 0;
+    const readsPerHour = (readsPerSecond * 3600).toFixed(0);
+    const readsPerDay = (readsPerSecond * 86400).toFixed(0);
+    
+    // Ordenar por cantidad de lecturas
+    const sortedReads = Array.from(this.reads.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([source, count]) => ({
+        source,
+        count,
+        percentage: ((count / this.totalReads) * 100).toFixed(2) + '%'
+      }));
+    
+    return {
+      total: this.totalReads,
+      bySource: sortedReads,
+      uptime: {
+        seconds: uptime,
+        hours: (uptime / 3600).toFixed(2),
+        days: (uptime / 86400).toFixed(2)
+      },
+      rates: {
+        perSecond: readsPerSecond,
+        perHour: readsPerHour,
+        perDay: readsPerDay
+      },
+      estimatedDailyLimit: {
+        current: this.totalReads,
+        limit: 50000,
+        percentage: ((this.totalReads / 50000) * 100).toFixed(2) + '%',
+        remaining: Math.max(0, 50000 - parseInt(readsPerDay))
+      }
+    };
+  },
+  
+  // Resetear contadores (útil para pruebas o reinicio diario)
+  reset() {
+    this.reads.clear();
+    this.totalReads = 0;
+    this.startTime = Date.now();
+  },
+
+  // 🔥 NUEVO: Guardar métricas en Firestore
+  async saveToFirestore() {
+    try {
+      if (!firestore) {
+        console.log("⚠️ Firestore no inicializado, saltando guardado de métricas");
+        return;
+      }
+      
+      const stats = this.getStats();
+      const ahora = new Date();
+      const fechaHoy = ahora.toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      // Guardar snapshot de métricas
+      await firestore.collection("metricas_lecturas_firebase").add({
+        fecha: fechaHoy,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        total_lecturas: stats.total,
+        lecturas_por_hora: parseInt(stats.rates.perHour),
+        lecturas_por_dia_estimado: parseInt(stats.rates.perDay),
+        porcentaje_limite: stats.estimatedDailyLimit.percentage,
+        uptime_horas: parseFloat(stats.uptime.hours),
+        endpoints: stats.bySource.slice(0, 20), // Top 20 endpoints
+        server_start: new Date(this.startTime).toISOString()
+      });
+      
+      console.log(`📊 Métricas guardadas en Firestore: ${stats.total} lecturas totales`);
+    } catch (error) {
+      console.error("❌ Error guardando métricas en Firestore:", error.message);
+    }
+  },
+
+  // Iniciar guardado periódico (cada hora)
+  startPeriodicSave() {
+    // Guardar cada hora
+    setInterval(() => {
+      this.saveToFirestore();
+    }, 60 * 60 * 1000); // 1 hora
+    
+    console.log("⏰ Guardado periódico de métricas iniciado (cada 1 hora)");
+  }
+};
+
+// ==========================================
+// 🗄️ SISTEMA DE CACHÉ DE CANDIDATOS
+// ==========================================
+let candidatosCache = {
+  data: [],
+  lastUpdate: null,
+  isLoading: false
+};
+
+// Función para cargar/refrescar el caché
+async function cargarCacheCandidatos(forzar = false) {
+  // Si ya está cargando, no duplicar
+  if (candidatosCache.isLoading) return;
+  
+  // Si no forzamos y el caché tiene datos, no recargar
+  if (!forzar && candidatosCache.data.length > 0) return;
+  
+  candidatosCache.isLoading = true;
+  
+  try {
+    console.log("🗄️ [CACHÉ] Cargando candidatos desde Firebase...");
+    const snapshot = await firestore.collection(MAIN_COLLECTION).get();
+    
+    candidatosCache.data = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    candidatosCache.lastUpdate = new Date();
+    
+    // Registrar lecturas
+    firebaseMetrics.recordRead("CACHE_LOAD", snapshot.size);
+    
+    console.log(`🗄️ [CACHÉ] ${snapshot.size} candidatos cargados en memoria`);
+  } catch (error) {
+    console.error("❌ [CACHÉ] Error cargando candidatos:", error);
+  } finally {
+    candidatosCache.isLoading = false;
+  }
+}
+
+// Función para actualizar UN candidato en el caché (sin leer de Firebase)
+function actualizarCandidatoEnCache(id, updates) {
+  const index = candidatosCache.data.findIndex(c => c.id === id);
+  if (index !== -1) {
+    candidatosCache.data[index] = { ...candidatosCache.data[index], ...updates };
+    console.log(`🗄️ [CACHÉ] Candidato ${id} actualizado en memoria`);
+  }
+}
+
+// Función para agregar un candidato al caché
+function agregarCandidatoAlCache(candidato) {
+  candidatosCache.data.unshift(candidato); // Agregar al inicio
+  console.log(`🗄️ [CACHÉ] Candidato ${candidato.id} agregado al caché`);
+}
+
+// Función para eliminar un candidato del caché
+function eliminarCandidatoDelCache(id) {
+  candidatosCache.data = candidatosCache.data.filter(c => c.id !== id);
+  console.log(`🗄️ [CACHÉ] Candidato ${id} eliminado del caché`);
+}
+
+// Helper para obtener el nombre del endpoint desde el request
+function getRequestSource(req) {
+  if (!req) return 'unknown';
+  const method = req.method || 'GET';
+  const path = req.path || req.route?.path || 'unknown';
+  return `${method} ${path}`;
+}
+
 ///////////////////////////////////////////////////express app /////////////////////////////////////////////////////////////
 
 const PORT = process.env.PORT || 3001;
@@ -297,6 +472,9 @@ async function obtenerCandidatosBloqueados() {
     const snap = await firestore.collection(MAIN_COLLECTION)
       .where("stage", "==", "trash")
       .get();
+    
+    // Registrar lectura
+    firebaseMetrics.recordRead('obtenerCandidatosBloqueados', snap.size);
     
     snap.forEach((doc) => {
       bloqueados.add(doc.id.trim().toLowerCase());
@@ -1116,49 +1294,67 @@ async function analizarCorreos() {
    ========================================================================== */
 
    app.get("/buscar", async (req, res) => {
-
-    try {
-
-      const { q = "", desde = null, hasta = null, limit = 100, startAfter = null } = req.query;
-
-      
-
-      console.log(`📡 Solicitud de búsqueda recibida. Query: "${q}", Limit: ${limit}, StartAfter: ${startAfter ? 'Sí' : 'No'}`);
-
+    const requestSource = getRequestSource(req);
   
-
-      // USAMOS LA VARIABLE MAESTRA
-      let ref = admin.firestore().collection(MAIN_COLLECTION);
-
-      const bloqueados = await obtenerCandidatosBloqueados();
+    try {
+      const { q = "", desde = null, hasta = null, limit = 100, startAfter = null, forceRefresh = false } = req.query;
+      console.log(`📡 Solicitud de búsqueda recibida. Query: "${q}", Limit: ${limit}, StartAfter: ${startAfter ? 'Sí' : 'No'}, Caché: ${candidatosCache.data.length} items`);
+  
+      const bloqueadosRaw = await obtenerCandidatosBloqueados();
+const bloqueados = Array.isArray(bloqueadosRaw) ? bloqueadosRaw : [];
       const termino = q.toLowerCase().trim();
       const limitNum = parseInt(limit) || 100;
+  
+      // 🗄️ USAR CACHÉ si no hay búsqueda específica y no hay paginación
+      const usarCache = !termino && !startAfter && candidatosCache.data.length > 0 && forceRefresh !== 'true';
       
-      // 🔥 MEJORA: Si hay término de búsqueda, buscar en Firestore directamente
-      // Firestore no soporta búsqueda full-text nativa, pero podemos hacer queries por campos
+      if (usarCache) {
+        console.log(`📤 [CACHÉ] Sirviendo desde memoria (${candidatosCache.data.length} candidatos)`);
+        
+        // Filtrar bloqueados
+        let resultados = candidatosCache.data.filter(c => !bloqueados.includes(c.id));
+        
+        // Ordenar por fecha (más recientes primero)
+        resultados.sort((a, b) => (b.fecha_orden || 0) - (a.fecha_orden || 0));
+        
+        // Aplicar límite
+        const limitados = resultados.slice(0, limitNum);
+        const hasMore = resultados.length > limitNum;
+        
+        return res.json({
+          candidatos: limitados,
+          resultados: limitados,
+          total: resultados.length,
+          hasMore: hasMore,
+          lastDoc: limitados.length > 0 ? limitados[limitados.length - 1].id : null,
+          fromCache: true,
+          cacheAge: candidatosCache.lastUpdate ? Math.floor((Date.now() - candidatosCache.lastUpdate.getTime()) / 1000) + 's' : null
+        });
+      }
+  
+      // 🔥 Si hay búsqueda o paginación, ir a Firebase
+      console.log(`🔍 [FIREBASE] Consultando base de datos...`);
+      let ref = admin.firestore().collection(MAIN_COLLECTION);
       let query = ref.orderBy('creado_en', 'desc');
-      
+  
       // Si hay un cursor (startAfter), usarlo para paginación
       if (startAfter) {
         try {
-          // startAfter es el ID del último documento
           const lastDoc = await ref.doc(startAfter).get();
+          firebaseMetrics.recordRead(`${requestSource} (startAfter)`, 1);
           if (lastDoc.exists) {
-            // Firestore necesita el documento completo para startAfter
             query = query.startAfter(lastDoc);
           }
         } catch (e) {
           console.warn(`⚠️ Error usando startAfter: ${e.message}`);
         }
       }
-      
-      // Aplicar límite (aumentamos a 100 por defecto, pero permitimos más)
-      query = query.limit(limitNum + 1); // Traemos uno más para saber si hay más resultados
-      
+  
+      query = query.limit(limitNum + 1);
       const snap = await query.get();
       
-
-      if (snap.empty) return res.json({ resultados: [], hasMore: false, lastDoc: null });
+      // Registrar lecturas
+      firebaseMetrics.recordRead(requestSource, snap.size);
 
   
 
@@ -1279,19 +1475,17 @@ let candidatos = snap.docs.map(doc => {
   
 
     } catch (err) {
-
       console.error("❌ Error en /buscar:", err);
-
       res.status(500).json({ error: "Error interno del servidor" });
-
     }
-
   });
 
 // ==========================================================================
 // 🔄 ENDPOINT: ACTUALIZACIÓN DE ESTADO INTERNO (Optimizado)
 // ==========================================================================
 app.post("/candidatos/:id/resumen", async (req, res) => {
+  const requestSource = getRequestSource(req);
+  
   try {
     const { id } = req.params;
     const { manualData, responsable } = req.body; 
@@ -1323,6 +1517,9 @@ app.post("/candidatos/:id/resumen", async (req, res) => {
     // --- CASO 2: PROCESO IDEAL (Candidatos del Pipeline) ---
     const docRef = firestore.collection(MAIN_COLLECTION).doc(id);
     const doc = await docRef.get();
+    
+    // Registrar lectura
+    firebaseMetrics.recordRead(requestSource, 1);
     
     if (!doc.exists) {
         return res.status(404).json({ error: "Candidato no encontrado en el pipeline." });
@@ -2138,6 +2335,8 @@ app.get("/resumen/:id", async (req, res) => {
 /////////////////////////////////////  MÉTRICAS PARA PANEL  /////////////////////////////////////
 const db = admin.firestore();
 app.get("/panel/metrics", async (req, res) => {
+  const requestSource = getRequestSource(req);
+  
   try {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -2161,6 +2360,9 @@ app.get("/panel/metrics", async (req, res) => {
        =========================================================== */
 
     const stagingSnap = await firestore.collection(MAIN_COLLECTION).get();
+    
+    // Registrar lectura: número de documentos leídos
+    firebaseMetrics.recordRead(requestSource, stagingSnap.size);
 
     stagingSnap.forEach((doc) => {
       const data = doc.data();
@@ -4581,11 +4783,8 @@ app.post("/candidatos/:id/reparar-video-workdrive", async (req, res) => {
 // ==========================================
 // 📦 2. FRONTEND (Sirve la página web)
 // ==========================================
-app.use(express.static(path.join(__dirname, "cliente_lite"))); 
+app.use(express.static(path.join(__dirname, "cliente_lite")));
 
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "cliente_lite", "dashboard.html"));
-});
 // ==========================================================================
 // 📎 ENDPOINT CORREGIDO: CARGA MANUAL DE ARCHIVOS (PDF/TXT)
 // ==========================================================================
@@ -5523,9 +5722,145 @@ async function moverArchivoStorage(rutaOrigen, rutaDestino) {
   }
 }
 // ==========================================
+// 🔍 ENDPOINT: OBTENER UN CANDIDATO POR ID (Optimizado para polling)
+// ==========================================
+app.get("/candidatos/:id", async (req, res) => {
+  const requestSource = getRequestSource(req);
+  
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ error: "ID de candidato requerido" });
+    }
+
+    // Leer solo el documento específico
+    const docRef = firestore.collection(MAIN_COLLECTION).doc(id);
+    const docSnap = await docRef.get();
+    
+    // Registrar lectura: solo 1 documento
+    firebaseMetrics.recordRead(requestSource, 1);
+
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: "Candidato no encontrado" });
+    }
+
+    const data = docSnap.data();
+    
+    // Mapear datos igual que en /buscar para consistencia
+    let timestamp = 0;
+    if (data.fecha_correo) {
+      timestamp = new Date(data.fecha_correo).getTime();
+    } else if (data.creado_en) {
+      timestamp = data.creado_en.toDate ? data.creado_en.toDate().getTime() : new Date(data.creado_en).getTime();
+    } else if (data.fecha) {
+      timestamp = new Date(data.fecha).getTime();
+    }
+
+    const nombreFinal = data.nombre || data.datos_personales?.nombre_completo || data.applicant_email || "Sin Nombre";
+    const linkFinal = data.cv_url || data.cv_storage_path || null;
+
+    const candidato = {
+      id: docSnap.id,
+      nombre: nombreFinal,
+      email: data.email || data.applicant_email || "S/E",
+      puesto: data.puesto || "Sin puesto",
+      cv_url: linkFinal,
+      fecha_orden: timestamp,
+      fecha: data.fecha || data.creado_en,
+      stage: data.stage || 'stage_1',
+      status_interno: data.status_interno || 'new',
+      assignedTo: data.assignedTo || null,
+      history: data.historial_movimientos || [],
+      origen: data.origen || null,
+      ia_score: data.ia_score || 0,
+      ia_motivos: data.ia_motivos || data.motivo || "Análisis pendiente...",
+      ia_alertas: data.ia_alertas || [],
+      video_url: data.video_url || null,
+      video_tipo: data.video_tipo || null,
+      respuestas_filtro: data.respuestas_filtro || {},
+      motivo: data.motivo || "",
+      notes: data.notes || "",
+      meet_link: data.meet_link || null,
+      informe_final_data: data.informe_final_data || null,
+      respuestas_form2: data.respuestas_form2 || null,
+      process_step_2_form: data.process_step_2_form || null,
+      interview_transcript: data.transcripcion_entrevista || data.interview_transcript || null,
+      transcripcion_entrevista: data.transcripcion_entrevista || null,
+      reseña_cv: data.reseña_cv || null,
+      reseña_video: data.reseña_video || null,
+      video_error: data.video_error || null,
+      video_link_publico: data.video_link_publico || null,
+      skip_form2: data.skip_form2 || false,
+      marcadores: data.marcadores || []
+    };
+
+    res.json(candidato);
+  } catch (err) {
+    console.error("❌ Error en GET /candidatos/:id:", err);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+// ==========================================
+// 📊 ENDPOINT: MÉTRICAS DE LECTURAS FIREBASE
+// ==========================================
+app.get("/metrics/lecturas", async (req, res) => {
+  try {
+    const stats = firebaseMetrics.getStats();
+    res.json(stats);
+  } catch (err) {
+    console.error("❌ Error obteniendo métricas:", err);
+    res.status(500).json({ error: "Error obteniendo métricas" });
+  }
+});
+
+// ==========================================
+// 📊 HISTORIAL DE MÉTRICAS DE LECTURAS
+// ==========================================
+app.get("/metrics/lecturas/historial", async (req, res) => {
+  try {
+    const dias = parseInt(req.query.dias) || 7; // Por defecto últimos 7 días
+    
+    const snapshot = await firestore.collection("metricas_lecturas_firebase")
+      .orderBy("timestamp", "desc")
+      .limit(dias * 24) // Aproximadamente 1 registro por hora
+      .get();
+    
+    const historial = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      timestamp: doc.data().timestamp?.toDate?.()?.toISOString() || null
+    }));
+    
+    res.json({
+      total_registros: historial.length,
+      dias_solicitados: dias,
+      historial
+    });
+  } catch (err) {
+    console.error("❌ Error obteniendo historial de métricas:", err);
+    res.status(500).json({ error: "Error obteniendo historial" });
+  }
+});
+
+// Endpoint para forzar guardado de métricas manualmente
+app.post("/metrics/lecturas/guardar", async (req, res) => {
+  try {
+    await firebaseMetrics.saveToFirestore();
+    res.json({ ok: true, mensaje: "Métricas guardadas exitosamente" });
+  } catch (err) {
+    console.error("❌ Error guardando métricas:", err);
+    res.status(500).json({ error: "Error guardando métricas" });
+  }
+});
+
+// ==========================================
 // 🛠️ ENDPOINT INTELIGENTE (PATCH) - ACTUALIZA Y GUARDA HISTORIAL
 // ==========================================
 app.patch("/candidatos/:id", async (req, res) => {
+  const requestSource = getRequestSource(req);
+  
   try {
     const { id } = req.params;
     const updates = req.body; // Ej: { stage: 'stage_2', assignedTo: 'Gladymar' }
@@ -5537,6 +5872,9 @@ app.patch("/candidatos/:id", async (req, res) => {
     // SIEMPRE apuntamos a la colección maestra
     const docRef = firestore.collection("CVs_staging").doc(id);
     const docSnap = await docRef.get();
+    
+    // Registrar lectura
+    firebaseMetrics.recordRead(requestSource, 1);
 
     if (!docSnap.exists) {
         return res.status(404).send("Candidato no encontrado en CVs_staging");
@@ -5891,6 +6229,8 @@ app.patch("/candidatos/:id", async (req, res) => {
 
     // Impactar en Firestore
     await docRef.update(finalUpdate);
+    // 🗄️ Actualizar el caché en memoria
+    actualizarCandidatoEnCache(id, finalUpdate);
 
     console.log(`✅ [PATCH] Candidato ${id} actualizado en CVs_staging.`);
     res.json({ ok: true });
@@ -6213,6 +6553,10 @@ app.get("/firebase-config", (req, res) => {
   });
 });
 
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "cliente_lite", "dashboard.html"));
+});
+
 // ==========================================
 // 🚀 INICIO DEL SERVIDOR (CON BUCLE AUTOMÁTICO)
 // ==========================================
@@ -6241,6 +6585,11 @@ app.listen(PORT, "0.0.0.0", async () => {
       } else {
         console.log("✅ Storage OK — sistema operativo");
       }
+      
+      // 📊 Iniciar guardado periódico de métricas
+      firebaseMetrics.startPeriodicSave();
+      // 🗄️ Cargar caché de candidatos al iniciar
+      await cargarCacheCandidatos(true);
       
   } catch (error) {
       console.error("❌ Error fatal inicializando servicios de Firebase:", error);

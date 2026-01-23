@@ -1,6 +1,4 @@
-
-
-        // --- 1. ARQUITECTURA DE DATOS (CEREBRO) ---
+// --- 1. ARQUITECTURA DE DATOS (CEREBRO) ---
 
         const MOCK_DB = [
         { 
@@ -1523,6 +1521,197 @@ function ManageView({ candidates, onSelect, currentUser }) {
     );
 }
 // ==========================================
+// 📊 VISTA MÉTRICAS DE LECTURAS FIREBASE
+// ==========================================
+function FirebaseMetricsView() {
+    const [metrics, setMetrics] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [autoRefresh, setAutoRefresh] = useState(true);
+
+    const cargarMetricas = async () => {
+        try {
+            setLoading(true);
+            const data = await api.metrics.getLecturas();
+            if (data.error) {
+                setError(data.error);
+            } else {
+                setMetrics(data);
+                setError(null);
+            }
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        cargarMetricas();
+        
+        // Auto-refresh cada 30 segundos si está habilitado
+        let intervalo;
+        if (autoRefresh) {
+            intervalo = setInterval(cargarMetricas, 30000);
+        }
+        return () => clearInterval(intervalo);
+    }, [autoRefresh]);
+
+    if (loading && !metrics) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                <span className="ml-3 text-slate-400">Cargando métricas...</span>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="bg-rose-900/20 border border-rose-500/30 rounded-xl p-6 text-center">
+                <AlertTriangle className="mx-auto mb-3 text-rose-400" size={32} />
+                <p className="text-rose-300">Error: {error}</p>
+                <button 
+                    onClick={cargarMetricas}
+                    className="mt-4 px-4 py-2 bg-rose-600 hover:bg-rose-700 rounded-lg text-white text-sm"
+                >
+                    Reintentar
+                </button>
+            </div>
+        );
+    }
+
+    const porcentajeUsado = metrics?.estimatedDailyLimit?.percentage || '0%';
+    const porcentajeNum = parseFloat(porcentajeUsado);
+    const colorBarra = porcentajeNum > 80 ? 'bg-rose-500' : porcentajeNum > 50 ? 'bg-amber-500' : 'bg-emerald-500';
+
+    return (
+        <div className="animate-in fade-in duration-500 max-w-6xl mx-auto">
+            <header className="mb-6 flex justify-between items-center">
+                <div>
+                    <h1 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
+                        <Database size={24} className="text-blue-400" />
+                        Métricas de Lecturas Firebase
+                    </h1>
+                    <p className="text-slate-400 text-sm">Monitoreo de consumo del límite diario (50,000 lecturas)</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            checked={autoRefresh} 
+                            onChange={(e) => setAutoRefresh(e.target.checked)}
+                            className="rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500"
+                        />
+                        Auto-refresh (30s)
+                    </label>
+                    <button 
+                        onClick={cargarMetricas}
+                        disabled={loading}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-sm text-slate-300 flex items-center gap-2"
+                    >
+                        <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                        Actualizar
+                    </button>
+                </div>
+            </header>
+
+            {/* Tarjeta Principal - Uso del Límite */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold text-white">Consumo Estimado Diario</h3>
+                    <span className={`text-2xl font-bold ${porcentajeNum > 80 ? 'text-rose-400' : porcentajeNum > 50 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                        {porcentajeUsado}
+                    </span>
+                </div>
+                <div className="w-full bg-slate-800 rounded-full h-4 mb-3">
+                    <div 
+                        className={`h-4 rounded-full transition-all duration-500 ${colorBarra}`}
+                        style={{ width: `${Math.min(porcentajeNum, 100)}%` }}
+                    ></div>
+                </div>
+                <div className="flex justify-between text-sm text-slate-500">
+                    <span>0</span>
+                    <span>25,000</span>
+                    <span>50,000 (límite)</span>
+                </div>
+            </div>
+
+            {/* Grid de Estadísticas */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Total Lecturas</p>
+                    <p className="text-3xl font-bold text-white">{metrics?.total?.toLocaleString() || 0}</p>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Por Segundo</p>
+                    <p className="text-3xl font-bold text-blue-400">{metrics?.rates?.perSecond || 0}</p>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Por Hora</p>
+                    <p className="text-3xl font-bold text-amber-400">{parseInt(metrics?.rates?.perHour || 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                    <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Uptime</p>
+                    <p className="text-3xl font-bold text-emerald-400">{metrics?.uptime?.hours || 0}h</p>
+                </div>
+            </div>
+
+            {/* Tabla de Lecturas por Endpoint */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                <div className="p-4 border-b border-slate-800">
+                    <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                        <Activity size={18} className="text-blue-400" />
+                        Lecturas por Endpoint
+                    </h3>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead className="bg-slate-800/50">
+                            <tr>
+                                <th className="text-left px-4 py-3 text-xs font-bold text-slate-400 uppercase">Endpoint</th>
+                                <th className="text-right px-4 py-3 text-xs font-bold text-slate-400 uppercase">Lecturas</th>
+                                <th className="text-right px-4 py-3 text-xs font-bold text-slate-400 uppercase">% del Total</th>
+                                <th className="text-left px-4 py-3 text-xs font-bold text-slate-400 uppercase">Impacto</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                            {metrics?.bySource?.map((item, idx) => (
+                                <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
+                                    <td className="px-4 py-3">
+                                        <code className="text-sm text-blue-300 bg-slate-800 px-2 py-0.5 rounded">{item.source}</code>
+                                    </td>
+                                    <td className="px-4 py-3 text-right font-mono text-white">{item.count.toLocaleString()}</td>
+                                    <td className="px-4 py-3 text-right text-slate-400">{item.percentage}</td>
+                                    <td className="px-4 py-3">
+                                        <div className="w-24 bg-slate-800 rounded-full h-2">
+                                            <div 
+                                                className="h-2 rounded-full bg-blue-500"
+                                                style={{ width: item.percentage }}
+                                            ></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )) || (
+                                <tr>
+                                    <td colSpan="4" className="px-4 py-8 text-center text-slate-500">
+                                        No hay datos de lecturas aún
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Footer con info */}
+            <div className="mt-4 text-center text-xs text-slate-600">
+                Datos desde el último reinicio del servidor • Las métricas se resetean cuando el servidor reinicia
+            </div>
+        </div>
+    );
+}
+// ==========================================
 // 🗑️ VISTA PAPELERA (RECUPERACIÓN)
 // ==========================================
 function TrashView({ candidates, onUpdate, onRefresh }) {
@@ -2908,11 +3097,9 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
                 intentos++;
                 
                 try {
-                    // Recargar datos del candidato desde la API
+                    // 🔥 OPTIMIZACIÓN: Usar endpoint específico que lee solo 1 documento
                     const apiClient = window.api || api;
-                    const data = await apiClient.candidates.list();
-                    const lista = data.candidatos || data || [];
-                    const candidatoActualizado = lista.find(c => c.id === candidate.id);
+                    const candidatoActualizado = await apiClient.candidates.get(candidate.id);
                     
                     if (candidatoActualizado) {
                         // Verificar si el score cambió o si hay reseña_video
@@ -4751,6 +4938,7 @@ const handleUpdateCandidate = async (id, updates) => {
             case 'search':    return <SearchView candidates={candidates} onSelect={handleSelectCandidate} />;
             case 'reports':   return <ReportsView candidates={candidates} setCurrentReport={setCurrentReport} onUpdate={handleUpdateCandidate} />;
             case 'trash':     return <TrashView candidates={candidates} onUpdate={handleUpdateCandidate} onRefresh={cargarDatos} />;
+            case 'firebase_metrics': return <FirebaseMetricsView />;
             default:          return <DashboardView candidates={candidates} onNavigate={setActiveTab} />;
         }
     };
@@ -4765,6 +4953,7 @@ const handleUpdateCandidate = async (id, updates) => {
         { id: 'search', label: 'Búsqueda', icon: Search },
         { id: 'reports', label: 'Informes', icon: FileText },
         { id: 'trash', label: 'Papelera', icon: Trash2 },
+        { id: 'firebase_metrics', label: 'Métricas Firebase', icon: Database, sub: 'Lecturas diarias' },
     ];
 
    // 7. ESTRUCTURA PRINCIPAL (ACTUALIZADA CON MODAL)

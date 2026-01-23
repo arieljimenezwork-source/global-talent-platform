@@ -69,161 +69,6 @@ zohoWorkDrive.js
 <files>
 This section contains the contents of the repository's files.
 
-<file path="zohoWorkDrive.js">
-// zohoWorkDrive.js
-const axios = require('axios');
-
-// Cache del access token
-let accessTokenCache = {
-  token: null,
-  expiresAt: 0
-};
-
-/**
- * Obtiene un access token válido de Zoho (usa refresh token)
- */
-async function getZohoAccessToken() {
-  // Si el token en cache aún es válido, usarlo
-  if (accessTokenCache.token && Date.now() < accessTokenCache.expiresAt - 60000) {
-    return accessTokenCache.token;
-  }
-
-  const region = process.env.ZOHO_REGION || 'eu';
-  const tokenUrl = `https://accounts.zoho.${region}/oauth/v2/token`;
-
-  try {
-    const response = await axios.post(tokenUrl, null, {
-      params: {
-        refresh_token: process.env.ZOHO_REFRESH_TOKEN,
-        client_id: process.env.ZOHO_CLIENT_ID,
-        client_secret: process.env.ZOHO_CLIENT_SECRET,
-        grant_type: 'refresh_token'
-      }
-    });
-
-    // Guardar en cache (expira en 1 hora normalmente)
-    accessTokenCache = {
-      token: response.data.access_token,
-      expiresAt: Date.now() + (response.data.expires_in * 1000)
-    };
-
-    console.log('✅ [WorkDrive] Token de acceso obtenido correctamente');
-    return accessTokenCache.token;
-
-  } catch (error) {
-    console.error('❌ [WorkDrive] Error obteniendo token:', error.response?.data || error.message);
-    throw new Error('No se pudo autenticar con Zoho WorkDrive');
-  }
-}
-
-/**
- * Busca un archivo en WorkDrive por nombre
- * @param {string} searchQuery - Nombre o parte del nombre del archivo
- * @param {string} folderId - ID de la carpeta donde buscar (opcional)
- */
-async function buscarArchivoEnWorkDrive(searchQuery, folderId = null) {
-  const token = await getZohoAccessToken();
-  const region = process.env.ZOHO_REGION || 'eu';
-  
-  // Si no se especifica carpeta, usar la configurada por defecto
-  const targetFolder = folderId || process.env.ZOHO_WORKDRIVE_FOLDER_ID;
-
-  try {
-    // Endpoint de búsqueda de WorkDrive
-    const searchUrl = `https://workdrive.zoho.${region}/api/v1/files/search`;
-    
-    const response = await axios.get(searchUrl, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      params: {
-        search_string: searchQuery,
-        parent_id: targetFolder, // Limitar búsqueda a la carpeta de CVs
-        type: 'file',
-        per_page: 10
-      }
-    });
-
-    const archivos = response.data?.data || [];
-    console.log(`🔍 [WorkDrive] Búsqueda "${searchQuery}": ${archivos.length} resultados`);
-    
-    return archivos;
-
-  } catch (error) {
-    console.error('❌ [WorkDrive] Error en búsqueda:', error.response?.data || error.message);
-    throw new Error(`Error buscando en WorkDrive: ${error.message}`);
-  }
-}
-
-/**
- * Descarga un archivo de WorkDrive por su ID
- * @param {string} fileId - ID del archivo en WorkDrive
- * @returns {Buffer} - Contenido del archivo
- */
-async function descargarArchivoDeWorkDrive(fileId) {
-  const token = await getZohoAccessToken();
-  const region = process.env.ZOHO_REGION || 'eu';
-
-  try {
-    // Endpoint de descarga
-    const downloadUrl = `https://workdrive.zoho.${region}/api/v1/download/${fileId}`;
-    
-    const response = await axios.get(downloadUrl, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
-      responseType: 'arraybuffer',
-      timeout: 60000, // 60 segundos
-      maxContentLength: 20 * 1024 * 1024 // 20MB máximo
-    });
-
-    console.log(`✅ [WorkDrive] Archivo descargado: ${(response.data.length / 1024).toFixed(2)} KB`);
-    return Buffer.from(response.data);
-
-  } catch (error) {
-    console.error('❌ [WorkDrive] Error descargando:', error.response?.data || error.message);
-    throw new Error(`Error descargando de WorkDrive: ${error.message}`);
-  }
-}
-
-/**
- * Lista archivos en una carpeta de WorkDrive
- * @param {string} folderId - ID de la carpeta
- */
-async function listarArchivosEnCarpeta(folderId = null) {
-  const token = await getZohoAccessToken();
-  const region = process.env.ZOHO_REGION || 'eu';
-  const targetFolder = folderId || process.env.ZOHO_WORKDRIVE_FOLDER_ID;
-
-  try {
-    const listUrl = `https://workdrive.zoho.${region}/api/v1/files/${targetFolder}/files`;
-    
-    const response = await axios.get(listUrl, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
-      params: {
-        per_page: 100
-      }
-    });
-
-    return response.data?.data || [];
-
-  } catch (error) {
-    console.error('❌ [WorkDrive] Error listando carpeta:', error.response?.data || error.message);
-    throw new Error(`Error listando carpeta de WorkDrive: ${error.message}`);
-  }
-}
-
-module.exports = {
-  getZohoAccessToken,
-  buscarArchivoEnWorkDrive,
-  descargarArchivoDeWorkDrive,
-  listarArchivosEnCarpeta
-};
-</file>
-
 <file path=".cursorrules">
 # 🤖 Ariel's Tech Lead & Pair Programmer Rules
 
@@ -1797,6 +1642,266 @@ Uso privado de Global Talent Connections.
 ```
 </file>
 
+<file path="zohoWorkDrive.js">
+// zohoWorkDrive.js
+const axios = require('axios');
+
+// Cache del access token
+let accessTokenCache = {
+  token: null,
+  expiresAt: 0
+};
+
+/**
+ * Obtiene un access token válido de Zoho (usa refresh token)
+ */
+async function getZohoAccessToken() {
+  // Si el token en cache aún es válido, usarlo
+  if (accessTokenCache.token && Date.now() < accessTokenCache.expiresAt - 60000) {
+    return accessTokenCache.token;
+  }
+
+  const region = process.env.ZOHO_REGION || 'eu';
+  const tokenUrl = `https://accounts.zoho.${region}/oauth/v2/token`;
+
+  try {
+    const response = await axios.post(tokenUrl, null, {
+      params: {
+        refresh_token: process.env.ZOHO_REFRESH_TOKEN,
+        client_id: process.env.ZOHO_CLIENT_ID,
+        client_secret: process.env.ZOHO_CLIENT_SECRET,
+        grant_type: 'refresh_token'
+      }
+    });
+
+    // Guardar en cache (expira en 1 hora normalmente)
+    accessTokenCache = {
+      token: response.data.access_token,
+      expiresAt: Date.now() + (response.data.expires_in * 1000)
+    };
+
+    console.log('✅ [WorkDrive] Token de acceso obtenido correctamente');
+    return accessTokenCache.token;
+
+  } catch (error) {
+    console.error('❌ [WorkDrive] Error obteniendo token:', error.response?.data || error.message);
+    throw new Error('No se pudo autenticar con Zoho WorkDrive');
+  }
+}
+
+/**
+ * Lista las subcarpetas de una carpeta en WorkDrive
+ * @param {string} folderId - ID de la carpeta padre
+ */
+async function listarSubcarpetas(folderId = null) {
+    const token = await getZohoAccessToken();
+    const region = process.env.ZOHO_REGION || 'eu';
+    const targetFolder = folderId || process.env.ZOHO_WORKDRIVE_FOLDER_ID;
+  
+    try {
+      // Endpoint para listar contenido de una carpeta (sin parámetros extra)
+      const listUrl = `https://workdrive.zoho.${region}/api/v1/files/${targetFolder}/files`;
+      
+      const response = await axios.get(listUrl, {
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${token}`
+        }
+      });
+  
+      const items = response.data?.data || [];
+      // Filtrar solo carpetas (type = 'folder')
+      const carpetas = items.filter(item => item.attributes?.type === 'folder');
+      console.log(`📁 [WorkDrive] Encontradas ${carpetas.length} subcarpetas`);
+      
+      return carpetas;
+  
+    } catch (error) {
+      console.error('❌ [WorkDrive] Error listando subcarpetas:', error.response?.data || error.message);
+      throw new Error(`Error listando subcarpetas: ${error.message}`);
+    }
+  }
+
+/**
+ * Lista los archivos dentro de una carpeta
+ * @param {string} folderId - ID de la carpeta
+ */
+async function listarArchivosEnCarpeta(folderId) {
+    const token = await getZohoAccessToken();
+    const region = process.env.ZOHO_REGION || 'eu';
+  
+    try {
+      const listUrl = `https://workdrive.zoho.${region}/api/v1/files/${folderId}/files`;
+      
+      const response = await axios.get(listUrl, {
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${token}`
+        }
+      });
+  
+      const archivos = response.data?.data || [];
+      console.log(`📄 [WorkDrive] Encontrados ${archivos.length} archivos en carpeta`);
+      
+      return archivos;
+  
+    } catch (error) {
+      console.error('❌ [WorkDrive] Error listando archivos:', error.response?.data || error.message);
+      throw new Error(`Error listando archivos: ${error.message}`);
+    }
+  }
+
+/**
+ * Busca la carpeta de un candidato por email
+ * @param {string} email - Email del candidato
+ * @returns {Object|null} - Carpeta encontrada o null
+ */
+async function buscarCarpetaCandidato(email) {
+  if (!email) return null;
+  
+  const emailLower = email.toLowerCase().trim();
+  console.log(`🔍 [WorkDrive] Buscando carpeta para: ${emailLower}`);
+  
+  try {
+    const subcarpetas = await listarSubcarpetas();
+    
+    // Buscar carpeta que contenga el email en su nombre
+    // Formato esperado: "Nombre Apellido - email@gmail.com"
+    const carpetaEncontrada = subcarpetas.find(carpeta => {
+      const nombreCarpeta = (carpeta.attributes?.name || '').toLowerCase();
+      return nombreCarpeta.includes(emailLower);
+    });
+    
+    if (carpetaEncontrada) {
+      console.log(`✅ [WorkDrive] Carpeta encontrada: ${carpetaEncontrada.attributes?.name}`);
+      return carpetaEncontrada;
+    }
+    
+    console.log(`⚠️ [WorkDrive] No se encontró carpeta para: ${emailLower}`);
+    return null;
+    
+  } catch (error) {
+    console.error('❌ [WorkDrive] Error buscando carpeta:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Busca un archivo PDF en la carpeta de un candidato
+ * @param {string} email - Email del candidato
+ * @returns {Object|null} - Archivo PDF encontrado o null
+ */
+async function buscarArchivoEnWorkDrive(email) {
+  try {
+    // 1. Buscar la carpeta del candidato
+    const carpeta = await buscarCarpetaCandidato(email);
+    
+    if (!carpeta) {
+      return [];
+    }
+    
+    // 2. Listar archivos en la carpeta
+    const archivos = await listarArchivosEnCarpeta(carpeta.id);
+    
+    // 3. Filtrar solo PDFs (probablemente el CV)
+    const pdfs = archivos.filter(archivo => {
+      const nombre = (archivo.attributes?.name || '').toLowerCase();
+      return nombre.endsWith('.pdf');
+    });
+    
+    // 4. Priorizar archivos que tengan "cv" en el nombre
+    pdfs.sort((a, b) => {
+      const nombreA = (a.attributes?.name || '').toLowerCase();
+      const nombreB = (b.attributes?.name || '').toLowerCase();
+      const tieneCV_A = nombreA.includes('cv') || nombreA.includes('curriculum');
+      const tieneCV_B = nombreB.includes('cv') || nombreB.includes('curriculum');
+      
+      if (tieneCV_A && !tieneCV_B) return -1;
+      if (!tieneCV_A && tieneCV_B) return 1;
+      return 0;
+    });
+    
+    console.log(`📄 [WorkDrive] PDFs encontrados: ${pdfs.length}`);
+    return pdfs;
+    
+  } catch (error) {
+    console.error('❌ [WorkDrive] Error buscando archivo:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * Descarga un archivo de WorkDrive por su ID
+ * @param {string} fileId - ID del archivo en WorkDrive
+ * @returns {Buffer} - Contenido del archivo
+ */
+async function descargarArchivoDeWorkDrive(fileId) {
+  const token = await getZohoAccessToken();
+  const region = process.env.ZOHO_REGION || 'eu';
+
+  try {
+    // Endpoint de descarga
+    const downloadUrl = `https://workdrive.zoho.${region}/api/v1/download/${fileId}`;
+    
+    const response = await axios.get(downloadUrl, {
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${token}`
+      },
+      responseType: 'arraybuffer',
+      timeout: 60000, // 60 segundos
+      maxContentLength: 20 * 1024 * 1024 // 20MB máximo
+    });
+
+    console.log(`✅ [WorkDrive] Archivo descargado: ${(response.data.length / 1024).toFixed(2)} KB`);
+    return Buffer.from(response.data);
+
+  } catch (error) {
+    console.error('❌ [WorkDrive] Error descargando:', error.response?.data || error.message);
+    throw new Error(`Error descargando de WorkDrive: ${error.message}`);
+  }
+}
+/**
+ * Busca un archivo de video en la carpeta de un candidato
+ * @param {string} email - Email del candidato
+ * @returns {Object|null} - Archivo de video encontrado o null
+ */
+async function buscarVideoEnWorkDrive(email) {
+    try {
+      // 1. Buscar la carpeta del candidato
+      const carpeta = await buscarCarpetaCandidato(email);
+      
+      if (!carpeta) {
+        return [];
+      }
+      
+      // 2. Listar archivos en la carpeta
+      const archivos = await listarArchivosEnCarpeta(carpeta.id);
+      
+      // 3. Filtrar solo videos
+      const videos = archivos.filter(archivo => {
+        const nombre = (archivo.attributes?.name || '').toLowerCase();
+        return nombre.endsWith('.mp4') || nombre.endsWith('.mov') || 
+               nombre.endsWith('.avi') || nombre.endsWith('.webm');
+      });
+      
+      console.log(`🎥 [WorkDrive] Videos encontrados: ${videos.length}`);
+      return videos;
+      
+    } catch (error) {
+      console.error('❌ [WorkDrive] Error buscando video:', error.message);
+      throw error;
+    }
+  }
+
+module.exports = {
+    getZohoAccessToken,
+    buscarArchivoEnWorkDrive,
+    buscarVideoEnWorkDrive,
+    descargarArchivoDeWorkDrive,
+    listarSubcarpetas,
+    listarArchivosEnCarpeta,
+    buscarCarpetaCandidato
+};
+</file>
+
 <file path=".gitignore">
 # Archivos de sistema y dependencias
 node_modules/
@@ -2235,6 +2340,73 @@ Object.keys(Icons).forEach(iconName => {
 });
 </file>
 
+<file path="cliente_lite/dashboard.html">
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Talent - Panel RRHH</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        
+        // Cargar configuración desde el backend
+        fetch('/firebase-config')
+            .then(res => res.json())
+            .then(config => {
+                if (config.apiKey) {
+                    const app = initializeApp(config);
+                    const auth = getAuth(app);
+                    const provider = new GoogleAuthProvider();
+                    
+                    window.firebaseAuth = auth;
+                    window.firebaseGoogleProvider = provider;
+                    window.firebaseSignInWithPopup = signInWithPopup;
+                    
+                    console.log('✅ Firebase Auth inicializado');
+                } else {
+                    console.warn('⚠️ Firebase config no disponible. La autenticación no funcionará.');
+                }
+            })
+            .catch(err => console.error('❌ Error cargando Firebase config:', err));
+    </script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    animation: { 'fade-in': 'fadeIn 0.5s ease-out' },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel" src="ui-components.js"></script>
+    <script type="text/babel" src="api-client.js"></script>
+    <script type="text/babel" src="dashboard.js"></script>
+</body>
+</html>
+</file>
+
 <file path="cliente_lite/api-client.js">
 const API_URL = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
     ? "http://localhost:3001"       // Si estoy en mi compu
@@ -2371,6 +2543,21 @@ const api = {
                         return { candidatos: [], hasMore: false, lastDoc: null, total: 0 }; 
                     }
                 },
+                // 🔍 Obtener un candidato por ID (optimizado para polling)
+                get: async (id) => {
+                    try {
+                        const headers = await getHeaders();
+                        const res = await fetch(`${API_URL}/candidatos/${id}`, {
+                            method: 'GET',
+                            headers: headers
+                        });
+                        if (!res.ok) throw new Error("Error obteniendo candidato");
+                        return await res.json();
+                    } catch (e) {
+                        console.error("Error obteniendo candidato:", e);
+                        return null;
+                    }
+                },
                 // 🚀 EL ARREGLO DEL BOTÓN (USANDO PATCH)
                 update: async (id, updates) => {
                     try {
@@ -2443,14 +2630,36 @@ const api = {
                 },
                 repararDesdeWorkDrive: async (id) => {
                     try {
+                        const headers = await getHeaders({ 'Content-Type': 'application/json' });
                         const res = await fetch(`${API_URL}/candidatos/${id}/reparar-desde-workdrive`, {
                             method: 'POST',
-                            headers: await getAuthHeaders()
+                            headers: headers
                         });
-                        return await res.json();
-                    } catch (error) {
-                        console.error("Error reparando desde WorkDrive:", error);
-                        throw new Error('Error al reparar desde WorkDrive');
+                        const data = await res.json();
+                        if (!res.ok) {
+                            throw new Error(data.error || 'Error al reparar desde WorkDrive');
+                        }
+                        return data;
+                    } catch (e) {
+                        console.error("Error reparando desde WorkDrive:", e);
+                        return { ok: false, error: e.message };
+                    }
+                },
+                repararVideoDesdeWorkDrive: async (id) => {
+                    try {
+                        const headers = await getHeaders({ 'Content-Type': 'application/json' });
+                        const res = await fetch(`${API_URL}/candidatos/${id}/reparar-video-workdrive`, {
+                            method: 'POST',
+                            headers: headers
+                        });
+                        const data = await res.json();
+                        if (!res.ok) {
+                            throw new Error(data.error || 'Error al reparar video desde WorkDrive');
+                        }
+                        return data;
+                    } catch (e) {
+                        console.error("Error reparando video desde WorkDrive:", e);
+                        return { ok: false, error: e.message };
                     }
                 },
                 analizar: async (id, responsable) => {
@@ -2534,73 +2743,6 @@ const api = {
         // --- HACER API GLOBAL ---
 window.api = api;
 window.API_URL = API_URL;
-</file>
-
-<file path="cliente_lite/dashboard.html">
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Talent - Panel RRHH</title>
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Firebase SDK -->
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        
-        // Cargar configuración desde el backend
-        fetch('/firebase-config')
-            .then(res => res.json())
-            .then(config => {
-                if (config.apiKey) {
-                    const app = initializeApp(config);
-                    const auth = getAuth(app);
-                    const provider = new GoogleAuthProvider();
-                    
-                    window.firebaseAuth = auth;
-                    window.firebaseGoogleProvider = provider;
-                    window.firebaseSignInWithPopup = signInWithPopup;
-                    
-                    console.log('✅ Firebase Auth inicializado');
-                } else {
-                    console.warn('⚠️ Firebase config no disponible. La autenticación no funcionará.');
-                }
-            })
-            .catch(err => console.error('❌ Error cargando Firebase config:', err));
-    </script>
-    
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Inter', 'sans-serif'] },
-                    animation: { 'fade-in': 'fadeIn 0.5s ease-out' },
-                    keyframes: {
-                        fadeIn: {
-                            '0%': { opacity: '0', transform: 'translateY(10px)' },
-                            '100%': { opacity: '1', transform: 'translateY(0)' },
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <div id="root"></div>
-    
-    <script type="text/babel" src="ui-components.js"></script>
-    <script type="text/babel" src="api-client.js"></script>
-    <script type="text/babel" src="dashboard.js"></script>
-</body>
-</html>
 </file>
 
 <file path="cliente_lite/dashboard.js">
@@ -3097,7 +3239,8 @@ window.API_URL = API_URL;
             "Asistente Desarrollador Odoo + Shopify",
             "Asistente Programador web (Power BI + Integración ERP/CRM",
             "Asistente de Seguridad y Salud Laboral",
-            "Asistente de Operaciones Comerciales"
+            "Asistente de Operaciones Comerciales",
+            "Asistente de Comercio Exterior"
         ];
 
         // --- NUEVA VISTA: BUSQUEDA Y TRACKING ---
@@ -5511,11 +5654,9 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
                 intentos++;
                 
                 try {
-                    // Recargar datos del candidato desde la API
+                    // 🔥 OPTIMIZACIÓN: Usar endpoint específico que lee solo 1 documento
                     const apiClient = window.api || api;
-                    const data = await apiClient.candidates.list();
-                    const lista = data.candidatos || data || [];
-                    const candidatoActualizado = lista.find(c => c.id === candidate.id);
+                    const candidatoActualizado = await apiClient.candidates.get(candidate.id);
                     
                     if (candidatoActualizado) {
                         // Verificar si el score cambió o si hay reseña_video
@@ -6297,114 +6438,87 @@ const handleConfirmDisqualified = () => {
                                     </div>
                                 )}
                                 <div className="flex items-center gap-4 p-4 rounded-xl border border-slate-800 bg-slate-950 hover:border-blue-500/50 hover:bg-slate-900 transition-all group">
-                                    <a href={candidate.cv_url} target="_blank" className="flex items-center gap-4 flex-1 cursor-pointer">
-                                        <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform"><FileText size={20}/></div>
-                                        <div className="flex-1">
-                                            <h4 className="text-sm font-bold text-white">Curriculum Vitae</h4>
-                                            <p className="text-xs text-blue-500 group-hover:underline">
-                                                {candidate.cv_url && candidate.cv_url.length > 5 ? "Ver Documento" : "Link no disponible"}
-                                            </p>
-                                        </div>
-                                    </a>
-                                    {/* 🔧 BOTÓN REPARAR - Mostrar si: score=0, no tiene PDF, o tiene reseña pero no URL */}
-                                    {(candidate.ia_score === 0 || candidate.ia_score === null || 
-                                        !candidate.tiene_pdf || 
-                                        (candidate.reseña_cv && (!candidate.cv_url || candidate.cv_url.length <= 5))) && (
-                                        <button
-                                            onClick={async () => {
-                                                if (isReparandoCV) return; // Prevenir múltiples clics
-                                                if (!confirm("¿Buscar y enlazar el CV en Storage? Esto también recalculará el score si es necesario.")) return;
-                                                
-                                                setIsReparandoCV(true); // Activar estado de carga
-                                                
-                                                try {
-                                                    const result = await api.candidates.repararCV(candidate.id);
-                                                    if (result.ok) {
-                                                        alert(`✅ ${result.mensaje}\n\nScore: ${result.datos.score_anterior} → ${result.datos.score_nuevo}`);
-                                                        // Recargar datos del candidato
-                                                        const data = await api.candidates.list();
-                                                        const lista = data.candidatos || data || [];
-                                                        const candidatoActualizado = lista.find(c => c.id === candidate.id);
-                                                        if (candidatoActualizado) {
-                                                            onUpdate(candidate.id, {
-                                                                cv_url: candidatoActualizado.cv_url,
-                                                                tiene_pdf: candidatoActualizado.tiene_pdf,
-                                                                ia_score: candidatoActualizado.ia_score,
-                                                                ia_motivos: candidatoActualizado.ia_motivos,
-                                                                ia_alertas: candidatoActualizado.ia_alertas,
-                                                                ia_status: candidatoActualizado.ia_status
-                                                            });
-                                                        }
-                                                    } else {
-                                                        alert(`❌ ${result.error || result.mensaje || "Error al reparar CV"}`);
-                                                    }
-                                                } catch (error) {
-                                                    console.error("Error reparando CV:", error);
-                                                    alert("❌ Error al reparar CV. Revisa la consola.");
-                                                } finally {
-                                                    setIsReparandoCV(false); // Desactivar estado de carga
-                                                }
-                                            }}
-                                            disabled={isReparandoCV}
-                                            className={`px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded border border-amber-400 flex items-center gap-2 transition-all shadow-lg shadow-amber-900/20 ${isReparandoCV ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            title={isReparandoCV ? "Buscando CV en Storage..." : "Buscar CV en Storage y enlazarlo"}
-                                        >
-                                            {isReparandoCV ? (
-                                                <>
-                                                    <Loader2 size={14} className="animate-spin"/> Buscando...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Wrench size={14}/> Reparar CV
-                                                </>
-                                            )}
-                                        </button>
-                                    )}
-                                    {/* 🔧 BOTÓN REPARAR DESDE WORKDRIVE - Para casos donde Storage también falló */}
-                                    {(candidate.ia_score === 0 || candidate.ia_score === null || !candidate.tiene_pdf) && (
-                                        <button
-                                            onClick={async () => {
-                                                if (isReparandoCV) return;
-                                                if (!confirm("¿Buscar el CV en el backup de WorkDrive? Esto puede tardar unos segundos.")) return;
-                                                
-                                                setIsReparandoCV(true);
-                                                
-                                                try {
-                                                    const result = await api.candidates.repararDesdeWorkDrive(candidate.id);
-                                                    if (result.ok) {
-                                                        alert(`✅ ${result.mensaje}\n\nArchivo: ${result.datos.archivo_encontrado}\nScore: ${result.datos.score_anterior} → ${result.datos.score_nuevo}`);
-                                                        // Recargar datos
-                                                        const data = await api.candidates.list();
-                                                        const lista = data.candidatos || data || [];
-                                                        const candidatoActualizado = lista.find(c => c.id === candidate.id);
-                                                        if (candidatoActualizado) {
-                                                            onUpdate(candidate.id, candidatoActualizado);
-                                                        }
-                                                    } else {
-                                                        alert(`❌ ${result.error || result.mensaje}`);
-                                                    }
-                                                } catch (error) {
-                                                    console.error("Error reparando desde WorkDrive:", error);
-                                                    alert("❌ Error al reparar desde WorkDrive. Revisa la consola.");
-                                                } finally {
-                                                    setIsReparandoCV(false);
-                                                }
-                                            }}
-                                            disabled={isReparandoCV}
-                                            className={`px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded border border-purple-400 flex items-center gap-2 transition-all shadow-lg shadow-purple-900/20 ${isReparandoCV ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            title="Buscar CV en backup de Zoho WorkDrive"
-                                        >
-                                            {isReparandoCV ? (
-                                                <>
-                                                    <Loader2 size={14} className="animate-spin"/> Buscando en WorkDrive...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <CloudDownload size={14}/> Recuperar de WorkDrive
-                                                </>
-                                            )}
-                                        </button>
-                                    )}
+                                    <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform"><FileText size={20}/></div>
+                                    <div className="flex-1">
+                                        <h4 className="text-sm font-bold text-white">Curriculum Vitae</h4>
+                                        {/* Link al CV o mensaje de no disponible */}
+                                        {candidate.cv_url && candidate.cv_url.length > 5 ? (
+                                            <a href={candidate.cv_url} target="_blank" className="text-xs text-blue-500 hover:underline">
+                                                Ver Documento
+                                            </a>
+                                        ) : (
+                                            <p className="text-xs text-slate-500">Link no disponible</p>
+                                        )}
+                                        
+                                        {/* 🔧 BOTONES DE REPARACIÓN - Solo si hay problemas con el CV */}
+                                        {(!candidate.tiene_pdf || !candidate.cv_url || candidate.cv_url.length <= 5 || (!candidate.texto_extraido && candidate.ia_score === 0)) && (
+                                            <div className="flex items-center gap-2 mt-1">
+                                                {/* Reparar desde Storage */}
+                                                {candidate.reseña_cv && (!candidate.cv_url || candidate.cv_url.length <= 5) && (
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (isReparandoCV) return;
+                                                            setIsReparandoCV(true);
+                                                            try {
+                                                                const result = await api.candidates.repararCV(candidate.id);
+                                                                if (result.ok) {
+                                                                    alert(`✅ ${result.mensaje}`);
+                                                                    const data = await api.candidates.list();
+                                                                    const lista = data.candidatos || data || [];
+                                                                    const actualizado = lista.find(c => c.id === candidate.id);
+                                                                    if (actualizado) onUpdate(candidate.id, actualizado);
+                                                                } else {
+                                                                    alert(`❌ ${result.error || result.mensaje}`);
+                                                                }
+                                                            } catch (error) {
+                                                                alert("❌ Error al reparar CV");
+                                                            } finally {
+                                                                setIsReparandoCV(false);
+                                                            }
+                                                        }}
+                                                        disabled={isReparandoCV}
+                                                        className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 disabled:opacity-50"
+                                                        title="Buscar en Storage"
+                                                    >
+                                                        {isReparandoCV ? <Loader2 size={10} className="animate-spin"/> : <Wrench size={10}/>}
+                                                        Storage
+                                                    </button>
+                                                )}
+
+                                                {/* Reparar desde WorkDrive */}
+                                                {(!candidate.tiene_pdf || (!candidate.texto_extraido && candidate.ia_score === 0)) && (
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (isReparandoCV) return;
+                                                            setIsReparandoCV(true);
+                                                            try {
+                                                                const result = await api.candidates.repararDesdeWorkDrive(candidate.id);
+                                                                if (result.ok) {
+                                                                    alert(`✅ ${result.mensaje}\nArchivo: ${result.datos.archivo_encontrado}`);
+                                                                    const data = await api.candidates.list();
+                                                                    const lista = data.candidatos || data || [];
+                                                                    const actualizado = lista.find(c => c.id === candidate.id);
+                                                                    if (actualizado) onUpdate(candidate.id, actualizado);
+                                                                } else {
+                                                                    alert(`❌ ${result.error || result.mensaje}`);
+                                                                }
+                                                            } catch (error) {
+                                                                alert("❌ Error al recuperar de WorkDrive");
+                                                            } finally {
+                                                                setIsReparandoCV(false);
+                                                            }
+                                                        }}
+                                                        disabled={isReparandoCV}
+                                                        className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 disabled:opacity-50"
+                                                        title="Buscar en WorkDrive (backup)"
+                                                    >
+                                                        {isReparandoCV ? <Loader2 size={10} className="animate-spin"/> : <CloudDownload size={10}/>}
+                                                        WorkDrive
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className={`flex items-center gap-4 p-4 rounded-xl border border-slate-800 bg-slate-950 transition-all group ${!candidate.video_url || !candidate.video_url.startsWith('http') ? 'opacity-50' : ''} ${isAnalyzingVideo ? 'border-purple-500/50 bg-purple-500/5' : ''}`}>
                                     <div className="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform">
@@ -6419,15 +6533,50 @@ const handleConfirmDisqualified = () => {
                                                 </span>
                                             )}
                                         </h4>
-                                        <p className="text-xs text-purple-400 group-hover:underline">
-                                            {isAnalyzingVideo ? 'Procesando video con IA...' :
-                                             !candidate.video_url ? 'No disponible' : 
-                                             candidate.video_url.startsWith('http') ? (
-                                                 <a href={candidate.video_url} target="_blank" className="hover:underline">Abrir Link Externo</a>
-                                             ) : 
-                                             candidate.video_tipo === 'archivo' ? 'Video subido (ver en Zoho)' : 
-                                             'Link no válido'}
-                                        </p>
+                                        {/* Link al video o mensaje de no disponible */}
+                                        {candidate.video_url && candidate.video_url.startsWith('http') ? (
+                                            <a href={candidate.video_url} target="_blank" className="text-xs text-purple-400 hover:underline">
+                                                Abrir Link Externo
+                                            </a>
+                                        ) : (
+                                            <p className="text-xs text-slate-500">
+                                                {candidate.video_tipo === 'archivo' ? 'Video subido (ver en Zoho)' : 'No disponible'}
+                                            </p>
+                                        )}
+                                        
+                                        {/* 🎥 BOTÓN REPARAR VIDEO - Solo si no hay video válido */}
+                                        {(!candidate.video_url || !candidate.video_url.startsWith('http')) && (
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <button
+                                                    onClick={async () => {
+                                                        if (isReparandoCV) return;
+                                                        setIsReparandoCV(true);
+                                                        try {
+                                                            const result = await api.candidates.repararVideoDesdeWorkDrive(candidate.id);
+                                                            if (result.ok) {
+                                                                alert(`✅ ${result.mensaje}\nArchivo: ${result.datos.archivo_encontrado}`);
+                                                                const data = await api.candidates.list();
+                                                                const lista = data.candidatos || data || [];
+                                                                const actualizado = lista.find(c => c.id === candidate.id);
+                                                                if (actualizado) onUpdate(candidate.id, actualizado);
+                                                            } else {
+                                                                alert(`❌ ${result.error || result.mensaje}`);
+                                                            }
+                                                        } catch (error) {
+                                                            alert("❌ Error al recuperar video de WorkDrive");
+                                                        } finally {
+                                                            setIsReparandoCV(false);
+                                                        }
+                                                    }}
+                                                    disabled={isReparandoCV}
+                                                    className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 disabled:opacity-50"
+                                                    title="Buscar video en WorkDrive (backup)"
+                                                >
+                                                    {isReparandoCV ? <Loader2 size={10} className="animate-spin"/> : <CloudDownload size={10}/>}
+                                                    WorkDrive
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -7470,7 +7619,9 @@ const { google } = require("googleapis");
 const nodemailer = require("nodemailer");
 require("dotenv").config();
 const fichaGenerator = require("./services/fichaGenerator");
-const {buscarArchivoEnWorkDrive, 
+const { 
+  buscarArchivoEnWorkDrive, 
+  buscarVideoEnWorkDrive,
   descargarArchivoDeWorkDrive 
 } = require('./zohoWorkDrive');
 
@@ -7614,6 +7765,79 @@ admin.initializeApp({
   storageBucket: process.env.FIREBASE_STORAGE_BUCKET
 });
 
+// ==========================================
+// 📊 SISTEMA DE MÉTRICAS DE LECTURAS FIREBASE
+// ==========================================
+const firebaseMetrics = {
+  // Contador de lecturas por endpoint/función
+  reads: new Map(),
+  // Contador total de lecturas
+  totalReads: 0,
+  // Timestamp de inicio
+  startTime: Date.now(),
+  
+  // Registrar una lectura
+  recordRead(source, count = 1) {
+    const key = source || 'unknown';
+    const current = this.reads.get(key) || 0;
+    this.reads.set(key, current + count);
+    this.totalReads += count;
+  },
+  
+  // Obtener estadísticas
+  getStats() {
+    const uptime = Math.floor((Date.now() - this.startTime) / 1000); // segundos
+    const readsPerSecond = uptime > 0 ? (this.totalReads / uptime).toFixed(4) : 0;
+    const readsPerHour = (readsPerSecond * 3600).toFixed(0);
+    const readsPerDay = (readsPerSecond * 86400).toFixed(0);
+    
+    // Ordenar por cantidad de lecturas
+    const sortedReads = Array.from(this.reads.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([source, count]) => ({
+        source,
+        count,
+        percentage: ((count / this.totalReads) * 100).toFixed(2) + '%'
+      }));
+    
+    return {
+      total: this.totalReads,
+      bySource: sortedReads,
+      uptime: {
+        seconds: uptime,
+        hours: (uptime / 3600).toFixed(2),
+        days: (uptime / 86400).toFixed(2)
+      },
+      rates: {
+        perSecond: readsPerSecond,
+        perHour: readsPerHour,
+        perDay: readsPerDay
+      },
+      estimatedDailyLimit: {
+        current: this.totalReads,
+        limit: 50000,
+        percentage: ((this.totalReads / 50000) * 100).toFixed(2) + '%',
+        remaining: Math.max(0, 50000 - parseInt(readsPerDay))
+      }
+    };
+  },
+  
+  // Resetear contadores (útil para pruebas o reinicio diario)
+  reset() {
+    this.reads.clear();
+    this.totalReads = 0;
+    this.startTime = Date.now();
+  }
+};
+
+// Helper para obtener el nombre del endpoint desde el request
+function getRequestSource(req) {
+  if (!req) return 'unknown';
+  const method = req.method || 'GET';
+  const path = req.path || req.route?.path || 'unknown';
+  return `${method} ${path}`;
+}
+
 ///////////////////////////////////////////////////express app /////////////////////////////////////////////////////////////
 
 const PORT = process.env.PORT || 3001;
@@ -7743,6 +7967,9 @@ async function obtenerCandidatosBloqueados() {
     const snap = await firestore.collection(MAIN_COLLECTION)
       .where("stage", "==", "trash")
       .get();
+    
+    // Registrar lectura
+    firebaseMetrics.recordRead('obtenerCandidatosBloqueados', snap.size);
     
     snap.forEach((doc) => {
       bloqueados.add(doc.id.trim().toLowerCase());
@@ -8562,16 +8789,11 @@ async function analizarCorreos() {
    ========================================================================== */
 
    app.get("/buscar", async (req, res) => {
-
+    const requestSource = getRequestSource(req);
+    
     try {
-
       const { q = "", desde = null, hasta = null, limit = 100, startAfter = null } = req.query;
-
-      
-
       console.log(`📡 Solicitud de búsqueda recibida. Query: "${q}", Limit: ${limit}, StartAfter: ${startAfter ? 'Sí' : 'No'}`);
-
-  
 
       // USAMOS LA VARIABLE MAESTRA
       let ref = admin.firestore().collection(MAIN_COLLECTION);
@@ -8580,8 +8802,8 @@ async function analizarCorreos() {
       const termino = q.toLowerCase().trim();
       const limitNum = parseInt(limit) || 100;
       
-      // 🔥 MEJORA: Si hay término de búsqueda, buscar en Firestore directamente
-      // Firestore no soporta búsqueda full-text nativa, pero podemos hacer queries por campos
+      // 🔥 OPTIMIZACIÓN: Usar queries de Firestore en lugar de leer todo y filtrar
+      // Si hay término de búsqueda, intentamos filtrar por campos indexados cuando sea posible
       let query = ref.orderBy('creado_en', 'desc');
       
       // Si hay un cursor (startAfter), usarlo para paginación
@@ -8589,6 +8811,7 @@ async function analizarCorreos() {
         try {
           // startAfter es el ID del último documento
           const lastDoc = await ref.doc(startAfter).get();
+          firebaseMetrics.recordRead(`${requestSource} (startAfter)`, 1);
           if (lastDoc.exists) {
             // Firestore necesita el documento completo para startAfter
             query = query.startAfter(lastDoc);
@@ -8602,9 +8825,13 @@ async function analizarCorreos() {
       query = query.limit(limitNum + 1); // Traemos uno más para saber si hay más resultados
       
       const snap = await query.get();
-      
+      // Registrar lecturas: el número de documentos leídos
+      const readCount = snap.size;
+      firebaseMetrics.recordRead(requestSource, readCount);
 
-      if (snap.empty) return res.json({ resultados: [], hasMore: false, lastDoc: null });
+      if (snap.empty) {
+        return res.json({ resultados: [], hasMore: false, lastDoc: null });
+      }
 
   
 
@@ -8725,19 +8952,17 @@ let candidatos = snap.docs.map(doc => {
   
 
     } catch (err) {
-
       console.error("❌ Error en /buscar:", err);
-
       res.status(500).json({ error: "Error interno del servidor" });
-
     }
-
   });
 
 // ==========================================================================
 // 🔄 ENDPOINT: ACTUALIZACIÓN DE ESTADO INTERNO (Optimizado)
 // ==========================================================================
 app.post("/candidatos/:id/resumen", async (req, res) => {
+  const requestSource = getRequestSource(req);
+  
   try {
     const { id } = req.params;
     const { manualData, responsable } = req.body; 
@@ -8769,6 +8994,9 @@ app.post("/candidatos/:id/resumen", async (req, res) => {
     // --- CASO 2: PROCESO IDEAL (Candidatos del Pipeline) ---
     const docRef = firestore.collection(MAIN_COLLECTION).doc(id);
     const doc = await docRef.get();
+    
+    // Registrar lectura
+    firebaseMetrics.recordRead(requestSource, 1);
     
     if (!doc.exists) {
         return res.status(404).json({ error: "Candidato no encontrado en el pipeline." });
@@ -9584,6 +9812,8 @@ app.get("/resumen/:id", async (req, res) => {
 /////////////////////////////////////  MÉTRICAS PARA PANEL  /////////////////////////////////////
 const db = admin.firestore();
 app.get("/panel/metrics", async (req, res) => {
+  const requestSource = getRequestSource(req);
+  
   try {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -9607,6 +9837,9 @@ app.get("/panel/metrics", async (req, res) => {
        =========================================================== */
 
     const stagingSnap = await firestore.collection(MAIN_COLLECTION).get();
+    
+    // Registrar lectura: número de documentos leídos
+    firebaseMetrics.recordRead(requestSource, stagingSnap.size);
 
     stagingSnap.forEach((doc) => {
       const data = doc.data();
@@ -11823,6 +12056,207 @@ app.post("/candidatos/:id/reparar-desde-workdrive", async (req, res) => {
     });
   }
 });
+
+// ==========================================================================
+// 🎥 ENDPOINT: REPARAR VIDEO DESDE WORKDRIVE
+// ==========================================================================
+app.post("/candidatos/:id/reparar-video-workdrive", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const responsable = req.body.responsable || "Sistema";
+    
+    console.log(`🎥 [REPARAR-VIDEO-WD] Iniciando para: ${id}`);
+    
+    // 1. Obtener datos del candidato
+    const docRef = firestore.collection("CVs_staging").doc(id);
+    const docSnap = await docRef.get();
+    
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: "Candidato no encontrado" });
+    }
+    
+    const candidato = docSnap.data();
+    const email = candidato.email || "";
+    
+    console.log(`📋 [REPARAR-VIDEO-WD] Buscando video para: ${candidato.nombre} (${email})`);
+    
+    // 2. Buscar video en WorkDrive
+    const videos = await buscarVideoEnWorkDrive(email);
+    
+    if (!videos || videos.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: "Video no encontrado en WorkDrive",
+        mensaje: "No se encontró ningún video en la carpeta del candidato."
+      });
+    }
+    
+    // Tomar el primer video encontrado
+    const videoEncontrado = videos[0];
+    const nombreArchivo = videoEncontrado.attributes?.name || 'video.mp4';
+    console.log(`✅ [REPARAR-VIDEO-WD] Video encontrado: ${nombreArchivo}`);
+    
+    // 3. Descargar el video de WorkDrive
+    console.log(`📥 [REPARAR-VIDEO-WD] Descargando video...`);
+    const videoBuffer = await descargarArchivoDeWorkDrive(videoEncontrado.id);
+    const sizeMB = videoBuffer.length / (1024 * 1024);
+    console.log(`📊 [REPARAR-VIDEO-WD] Tamaño: ${sizeMB.toFixed(2)} MB`);
+    
+    // 4. Comprimir si es mayor a 50MB
+    let bufferFinal = videoBuffer;
+    const extension = nombreArchivo.split('.').pop() || 'mp4';
+    
+    if (sizeMB > 50) {
+      console.log(`🎬 [REPARAR-VIDEO-WD] Comprimiendo video (${sizeMB.toFixed(2)} MB > 50 MB)...`);
+      
+      const tempInputPath = path.join(os.tmpdir(), `${id}_video_original_${Date.now()}.${extension}`);
+      const tempOutputPath = path.join(os.tmpdir(), `${id}_video_comprimido_${Date.now()}.mp4`);
+      
+      // Guardar temporalmente
+      fs.writeFileSync(tempInputPath, videoBuffer);
+      
+      // Comprimir
+      await comprimirVideoA50MB(tempInputPath, tempOutputPath);
+      
+      // Leer el comprimido
+      bufferFinal = fs.readFileSync(tempOutputPath);
+      
+      // Limpiar archivos temporales
+      try { fs.unlinkSync(tempInputPath); } catch(e) {}
+      try { fs.unlinkSync(tempOutputPath); } catch(e) {}
+      
+      const newSizeMB = bufferFinal.length / (1024 * 1024);
+      console.log(`✅ [REPARAR-VIDEO-WD] Video comprimido: ${sizeMB.toFixed(2)} MB → ${newSizeMB.toFixed(2)} MB`);
+    }
+    
+    // 5. Subir a Firebase Storage
+    const fileName = `CVs_staging/videos/${id}_video.mp4`;
+    const bucketFile = bucket.file(fileName);
+    
+    await bucketFile.save(bufferFinal, {
+      metadata: { contentType: 'video/mp4' }
+    });
+    
+    // Generar URL firmada
+    const [signedUrl] = await bucketFile.getSignedUrl({
+      action: 'read',
+      expires: '01-01-2035'
+    });
+    
+    console.log(`✅ [REPARAR-VIDEO-WD] Video subido a Storage: ${fileName}`);
+    
+    // 6. Analizar video con IA (usando la función existente)
+    console.log(`🤖 [REPARAR-VIDEO-WD] Analizando video con IA...`);
+    
+    const resultadoVideo = await generarResenaVideo(signedUrl, candidato.puesto || "General");
+    
+    let reseñaVideo = null;
+    let videoError = null;
+    
+    if (resultadoVideo.reseña) {
+      reseñaVideo = resultadoVideo.reseña;
+      console.log(`✅ [REPARAR-VIDEO-WD] Reseña generada correctamente`);
+    } else {
+      videoError = resultadoVideo.error;
+      console.log(`⚠️ [REPARAR-VIDEO-WD] Error generando reseña: ${videoError}`);
+    }
+    
+    // 7. Recalcular score si hay reseña del video
+    let nuevoScore = candidato.ia_score || 0;
+    let nuevoMotivos = candidato.ia_motivos || "";
+    let nuevasAlertas = candidato.ia_alertas || [];
+    
+    if (reseñaVideo) {
+      console.log(`🤖 [REPARAR-VIDEO-WD] Recalculando score con video...`);
+      
+      const reseñaCV = candidato.reseña_cv || null;
+      const respuestasFiltro = candidato.respuestas_filtro || {};
+      const datosFormulario = JSON.stringify(respuestasFiltro);
+      
+      try {
+        const analisisIA = await verificaConocimientosMinimos(
+          candidato.puesto || "General",
+          datosFormulario,
+          "",
+          reseñaCV,
+          reseñaVideo
+        );
+        
+        // Aplicar límite según origen
+        const origen = candidato.origen || "";
+        if (origen === "webhook_zoho_passive" || origen.includes("zoho") || origen.includes("mail")) {
+          analisisIA.score = Math.min(analisisIA.score, 80);
+        } else if (origen === "carga_manual") {
+          analisisIA.score = Math.min(analisisIA.score, 75);
+        }
+        
+        nuevoScore = analisisIA.score;
+        nuevoMotivos = analisisIA.motivos;
+        nuevasAlertas = analisisIA.alertas || [];
+        
+        console.log(`✅ [REPARAR-VIDEO-WD] Score recalculado: ${candidato.ia_score || 0} → ${nuevoScore}`);
+        
+      } catch (e) {
+        console.error(`❌ [REPARAR-VIDEO-WD] Error recalculando score:`, e.message);
+      }
+    }
+    
+    // 8. Actualizar Firestore
+    const updateData = {
+      video_url: signedUrl,
+      video_tipo: 'archivo',
+      reseña_video: reseñaVideo,
+      video_error: videoError,
+      ia_score: nuevoScore,
+      ia_motivos: nuevoMotivos,
+      ia_alertas: nuevasAlertas,
+      actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
+      
+      // Registro de la reparación
+      reparacion_video_workdrive: {
+        fecha: new Date().toISOString(),
+        archivo_original: nombreArchivo,
+        archivo_id: videoEncontrado.id,
+        responsable: responsable,
+        comprimido: sizeMB > 50
+      },
+      
+      // Historial
+      historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+        date: new Date().toISOString(),
+        event: 'Video Recuperado desde WorkDrive',
+        detail: `Video recuperado (${nombreArchivo}), analizado con IA. Score: ${candidato.ia_score || 0} → ${nuevoScore}`,
+        usuario: responsable
+      })
+    };
+    
+    await docRef.update(updateData);
+    
+    console.log(`✅ [REPARAR-VIDEO-WD] Reparación completada`);
+    
+    res.json({
+      ok: true,
+      mensaje: "Video recuperado, analizado y score recalculado exitosamente",
+      datos: {
+        archivo_encontrado: nombreArchivo,
+        video_url: signedUrl,
+        comprimido: sizeMB > 50,
+        tamaño_original_mb: sizeMB.toFixed(2),
+        score_anterior: candidato.ia_score || 0,
+        score_nuevo: nuevoScore,
+        tiene_reseña: !!reseñaVideo
+      }
+    });
+    
+  } catch (error) {
+    console.error("❌ [REPARAR-VIDEO-WD] Error:", error);
+    res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
 // ==========================================
 // 📦 2. FRONTEND (Sirve la página web)
 // ==========================================
@@ -12768,9 +13202,105 @@ async function moverArchivoStorage(rutaOrigen, rutaDestino) {
   }
 }
 // ==========================================
+// 🔍 ENDPOINT: OBTENER UN CANDIDATO POR ID (Optimizado para polling)
+// ==========================================
+app.get("/candidatos/:id", async (req, res) => {
+  const requestSource = getRequestSource(req);
+  
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ error: "ID de candidato requerido" });
+    }
+
+    // Leer solo el documento específico
+    const docRef = firestore.collection(MAIN_COLLECTION).doc(id);
+    const docSnap = await docRef.get();
+    
+    // Registrar lectura: solo 1 documento
+    firebaseMetrics.recordRead(requestSource, 1);
+
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: "Candidato no encontrado" });
+    }
+
+    const data = docSnap.data();
+    
+    // Mapear datos igual que en /buscar para consistencia
+    let timestamp = 0;
+    if (data.fecha_correo) {
+      timestamp = new Date(data.fecha_correo).getTime();
+    } else if (data.creado_en) {
+      timestamp = data.creado_en.toDate ? data.creado_en.toDate().getTime() : new Date(data.creado_en).getTime();
+    } else if (data.fecha) {
+      timestamp = new Date(data.fecha).getTime();
+    }
+
+    const nombreFinal = data.nombre || data.datos_personales?.nombre_completo || data.applicant_email || "Sin Nombre";
+    const linkFinal = data.cv_url || data.cv_storage_path || null;
+
+    const candidato = {
+      id: docSnap.id,
+      nombre: nombreFinal,
+      email: data.email || data.applicant_email || "S/E",
+      puesto: data.puesto || "Sin puesto",
+      cv_url: linkFinal,
+      fecha_orden: timestamp,
+      fecha: data.fecha || data.creado_en,
+      stage: data.stage || 'stage_1',
+      status_interno: data.status_interno || 'new',
+      assignedTo: data.assignedTo || null,
+      history: data.historial_movimientos || [],
+      origen: data.origen || null,
+      ia_score: data.ia_score || 0,
+      ia_motivos: data.ia_motivos || data.motivo || "Análisis pendiente...",
+      ia_alertas: data.ia_alertas || [],
+      video_url: data.video_url || null,
+      video_tipo: data.video_tipo || null,
+      respuestas_filtro: data.respuestas_filtro || {},
+      motivo: data.motivo || "",
+      notes: data.notes || "",
+      meet_link: data.meet_link || null,
+      informe_final_data: data.informe_final_data || null,
+      respuestas_form2: data.respuestas_form2 || null,
+      process_step_2_form: data.process_step_2_form || null,
+      interview_transcript: data.transcripcion_entrevista || data.interview_transcript || null,
+      transcripcion_entrevista: data.transcripcion_entrevista || null,
+      reseña_cv: data.reseña_cv || null,
+      reseña_video: data.reseña_video || null,
+      video_error: data.video_error || null,
+      video_link_publico: data.video_link_publico || null,
+      skip_form2: data.skip_form2 || false,
+      marcadores: data.marcadores || []
+    };
+
+    res.json(candidato);
+  } catch (err) {
+    console.error("❌ Error en GET /candidatos/:id:", err);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+// ==========================================
+// 📊 ENDPOINT: MÉTRICAS DE LECTURAS FIREBASE
+// ==========================================
+app.get("/metrics/lecturas", async (req, res) => {
+  try {
+    const stats = firebaseMetrics.getStats();
+    res.json(stats);
+  } catch (err) {
+    console.error("❌ Error obteniendo métricas:", err);
+    res.status(500).json({ error: "Error obteniendo métricas" });
+  }
+});
+
+// ==========================================
 // 🛠️ ENDPOINT INTELIGENTE (PATCH) - ACTUALIZA Y GUARDA HISTORIAL
 // ==========================================
 app.patch("/candidatos/:id", async (req, res) => {
+  const requestSource = getRequestSource(req);
+  
   try {
     const { id } = req.params;
     const updates = req.body; // Ej: { stage: 'stage_2', assignedTo: 'Gladymar' }
@@ -12782,6 +13312,9 @@ app.patch("/candidatos/:id", async (req, res) => {
     // SIEMPRE apuntamos a la colección maestra
     const docRef = firestore.collection("CVs_staging").doc(id);
     const docSnap = await docRef.get();
+    
+    // Registrar lectura
+    firebaseMetrics.recordRead(requestSource, 1);
 
     if (!docSnap.exists) {
         return res.status(404).send("Candidato no encontrado en CVs_staging");
