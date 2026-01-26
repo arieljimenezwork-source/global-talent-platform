@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subir Video - Global Talent Connections</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        .upload-area { transition: all 0.3s ease; }
+        .upload-area:hover { border-color: #8b5cf6; background-color: rgba(139, 92, 246, 0.05); }
+        .upload-area.dragover { border-color: #8b5cf6; background-color: rgba(139, 92, 246, 0.1); }
+    </style>
+</head>
+<body class="bg-slate-950 min-h-screen flex items-center justify-center p-4">
+    <div id="app" class="w-full max-w-lg">
+        <!-- Estado: Cargando -->
+        <div id="loading" class="text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+            <p class="text-slate-400">Verificando enlace...</p>
+        </div>
+
+        <!-- Estado: Error (link inválido/expirado) -->
+        <div id="error" class="hidden text-center">
+            <div class="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-2">Enlace no válido</h2>
+            <p id="error-message" class="text-slate-400">Este enlace ha expirado o no es válido.</p>
+        </div>
+
+        <!-- Estado: Formulario de subida -->
+        <div id="upload-form" class="hidden">
+            <div class="text-center mb-8">
+                <img src="/GLOBAL.png" alt="Global Talent" class="h-16 mx-auto mb-4">
+                <h1 class="text-2xl font-bold text-white mb-2">Video de Presentación</h1>
+                <p class="text-slate-400">Hola <span id="candidate-name" class="text-purple-400 font-medium">Candidato</span>, subí tu video aquí.</p>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                <!-- Área de subida -->
+                <div id="drop-area" class="upload-area border-2 border-dashed border-slate-700 rounded-xl p-8 text-center cursor-pointer mb-4">
+                    <input type="file" id="video-input" accept="video/*" class="hidden">
+                    <div id="upload-icon" class="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                    </div>
+                    <p class="text-white font-medium mb-1">Arrastrá tu video aquí</p>
+                    <p class="text-slate-500 text-sm">o hacé clic para seleccionar</p>
+                    <p class="text-slate-600 text-xs mt-2">MP4, MOV, AVI • Máximo 100MB • Hasta 2 minutos</p>
+                </div>
+
+                <!-- Archivo seleccionado -->
+                <div id="file-selected" class="hidden bg-slate-800 rounded-xl p-4 mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p id="file-name" class="text-white text-sm font-medium truncate">video.mp4</p>
+                            <p id="file-size" class="text-slate-500 text-xs">10.5 MB</p>
+                        </div>
+                        <button id="remove-file" class="text-slate-500 hover:text-rose-500 transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Barra de progreso -->
+                <div id="progress-container" class="hidden mb-4">
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="text-slate-400">Subiendo video...</span>
+                        <span id="progress-text" class="text-purple-400">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-2">
+                        <div id="progress-bar" class="bg-purple-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Botón de subida -->
+                <button id="upload-btn" disabled class="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                    </svg>
+                    Subir Video
+                </button>
+            </div>
+
+            <p class="text-center text-slate-600 text-xs mt-4">
+                Al subir tu video, aceptás que sea utilizado en el proceso de selección.
+            </p>
+        </div>
+
+        <!-- Estado: Éxito -->
+        <div id="success" class="hidden text-center">
+            <div class="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg class="w-10 h-10 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h2 class="text-2xl font-bold text-white mb-2">¡Video Recibido!</h2>
+            <p class="text-slate-400 mb-6">Gracias por enviar tu video de presentación. Nuestro equipo lo revisará pronto.</p>
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                <p class="text-slate-500 text-sm">Podés cerrar esta ventana.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = window.location.pathname.split('/').pop();
+        let candidatoId = null;
+        let selectedFile = null;
+
+        // Elementos del DOM
+        const loadingEl = document.getElementById('loading');
+        const errorEl = document.getElementById('error');
+        const errorMessageEl = document.getElementById('error-message');
+        const uploadFormEl = document.getElementById('upload-form');
+        const successEl = document.getElementById('success');
+        const candidateNameEl = document.getElementById('candidate-name');
+        const dropArea = document.getElementById('drop-area');
+        const videoInput = document.getElementById('video-input');
+        const fileSelectedEl = document.getElementById('file-selected');
+        const fileNameEl = document.getElementById('file-name');
+        const fileSizeEl = document.getElementById('file-size');
+        const removeFileBtn = document.getElementById('remove-file');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const uploadBtn = document.getElementById('upload-btn');
+
+        // Verificar token al cargar
+        async function verificarToken() {
+            try {
+                const response = await fetch(`/verificar-token-video/${token}`);
+                const data = await response.json();
+
+                if (data.ok) {
+                    candidatoId = data.candidato_id;
+                    candidateNameEl.textContent = data.nombre || 'Candidato';
+                    loadingEl.classList.add('hidden');
+                    uploadFormEl.classList.remove('hidden');
+                } else {
+                    mostrarError(data.error || 'Enlace no válido');
+                }
+            } catch (error) {
+                mostrarError('Error al verificar el enlace');
+            }
+        }
+
+        function mostrarError(mensaje) {
+            loadingEl.classList.add('hidden');
+            errorEl.classList.remove('hidden');
+            errorMessageEl.textContent = mensaje;
+        }
+
+        // Drag & Drop
+        dropArea.addEventListener('click', () => videoInput.click());
+        
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.classList.add('dragover');
+        });
+
+        dropArea.addEventListener('dragleave', () => {
+            dropArea.classList.remove('dragover');
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFileSelect(files[0]);
+        });
+
+        videoInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFileSelect(e.target.files[0]);
+        });
+
+        function handleFileSelect(file) {
+            // Validar tipo
+            if (!file.type.startsWith('video/')) {
+                alert('Por favor, seleccioná un archivo de video válido.');
+                return;
+            }
+
+            // Validar tamaño (100MB)
+            if (file.size > 100 * 1024 * 1024) {
+                alert('El video no puede superar los 100MB.');
+                return;
+            }
+
+            selectedFile = file;
+            fileNameEl.textContent = file.name;
+            fileSizeEl.textContent = (file.size / (1024 * 1024)).toFixed(2) + ' MB';
+            
+            dropArea.classList.add('hidden');
+            fileSelectedEl.classList.remove('hidden');
+            uploadBtn.disabled = false;
+        }
+
+        removeFileBtn.addEventListener('click', () => {
+            selectedFile = null;
+            videoInput.value = '';
+            dropArea.classList.remove('hidden');
+            fileSelectedEl.classList.add('hidden');
+            uploadBtn.disabled = true;
+        });
+
+        // Subir video
+        uploadBtn.addEventListener('click', subirVideo);
+
+        async function subirVideo() {
+            if (!selectedFile || !candidatoId) return;
+
+            uploadBtn.disabled = true;
+            fileSelectedEl.classList.add('hidden');
+            progressContainer.classList.remove('hidden');
+
+            try {
+                // 1. Obtener URL firmada para subida directa
+                const urlResponse = await fetch(`/generar-url-subida/${token}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: selectedFile.name,
+                        contentType: selectedFile.type
+                    })
+                });
+
+                const urlData = await urlResponse.json();
+                if (!urlData.ok) throw new Error(urlData.error);
+
+                // 2. Subir directamente a Firebase Storage
+                const xhr = new XMLHttpRequest();
+                
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        progressBar.style.width = percent + '%';
+                        progressText.textContent = percent + '%';
+                    }
+                });
+
+                xhr.addEventListener('load', async () => {
+                    if (xhr.status === 200) {
+                        // 3. Confirmar subida al backend
+                        progressText.textContent = 'Procesando...';
+                        
+                        const confirmResponse = await fetch(`/confirmar-video/${token}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ filename: selectedFile.name })
+                        });
+
+                        const confirmData = await confirmResponse.json();
+                        
+                        if (confirmData.ok) {
+                            uploadFormEl.classList.add('hidden');
+                            successEl.classList.remove('hidden');
+                        } else {
+                            throw new Error(confirmData.error || 'Error al confirmar');
+                        }
+                    } else {
+                        throw new Error('Error al subir el video');
+                    }
+                });
+
+                xhr.addEventListener('error', () => {
+                    throw new Error('Error de conexión');
+                });
+
+                xhr.open('PUT', urlData.uploadUrl);
+                xhr.setRequestHeader('Content-Type', selectedFile.type);
+                xhr.send(selectedFile);
+
+            } catch (error) {
+                alert('Error: ' + error.message);
+                progressContainer.classList.add('hidden');
+                fileSelectedEl.classList.remove('hidden');
+                uploadBtn.disabled = false;
+            }
+        }
+
+        // Iniciar
+        verificarToken();
+    </script>
+</body>
+</html>
