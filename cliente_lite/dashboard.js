@@ -2849,6 +2849,7 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
 
     // ⭐ ESTADOS PARA SISTEMA DE MARCADORES
     const [showMarcadorModal, setShowMarcadorModal] = useState(false);
+    const [showSolicitarVideoModal, setShowSolicitarVideoModal] = useState(false);
     const [marcadorTipo, setMarcadorTipo] = useState('estrella');
     const [marcadorRazon, setMarcadorRazon] = useState('');
 
@@ -3352,6 +3353,151 @@ const handleConfirmDisqualified = () => {
     // ORIGINAL: const isStage2Complete = meetLink && form2Status === 'received' && !!candidate.transcripcion_entrevista && finalResult === 'qualified';
     const isStage2Complete = meetLink && form2Completo && !!candidate.transcripcion_entrevista && finalResult === 'qualified';
 
+// =============================================
+// 📧 MODAL SOLICITAR VIDEO
+// =============================================
+const SolicitarVideoModal = () => {
+    const [asunto, setAsunto] = useState(`Siguiente paso: Video de Presentación - Global Talent`);
+    const [mensaje, setMensaje] = useState(
+`Hola ${candidate.nombre?.split(' ')[0] || 'Candidato'},
+
+¡Felicitaciones! Tu CV ha sido preseleccionado para la posición de ${candidate.puesto || 'la vacante'}.
+
+En Global Talent Connections valoramos la actitud y la comunicación, por eso el siguiente paso es conocerte un poco más. Te pedimos que nos envíes un video breve (máximo 90 segundos) donde nos cuentes:
+
+Tu experiencia: ¿Qué has logrado en roles similares a la vacante?
+
+Tu motivación: ¿Por qué quieres unirte a Global Talent Connections?
+
+Tu valor único: ¿Qué te hace el candidato ideal para este desafío?
+
+📌 Sube tu video aquí: [LINK_VIDEO]
+
+Nota: El enlace estará activo solo por las próximas 24 horas. ¡No pierdas tu lugar en el proceso!
+
+¡Estamos ansiosos por conocerte!
+
+Saludos, Equipo de Selección de Global Talent Connections`
+
+    );
+    const [enviando, setEnviando] = useState(false);
+
+    const handleEnviar = async () => {
+        setEnviando(true);
+        try {
+            const response = await fetch(`${window.API_URL}/candidatos/${candidate.id}/solicitar-video`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    asunto,
+                    mensaje,
+                    solicitado_por: currentUser || 'Admin'
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.ok) {
+                alert('✅ Email enviado exitosamente');
+                setShowSolicitarVideoModal(false);
+                onUpdate(candidate.id, { 
+                    video_solicitado: true, 
+                    video_solicitado_fecha: new Date().toISOString() 
+                });
+            } else {
+                alert(`❌ Error: ${data.error || 'No se pudo enviar el email'}`);
+            }
+        } catch (error) {
+            console.error('Error enviando solicitud:', error);
+            alert('❌ Error al enviar el email');
+        } finally {
+            setEnviando(false);
+        }
+    };
+
+    if (!showSolicitarVideoModal) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div className="p-4 border-b border-slate-700 flex justify-between items-center">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <Video size={20} className="text-purple-400"/>
+                        Solicitar Video de Presentación
+                    </h3>
+                    <button 
+                        onClick={() => setShowSolicitarVideoModal(false)}
+                        className="text-slate-400 hover:text-white"
+                    >
+                        <X size={20}/>
+                    </button>
+                </div>
+                
+                <div className="p-4 space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Para:</label>
+                        <input 
+                            type="text" 
+                            value={candidate.email || 'Sin email'} 
+                            readOnly
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm opacity-70"
+                        />
+                    </div>
+                    
+                    <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Asunto:</label>
+                        <input 
+                            type="text" 
+                            value={asunto}
+                            onChange={(e) => setAsunto(e.target.value)}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-purple-500 focus:outline-none"
+                        />
+                    </div>
+                    
+                    <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Mensaje:</label>
+                        <textarea 
+                            value={mensaje}
+                            onChange={(e) => setMensaje(e.target.value)}
+                            rows={12}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-purple-500 focus:outline-none resize-none"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1">
+                            💡 [LINK_VIDEO] será reemplazado automáticamente por el enlace de subida único del candidato.
+                        </p>
+                    </div>
+                </div>
+                
+                <div className="p-4 border-t border-slate-700 flex justify-end gap-2">
+                    <button
+                        onClick={() => setShowSolicitarVideoModal(false)}
+                        className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={handleEnviar}
+                        disabled={enviando || !candidate.email}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm font-medium rounded-lg flex items-center gap-2 transition-colors"
+                    >
+                        {enviando ? (
+                            <>
+                                <Loader2 size={14} className="animate-spin"/>
+                                Enviando...
+                            </>
+                        ) : (
+                            <>
+                                <Send size={14}/>
+                                Enviar Solicitud
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
     return (
         <div className="flex flex-col h-full animate-in slide-in-from-right duration-300 pb-10 max-w-7xl mx-auto px-4 relative">
             
@@ -3802,37 +3948,49 @@ const handleConfirmDisqualified = () => {
                                         
                                         {/* 🎥 BOTÓN REPARAR VIDEO - Solo si no hay video válido */}
                                         {(!candidate.video_url || !candidate.video_url.startsWith('http')) && (
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <button
-                                                    onClick={async () => {
-                                                        if (isReparandoCV) return;
-                                                        setIsReparandoCV(true);
-                                                        try {
-                                                            const result = await api.candidates.repararVideoDesdeWorkDrive(candidate.id);
-                                                            if (result.ok) {
-                                                                alert(`✅ ${result.mensaje}\nArchivo: ${result.datos.archivo_encontrado}`);
-                                                                const data = await api.candidates.list();
-                                                                const lista = data.candidatos || data || [];
-                                                                const actualizado = lista.find(c => c.id === candidate.id);
-                                                                if (actualizado) onUpdate(candidate.id, actualizado);
-                                                            } else {
-                                                                alert(`❌ ${result.error || result.mensaje}`);
-                                                            }
-                                                        } catch (error) {
-                                                            alert("❌ Error al recuperar video de WorkDrive");
-                                                        } finally {
-                                                            setIsReparandoCV(false);
-                                                        }
-                                                    }}
-                                                    disabled={isReparandoCV}
-                                                    className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 disabled:opacity-50"
-                                                    title="Buscar video en WorkDrive (backup)"
-                                                >
-                                                    {isReparandoCV ? <Loader2 size={10} className="animate-spin"/> : <CloudDownload size={10}/>}
-                                                    WorkDrive
-                                                </button>
-                                            </div>
-                                        )}
+    <div className="flex items-center gap-2 mt-1">
+        {/* Botón Solicitar Video por Email */}
+        <button
+            onClick={() => setShowSolicitarVideoModal(true)}
+            className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/30 hover:border-emerald-500/50 transition-all"
+            title="Enviar email solicitando video"
+        >
+            <Mail size={10}/>
+            Solicitar Video
+        </button>
+        
+        {/* Botón WorkDrive (existente) */}
+        <button
+            onClick={async () => {
+                if (isReparandoCV) return;
+                setIsReparandoCV(true);
+                try {
+                    const result = await api.candidates.repararVideoDesdeWorkDrive(candidate.id);
+                    if (result.ok) {
+                        alert(`✅ ${result.mensaje}\nArchivo: ${result.datos.archivo_encontrado}`);
+                        const data = await api.candidates.list();
+                        const lista = data.candidatos || data || [];
+                        const actualizado = lista.find(c => c.id === candidate.id);
+                        if (actualizado) onUpdate(candidate.id, actualizado);
+                    } else {
+                        alert(`❌ ${result.error || result.mensaje}`);
+                    }
+                } catch (error) {
+                    alert("❌ Error al recuperar video de WorkDrive");
+                } finally {
+                    setIsReparandoCV(false);
+                }
+            }}
+            disabled={isReparandoCV}
+            className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 disabled:opacity-50"
+            title="Buscar video en WorkDrive (backup)"
+        >
+            {isReparandoCV ? <Loader2 size={10} className="animate-spin"/> : <CloudDownload size={10}/>}
+            WorkDrive
+        </button>
+    </div>
+)}
+
                                     </div>
                                 </div>
                             </div>
@@ -4356,6 +4514,11 @@ const handleConfirmDisqualified = () => {
                     </div>
                 </div>
             )}
+
+            {/* 📧 Modal Solicitar Video */}
+            <SolicitarVideoModal />
+
+            
        </div>
    );
 }
@@ -4375,6 +4538,7 @@ const LoginView = ({ onLogin }) => {
         { name: "Reyna", role: "Revision RRHH", password: "Reyna23546" },
         { name: "Norma", role: "Control de Calidad", password: "Norma63841" },
         { name: "Daniel (CEO)", role: "Dirección", password: "Daniel29476" },
+        { name: "Victor", role: "Director de Operaciones", password: "Victor84752" },
         { name: "Admin", role: "Superusuario", password: "12345" }
     ];
     

@@ -192,7 +192,9 @@ app.use(
             "https://generativelanguage.googleapis.com",
             "https://www.gstatic.com",
             "https://identitytoolkit.googleapis.com",
-            "https://securetoken.googleapis.com"
+            "https://securetoken.googleapis.com",
+            "https://storage.googleapis.com",
+            "https://*.firebasestorage.app"
         ],
         "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.tailwindcss.com", "https://unpkg.com", "https://www.gstatic.com"],
       },
@@ -4577,6 +4579,184 @@ app.post("/candidatos/:id/reparar-video-workdrive", async (req, res) => {
     });
   }
 });
+// ==========================================
+// 🎥 PÁGINA DE SUBIDA DE VIDEO (GET)
+// ==========================================
+app.get("/subir-video/:token", (req, res) => {
+  // Servir la página HTML de subida
+  res.sendFile(path.join(__dirname, "cliente_lite", "video-upload.html"));
+});
+
+// ==========================================
+// 🔍 VERIFICAR TOKEN DE VIDEO
+// ==========================================
+app.get("/verificar-token-video/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    // Buscar candidato con este token
+    const snapshot = await firestore.collection(MAIN_COLLECTION)
+      .where('video_token', '==', token)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return res.json({ ok: false, error: "Enlace no válido o ya utilizado" });
+    }
+
+    const doc = snapshot.docs[0];
+    const candidato = doc.data();
+
+    // Verificar si expiró
+    if (candidato.video_token_expira) {
+      const expira = new Date(candidato.video_token_expira);
+      if (new Date() > expira) {
+        return res.json({ ok: false, error: "Este enlace ha expirado" });
+      }
+    }
+
+    // Verificar si ya subió video
+    if (candidato.video_url && candidato.video_recibido) {
+      return res.json({ ok: false, error: "Ya has subido tu video anteriormente" });
+    }
+
+    res.json({
+      ok: true,
+      candidato_id: doc.id,
+      nombre: candidato.nombre || 'Candidato',
+      puesto: candidato.puesto || 'la vacante'
+    });
+
+  } catch (error) {
+    console.error("Error verificando token:", error);
+    res.status(500).json({ ok: false, error: "Error del servidor" });
+  }
+});
+
+// ==========================================
+// 📤 GENERAR URL FIRMADA PARA SUBIDA DIRECTA
+// ==========================================
+app.post("/generar-url-subida/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { filename, contentType } = req.body;
+
+    // Verificar token
+    const snapshot = await firestore.collection(MAIN_COLLECTION)
+      .where('video_token', '==', token)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return res.json({ ok: false, error: "Token no válido" });
+    }
+
+    const doc = snapshot.docs[0];
+    const candidatoId = doc.id;
+
+    // Generar nombre único para el archivo
+    const extension = filename.split('.').pop() || 'mp4';
+    const videoFileName = `CVs_staging/videos/${candidatoId}_video_${Date.now()}.${extension}`;
+
+    // Generar URL firmada para subida directa (válida por 30 minutos)
+    const file = bucket.file(videoFileName);
+    const [uploadUrl] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'write',
+      expires: Date.now() + 30 * 60 * 1000, // 30 minutos
+      contentType: contentType || 'video/mp4'
+    });
+
+    // Guardar referencia temporal del archivo
+    await doc.ref.update({
+      video_upload_pending: videoFileName,
+      video_upload_started: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    res.json({
+      ok: true,
+      uploadUrl,
+      filename: videoFileName
+    });
+
+  } catch (error) {
+    console.error("Error generando URL de subida:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==========================================
+// ✅ CONFIRMAR SUBIDA DE VIDEO
+// ==========================================
+app.post("/confirmar-video/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    // Buscar candidato
+    const snapshot = await firestore.collection(MAIN_COLLECTION)
+      .where('video_token', '==', token)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return res.json({ ok: false, error: "Token no válido" });
+    }
+
+    const doc = snapshot.docs[0];
+    const candidato = doc.data();
+    const candidatoId = doc.id;
+
+    // Obtener el path del video subido
+    const videoPath = candidato.video_upload_pending;
+    if (!videoPath) {
+      return res.json({ ok: false, error: "No se encontró video pendiente" });
+    }
+
+    // Generar URL pública del video
+    const videoFile = bucket.file(videoPath);
+    const [videoUrl] = await videoFile.getSignedUrl({
+      action: 'read',
+      expires: '01-01-2035',
+      responseDisposition: 'inline'
+    });
+
+    // Actualizar candidato
+    await doc.ref.update({
+      video_url: videoUrl,
+      video_storage_path: videoPath,
+      video_recibido: true,
+      video_recibido_fecha: admin.firestore.FieldValue.serverTimestamp(),
+      video_status: 'pending', // Pendiente de procesar
+      video_token: null, // Invalidar token (un solo uso)
+      video_upload_pending: null,
+      actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
+      
+      historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+        date: new Date().toISOString(),
+        event: 'Video Recibido',
+        detail: 'El candidato subió su video de presentación',
+        usuario: 'Sistema (Upload)'
+      })
+    });
+
+    console.log(`✅ Video recibido para candidato ${candidatoId}`);
+
+    // Disparar procesamiento en background
+    procesarVideoEnBackground(candidatoId, videoUrl, candidato.puesto || 'General')
+      .catch(error => {
+        console.error(`❌ Error procesando video en background:`, error.message);
+      });
+
+    res.json({ ok: true, mensaje: "Video recibido exitosamente" });
+
+  } catch (error) {
+    console.error("Error confirmando video:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+
+
 
 // ==========================================
 // 📦 2. FRONTEND (Sirve la página web)
@@ -5425,6 +5605,100 @@ function comprimirVideoA50MB(inputPath, outputPath) {
     });
   });
 }
+
+// ==========================================
+// 📧 SOLICITAR VIDEO POR EMAIL
+// ==========================================
+app.post("/candidatos/:id/solicitar-video", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { asunto, mensaje, solicitado_por } = req.body;
+
+    // 1. Obtener candidato
+    const docRef = firestore.collection(MAIN_COLLECTION).doc(id);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      return res.status(404).json({ ok: false, error: "Candidato no encontrado" });
+    }
+
+    const candidato = docSnap.data();
+
+    if (!candidato.email) {
+      return res.status(400).json({ ok: false, error: "El candidato no tiene email" });
+    }
+
+    // 2. Generar token único para subida de video
+    const videoToken = crypto.randomBytes(32).toString('hex');
+    const tokenExpira = new Date();
+    tokenExpira.setDate(tokenExpira.getDate() + 7); // Expira en 7 días
+
+    // 3. Construir el link de subida
+    const baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
+    const linkVideo = `${baseUrl}/subir-video/${videoToken}`;
+
+    // 4. Reemplazar [LINK_VIDEO] en el mensaje
+    const mensajeFinal = mensaje.replace('[LINK_VIDEO]', linkVideo);
+
+    // 5. Preparar y enviar email
+    const imagenPieUrl = 'https://raw.githubusercontent.com/nelsonmdq1996-sys/global-talent-platform/320cd201d6f93d77553f7bacb97bedfcd7cb0324/pie_email.png';
+    
+    const htmlCompleto = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="white-space: pre-wrap;">${mensajeFinal.replace(/\n/g, '<br>')}</div>
+          <div style="margin-top: 30px; text-align: center;">
+            <img src="${imagenPieUrl}" alt="Global Talent Connections" style="max-width: 600px; width: 100%; height: auto; display: block; margin: 0 auto;" />
+          </div>
+        </body>
+      </html>
+    `;
+
+    const mailOptions = {
+      from: `"Global Talent Connections" <${process.env.EMAIL_FROM}>`,
+      to: candidato.email,
+      subject: asunto,
+      html: htmlCompleto
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Email de solicitud de video enviado a ${candidato.email}`);
+
+    // 6. Actualizar candidato en Firestore
+    await docRef.update({
+      video_token: videoToken,
+      video_token_expira: tokenExpira.toISOString(),
+      video_solicitado: true,
+      video_solicitado_fecha: admin.firestore.FieldValue.serverTimestamp(),
+      video_solicitado_por: solicitado_por || 'Admin',
+      actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
+      
+      // Agregar al historial
+      historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+        date: new Date().toISOString(),
+        event: 'Video Solicitado',
+        detail: `Se envió solicitud de video por email a ${candidato.email}`,
+        usuario: solicitado_por || 'Admin'
+      })
+    });
+
+    res.json({ 
+      ok: true, 
+      mensaje: "Email enviado exitosamente",
+      link_generado: linkVideo
+    });
+
+  } catch (error) {
+    console.error("❌ Error en solicitar-video:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 
 // ==========================================
 // 📧 ENDPOINT PARA ENVIAR EMAILS CON HTML (GESTIÓN)
