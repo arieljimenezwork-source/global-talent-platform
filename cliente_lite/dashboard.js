@@ -2853,10 +2853,16 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     const [marcadorTipo, setMarcadorTipo] = useState('estrella');
     const [marcadorRazon, setMarcadorRazon] = useState('');
 
+    // 🤖 ESTADOS PARA GENERACIÓN DE LINK CON IA (GTC)
+    const [localLink, setLocalLink] = React.useState(null);
+    const [loadingAI, setLoadingAI] = React.useState(false);
+
     // 🔥 SINCRONIZAR ESTADOS CUANDO CANDIDATE CAMBIA (para que persistan después de F5)
     React.useEffect(() => {
         if (candidate.meet_link) {
             setMeetLink(candidate.meet_link);
+            // Sincronizar localLink también solo si no hay uno local ya establecido
+            setLocalLink(prev => prev || candidate.meet_link);
         }
         // Solo actualizar transcript si NO está analizada (para no sobrescribir el estado "ANALIZADA")
         if (candidate.interview_transcript && !candidate.transcripcion_entrevista) {
@@ -3038,6 +3044,76 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
         const linkToSave = meetLink || candidate.meet_link;
         if (linkToSave && linkToSave !== candidate.meet_link) {
             onUpdate(candidate.id, { meet_link: linkToSave });
+        }
+    };
+
+    // 🤖 Función para generar link de entrevista con bot de IA (GTC)
+    const generarLink = async () => {
+        try {
+            // Validar que el candidato y su email existan
+            if (!candidate || !candidate.email) {
+                alert("⚠️ El candidato no tiene email registrado. No se puede generar el link.");
+                return;
+            }
+
+            setLoadingAI(true);
+            
+            // Obtener headers con autenticación
+            const headers = { 'Content-Type': 'application/json' };
+            try {
+                const token = localStorage.getItem('firebase_token');
+                const expires = localStorage.getItem('firebase_token_expires');
+                
+                if (token && expires && Date.now() < parseInt(expires)) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                } else if (window.firebaseAuth && window.firebaseAuth.currentUser) {
+                    const user = window.firebaseAuth.currentUser;
+                    const newToken = await user.getIdToken();
+                    localStorage.setItem('firebase_token', newToken);
+                    localStorage.setItem('firebase_token_expires', (Date.now() + 3600000).toString());
+                    headers['Authorization'] = `Bearer ${newToken}`;
+                }
+            } catch (e) {
+                console.warn('⚠️ Error obteniendo token:', e);
+            }
+            
+            // Hacer fetch al nuevo endpoint
+            const API_URL = window.API_URL || 'http://localhost:3001';
+            const response = await fetch(`${API_URL}/candidatos/${candidate.id}/preparar-bot`, {
+                method: 'POST',
+                headers: headers
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Error desconocido' }));
+                throw new Error(errorData.error || `Error ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data && data.success && data.link) {
+                // Actualizar estado local
+                setLocalLink(data.link);
+                
+                // Actualizar candidato en el estado global
+                onUpdate(candidate.id, {
+                    meet_link: data.link,
+                    gtc_interview_id: data.interview_id || null,
+                    estado_entrevista: 'link_generado'
+                });
+
+                // También actualizar meetLink para sincronización
+                setMeetLink(data.link);
+                
+                console.log('✅ Link generado exitosamente:', data.link);
+            } else {
+                throw new Error(data?.error || 'No se recibió el link de la entrevista');
+            }
+        } catch (error) {
+            console.error('❌ Error generando link:', error);
+            alert(`❌ Error al generar link de entrevista: ${error.message || 'Error desconocido'}`);
+        } finally {
+            setLoadingAI(false);
         }
     };
 
@@ -4157,38 +4233,49 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                         <Calendar size={16}/> 1. Gestión de Entrevista
                                     </h3>
                                     
-{/* BLOQUE NUEVO: BOTONES SEPARADOS (REGISTRAR + ENVIAR) */}
+{/* BLOQUE MEJORADO: GENERAR LINK CON IA + INPUT READONLY + ENVIAR MAIL */}
 <div className="grid grid-cols-1 gap-4 mb-6">
-   <label className="text-[10px] text-slate-500 font-bold uppercase mb-1 block">Link de Meet / Zoom</label>
+   <label className="text-[10px] text-slate-500 font-bold uppercase mb-1 block">Link de Entrevista con Bot de IA</label>
    <div className="flex gap-2 w-full">
-       {/* INPUT */}
+       {/* INPUT READONLY */}
        <div className="relative flex-1">
            <Video className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" size={16}/>
            <input
                type="text"
-               placeholder="Pegar link de reunión aquí..."
-               className={`w-full pl-10 pr-4 py-2.5 bg-slate-900 border rounded-lg text-sm text-white focus:outline-none transition-all placeholder-slate-600 ${candidate.meet_link ? 'border-emerald-500/50 text-emerald-400' : 'border-slate-700 focus:border-blue-500'}`}
-               value={candidate.meet_link || meetLink}
-               onChange={(e) => setMeetLink(e.target.value)}
-               onBlur={saveMeetLink}
+               readOnly
+               placeholder="El link aparecerá aquí después de generarlo..."
+               className={`w-full pl-10 pr-4 py-2.5 bg-slate-900 border rounded-lg text-sm text-white transition-all placeholder-slate-600 ${(localLink || candidate?.meet_link) ? 'border-emerald-500/50 text-emerald-400' : 'border-slate-700'}`}
+               value={localLink || candidate?.meet_link || ""}
            />
        </div>
       
-       {/* BOTÓN 1: REGISTRAR (DISKETTE) */}
+       {/* BOTÓN: GENERAR LINK CON IA */}
        <button
-           onClick={saveMeetLink}
-           className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${candidate.meet_link ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white'}`}
-           title="Guardar link en la base de datos"
+           onClick={generarLink}
+           disabled={loadingAI || !candidate?.email}
+           className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${
+               loadingAI || !candidate?.email
+                   ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed' 
+                   : (localLink || candidate?.meet_link)
+                       ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400'
+                       : 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-lg'
+           }`}
+           title={loadingAI ? "Generando link..." : (localLink || candidate?.meet_link) ? "Link generado exitosamente" : "Generar link de entrevista con bot de IA"}
        >
-           {candidate.meet_link ? <><CheckCircle size={14}/> GUARDADO</> : <><Save size={14}/> REGISTRAR</>}
+           {loadingAI ? (
+               <><Loader2 size={14} className="animate-spin"/> GENERANDO...</>
+           ) : (localLink || candidate?.meet_link) ? (
+               <><CheckCircle size={14}/> LISTO</>
+           ) : (
+               <><Sparkles size={14}/> GENERAR LINK</>
+           )}
        </button>
 
-
-       {/* BOTÓN 2: ENVIAR MAIL (SOBRE) */}
+       {/* BOTÓN: ENVIAR MAIL (mantener existente) */}
        <button
            onClick={handleOpenMail}
-           disabled={!candidate.meet_link && !meetLink}
-           className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${!candidate.meet_link && !meetLink ? 'bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-lg'}`}
+           disabled={!candidate?.meet_link && !localLink && !meetLink}
+           className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${!candidate?.meet_link && !localLink && !meetLink ? 'bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-lg'}`}
            title="Abrir correo con invitación"
        >
            <Mail size={14}/> ENVIAR MAIL

@@ -22,6 +22,7 @@ const { google } = require("googleapis");
 const nodemailer = require("nodemailer");
 require("dotenv").config();
 const fichaGenerator = require("./services/fichaGenerator");
+const { crearEntrevistaEnGTC } = require('./services/gtcService');
 const { 
   buscarArchivoEnWorkDrive, 
   buscarVideoEnWorkDrive,
@@ -6329,6 +6330,92 @@ app.post("/candidatos/:id/analizar-entrevista", async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ==========================================
+// 🤖 ENDPOINT: PREPARAR ENTREVISTA CON BOT DE IA (GTC)
+// ==========================================
+app.post("/candidatos/:id/preparar-bot", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Buscar candidato en Firestore
+    const docRef = firestore.collection("CVs_staging").doc(id);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      return res.status(404).json({ 
+        success: false, 
+        error: "Candidato no encontrado en CVs_staging" 
+      });
+    }
+
+    const candidato = docSnap.data();
+
+    // 2. Validar que tenga email
+    if (!candidato.email) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "El candidato debe tener un email registrado" 
+      });
+    }
+
+    // 3. Preparar datos para el servicio GTC
+    const datosCandidato = {
+      email: candidato.email,
+      nombre: candidato.nombre || "Candidato"
+    };
+
+    console.log(`🤖 [PREPARAR-BOT] Generando link de entrevista para: ${datosCandidato.email}`);
+
+    // 4. Llamar al servicio GTC
+    const resultado = await crearEntrevistaEnGTC(datosCandidato);
+
+    if (!resultado.success) {
+      return res.status(500).json({
+        success: false,
+        error: resultado.error || "Error al generar link de entrevista"
+      });
+    }
+
+    // 5. Actualizar Firestore con el link y datos de la entrevista
+    const updateData = {
+      meet_link: resultado.link,
+      gtc_interview_id: resultado.interview_id || null,
+      estado_entrevista: 'link_generado',
+      actualizado_en: new Date().toISOString()
+    };
+
+    await docRef.update(updateData);
+
+    // 6. Agregar evento al historial
+    const nombreAccion = req.body.usuario_accion || 'Sistema';
+    await docRef.update({
+      historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+        date: new Date().toISOString(),
+        event: 'Link de Entrevista Generado',
+        detail: `Link generado automáticamente con bot de IA por: ${nombreAccion}`,
+        usuario: nombreAccion
+      })
+    });
+
+    console.log(`✅ [PREPARAR-BOT] Link generado exitosamente para candidato ${id}`);
+
+    // 7. Retornar respuesta exitosa
+    res.json({
+      success: true,
+      link: resultado.link,
+      interview_id: resultado.interview_id
+    });
+
+  } catch (error) {
+    console.error("❌ [PREPARAR-BOT] Error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Error interno al generar link de entrevista"
+    });
+  }
+});
+
 // ==========================================
 // 🔍 ENDPOINT: ANÁLISIS MANUAL DE CANDIDATO (CARGA MANUAL)
 // ==========================================
