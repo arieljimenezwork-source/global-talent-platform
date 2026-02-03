@@ -6420,127 +6420,68 @@ app.post("/candidatos/:id/preparar-bot", async (req, res) => {
   }
 });
 
-// --- WEBHOOK: RECIBIR RESULTADOS DE GTC (usa el mismo cerebro que el análisis manual) ---
-app.post('/webhooks/resultado-entrevista', async (req, res) => {
+// ==========================================
+// 🔄 SYNC MANUAL CON ELEVENLABS (Recuperación)
+// ==========================================
+app.post("/candidatos/:id/sync-elevenlabs", async (req, res) => {
+  const { id } = req.params;
+  const { conversation_id } = req.body;
+
+  if (!conversation_id) return res.status(400).json({ error: "Falta conversation_id" });
+
+  // Validamos si existe la key, si no, avisamos
+  if (!process.env.ELEVENLABS_API_KEY) {
+    console.error("❌ Falta ELEVENLABS_API_KEY en .env");
+    return res.status(500).json({ error: "Falta configuración de API Key de ElevenLabs en servidor." });
+  }
+
   try {
-    const body = req.body;
-    const payload = body.data || body; // ElevenLabs envuelve todo en 'data'
+    const docRef = firestore.collection("CVs_staging").doc(id);
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) return res.status(404).json({ error: "Candidato no encontrado" });
+    const candidatoData = docSnap.data();
 
-    // 🔍 LOGGING EXTENDIDO
-    console.log("📦 WEBHOOK RECEIVED:", JSON.stringify(body, null, 2));
+    // 1. Fetch from ElevenLabs
+    const url = `https://api.elevenlabs.io/v1/convai/conversations/${conversation_id}`;
+    console.log(`🔄 Syncing with ElevenLabs: ${url}`);
 
-    // 1. Extraer ID (ElevenLabs usa 'conversation_id')
-    const interview_id = payload.conversation_id || payload.interview_id || body.conversation_id || payload.token;
+    const response = await axios.get(url, {
+      headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY }
+    });
+    const data = response.data;
 
-    // 2. Extraer Transcripción (Es un ARRAY, hay que convertirlo a String)
+    // 2. Map Data
     let transcriptText = "";
-    if (Array.isArray(payload.transcript)) {
-      transcriptText = payload.transcript
-        .map(turn => `[${turn.role.toUpperCase()}]: ${turn.message}`)
-        .join("\n");
+    if (Array.isArray(data.transcript)) {
+      transcriptText = data.transcript.map(t => `[${t.role}]: ${t.message}`).join("\n");
     } else {
-      transcriptText = payload.transcript || "";
+      transcriptText = JSON.stringify(data.transcript || "");
     }
 
-    // 3. Extraer Summary (Está en 'analysis.transcript_summary')
-    const summary = payload.analysis?.transcript_summary || payload.summary || "";
-
-    // 4. Audio (En el webhook de transcripción no viene el audio base64)
-    const audio_url = payload.audio_url || "";
-
-    console.log(`📨 Procesando entrevista ID: ${interview_id}`);
-    console.log(`📝 Transcripción procesada: ${transcriptText.substring(0, 50)}...`);
-
-    if (!interview_id) {
-      console.error("❌ ERROR: No conversation_id found.");
-      if (!payload.email) {
-        return res.status(400).json({ error: "Missing interview_id and email in payload" });
-      }
+    // Si no hay transcripción válida
+    if (!transcriptText || transcriptText.length < 10) {
+      return res.status(400).json({ error: "La conversación no tiene transcripción válida o es muy corta." });
     }
 
-    // 1. Buscar al candidato
-    let snapshot;
-    let doc;
-    let candidatoData;
+    const summary = data.analysis?.transcript_summary || "";
 
-    try {
-      if (interview_id) {
-        snapshot = await firestore.collection("CVs_staging")
-          .where("gtc_interview_id", "==", interview_id)
-          .limit(1)
-          .get();
-      }
+    // 3. Analyze with Gemini
+    console.log(`🧠 Re-analizando transcripción (${transcriptText.length} chars) con Gemini...`);
 
-      // Si no se encontró por ID o no habia ID, intentamos validar el snapshot
-      if (!snapshot || snapshot.empty) {
-        console.log(`⚠️ No encontrado por ID ${interview_id}. Buscando estrategias alternativas...`);
-        // (El código continuará al fallback de email más abajo)
-      } else {
-        doc = snapshot.docs[0];
-        candidatoData = doc.data();
-      }
-    } catch (queryErr) {
-      console.error("❌ Error en búsqueda inicial por ID:", queryErr);
-      // Continuamos para permitir que el fallback de email actúe
-    }
-
-    // 2. Fallback: Búsqueda por Email si no se encontró por ID
-    if (!candidatoData && payload.email) {
-      console.log(`⚠️ ID no encontrado. Intentando fallback por Email: ${payload.email}`);
-      try {
-        const emailSnapshot = await firestore.collection("CVs_staging")
-          .where("email", "==", payload.email)
-          .limit(1)
-          .get();
-
-        if (!emailSnapshot.empty) {
-          doc = emailSnapshot.docs[0];
-          candidatoData = doc.data();
-          console.log(`✅ ¡Recuperado por Email!`);
-        }
-      } catch (err) {
-        console.error("❌ Error en fallback de email:", err);
-      }
-    }
-
-    // Verificación Final
-    if (!candidatoData) {
-      console.error("❌ CLASIFICADOR: Candidato no encontrado tras todos los intentos.");
-      return res.status(404).json({ error: "Candidato no encontrado (ID/Email inválidos)" });
-    }
-
-    // ✅ EL PORTERO (Idempotencia): Si ya fue procesado, no volver a analizar
-    if (candidatoData.estado_entrevista === 'analizada' || candidatoData.interview_analyzed === true) {
-      console.log("✋ [DUPLICADO] Este candidato ya fue procesado. Ignorando request.");
-      return res.status(200).json({ success: true, message: 'Already processed' });
-    }
-
-    // ---------------------------------------------------------
-    // 🧠 2. ANÁLISIS IA EN TIEMPO REAL (Gemini)
-    // ---------------------------------------------------------
-    // ---------------------------------------------------------
-    // 🧠 2. ANÁLISIS IA EN TIEMPO REAL (Gemini)
-    // ---------------------------------------------------------
-    // transcriptText ya fue definido arriba en el Adapter
-    console.log(`🧠 Analizando transcripción (${(transcriptText || "").length} caracteres) con Gemini...`);
-    console.log(`📝 Contenido Transcripción: "${transcriptText}"`);
-
+    // Importante: Reutilizamos la función de análisis existente
     let analisis;
-    try {
+    if (typeof analizarEntrevistaConGemini === 'function') {
       analisis = await analizarEntrevistaConGemini(candidatoData, transcriptText);
-    } catch (err) {
-      console.error("Error en análisis IA (webhook):", err);
-      return res.status(500).json({ error: "Error al analizar la entrevista con IA", detail: err.message });
+    } else {
+      // Fallback simple si la función no está en scope (raro, pero preventivo)
+      analisis = { score: 0, motivos: "Análisis manual no disponible (fn missing)", alertas: [] };
     }
 
-    console.log(`📊 Resultado IA -> Score: ${analisis.score} | Motivo: ${(analisis.motivos || "").substring(0, 50)}...`);
-
-    // 3. Guardar en Firestore (datos crudos + análisis)
-    await doc.ref.update({
+    // 4. Update Firestore
+    await docRef.update({
       transcripcion_entrevista: transcriptText,
       entrevista_transcripcion: transcriptText,
-      entrevista_resumen: summary || "",
-      entrevista_audio: audio_url || "",
+      entrevista_resumen: summary,
       entrevista_analisis: analisis,
       entrevista_analisis_completo: analisis,
       ia_score: analisis.score,
@@ -6548,244 +6489,385 @@ app.post('/webhooks/resultado-entrevista', async (req, res) => {
       ia_alertas: analisis.alertas || [],
       interview_analyzed: true,
       estado_entrevista: 'analizada',
-      status_interno: 'interview_completed',
-      actualizado_en: new Date().toISOString(),
-      updated_at: admin.firestore.FieldValue.serverTimestamp(),
-      historial_movimientos: admin.firestore.FieldValue.arrayUnion({
-        date: new Date().toISOString(),
-        event: 'Transcripción Analizada (Webhook GTC)',
-        detail: `Análisis post-entrevista completado. Score: ${analisis.score}/100`,
-        usuario: 'Sistema'
-      })
+      gtc_interview_id: conversation_id, // Guardamos el ID correcto
+      actualizado_en: new Date().toISOString()
     });
 
-    console.log(`✅ Candidato ${candidatoData.email || doc.id} actualizado con Score: ${analisis.score}`);
-    res.json({ success: true });
+    console.log(`✅ Sync exitoso para candidato ${id}`);
+    res.json({ success: true, message: "Sincronizado y analizado correctamente" });
 
   } catch (error) {
-    const fs = require('fs');
-    fs.appendFileSync('webhook_debug.log', `[${new Date().toISOString()}] ❌ ERROR: ${error.stack}\n`);
-    console.error("❌ Error procesando webhook:", error);
-    res.status(500).json({ error: error.message });
+    console.error("❌ Link Sync Error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Error al sincronizar con ElevenLabs: " + (error.response?.data?.detail || error.message) });
   }
-});
 
-// ==========================================
-// 🔍 ENDPOINT: ANÁLISIS MANUAL DE CANDIDATO (CARGA MANUAL)
-// ==========================================
-app.post("/candidatos/:id/analizar", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const responsable = req.body.responsable || req.body.usuario_accion || "Admin";
 
-    // 1. Obtener candidato de Firestore
-    const docRef = firestore.collection(MAIN_COLLECTION).doc(id);
-    const docSnap = await docRef.get();
+  // --- WEBHOOK: RECIBIR RESULTADOS DE GTC (usa el mismo cerebro que el análisis manual) ---
+  app.post('/webhooks/resultado-entrevista', async (req, res) => {
+    try {
+      const body = req.body;
+      const payload = body.data || body; // ElevenLabs envuelve todo en 'data'
 
-    if (!docSnap.exists) {
-      return res.status(404).json({ error: "Candidato no encontrado" });
+      // 🔍 LOGGING EXTENDIDO
+      console.log("📦 WEBHOOK RECEIVED:", JSON.stringify(body, null, 2));
+
+      // 1. Extraer ID (ElevenLabs usa 'conversation_id')
+      const interview_id = payload.conversation_id || payload.interview_id || body.conversation_id || payload.token;
+
+      // 2. Extraer Transcripción (Es un ARRAY, hay que convertirlo a String)
+      let transcriptText = "";
+      if (Array.isArray(payload.transcript)) {
+        transcriptText = payload.transcript
+          .map(turn => `[${turn.role.toUpperCase()}]: ${turn.message}`)
+          .join("\n");
+      } else {
+        transcriptText = payload.transcript || "";
+      }
+
+      // 3. Extraer Summary (Está en 'analysis.transcript_summary')
+      const summary = payload.analysis?.transcript_summary || payload.summary || "";
+
+      // 4. Audio (En el webhook de transcripción no viene el audio base64)
+      const audio_url = payload.audio_url || "";
+
+      console.log(`📨 Procesando entrevista ID: ${interview_id}`);
+      console.log(`📝 Transcripción procesada: ${transcriptText.substring(0, 50)}...`);
+
+      if (!interview_id) {
+        console.error("❌ ERROR: No conversation_id found.");
+        if (!payload.email) {
+          return res.status(400).json({ error: "Missing interview_id and email in payload" });
+        }
+      }
+
+      // 1. Buscar al candidato
+      let snapshot;
+      let doc;
+      let candidatoData;
+
+      try {
+        if (interview_id) {
+          snapshot = await firestore.collection("CVs_staging")
+            .where("gtc_interview_id", "==", interview_id)
+            .limit(1)
+            .get();
+        }
+
+        // Si no se encontró por ID o no habia ID, intentamos validar el snapshot
+        if (!snapshot || snapshot.empty) {
+          console.log(`⚠️ No encontrado por ID ${interview_id}. Buscando estrategias alternativas...`);
+          // (El código continuará al fallback de email más abajo)
+        } else {
+          doc = snapshot.docs[0];
+          candidatoData = doc.data();
+        }
+      } catch (queryErr) {
+        console.error("❌ Error en búsqueda inicial por ID:", queryErr);
+        // Continuamos para permitir que el fallback de email actúe
+      }
+
+      // 2. Fallback: Búsqueda por Email si no se encontró por ID
+      if (!candidatoData && payload.email) {
+        console.log(`⚠️ ID no encontrado. Intentando fallback por Email: ${payload.email}`);
+        try {
+          const emailSnapshot = await firestore.collection("CVs_staging")
+            .where("email", "==", payload.email)
+            .limit(1)
+            .get();
+
+          if (!emailSnapshot.empty) {
+            doc = emailSnapshot.docs[0];
+            candidatoData = doc.data();
+            console.log(`✅ ¡Recuperado por Email!`);
+          }
+        } catch (err) {
+          console.error("❌ Error en fallback de email:", err);
+        }
+      }
+
+      // Verificación Final
+      if (!candidatoData) {
+        console.error("❌ CLASIFICADOR: Candidato no encontrado tras todos los intentos.");
+        return res.status(404).json({ error: "Candidato no encontrado (ID/Email inválidos)" });
+      }
+
+      // ✅ EL PORTERO (Idempotencia): Si ya fue procesado, no volver a analizar
+      if (candidatoData.estado_entrevista === 'analizada' || candidatoData.interview_analyzed === true) {
+        console.log("✋ [DUPLICADO] Este candidato ya fue procesado. Ignorando request.");
+        return res.status(200).json({ success: true, message: 'Already processed' });
+      }
+
+      // ---------------------------------------------------------
+      // 🧠 2. ANÁLISIS IA EN TIEMPO REAL (Gemini)
+      // ---------------------------------------------------------
+      // ---------------------------------------------------------
+      // 🧠 2. ANÁLISIS IA EN TIEMPO REAL (Gemini)
+      // ---------------------------------------------------------
+      // transcriptText ya fue definido arriba en el Adapter
+      console.log(`🧠 Analizando transcripción (${(transcriptText || "").length} caracteres) con Gemini...`);
+      console.log(`📝 Contenido Transcripción: "${transcriptText}"`);
+
+      let analisis;
+      try {
+        analisis = await analizarEntrevistaConGemini(candidatoData, transcriptText);
+      } catch (err) {
+        console.error("Error en análisis IA (webhook):", err);
+        return res.status(500).json({ error: "Error al analizar la entrevista con IA", detail: err.message });
+      }
+
+      console.log(`📊 Resultado IA -> Score: ${analisis.score} | Motivo: ${(analisis.motivos || "").substring(0, 50)}...`);
+
+      // 3. Guardar en Firestore (datos crudos + análisis)
+      await doc.ref.update({
+        transcripcion_entrevista: transcriptText,
+        entrevista_transcripcion: transcriptText,
+        entrevista_resumen: summary || "",
+        entrevista_audio: audio_url || "",
+        entrevista_analisis: analisis,
+        entrevista_analisis_completo: analisis,
+        ia_score: analisis.score,
+        ia_motivos: analisis.motivos,
+        ia_alertas: analisis.alertas || [],
+        interview_analyzed: true,
+        estado_entrevista: 'analizada',
+        status_interno: 'interview_completed',
+        actualizado_en: new Date().toISOString(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+          date: new Date().toISOString(),
+          event: 'Transcripción Analizada (Webhook GTC)',
+          detail: `Análisis post-entrevista completado. Score: ${analisis.score}/100`,
+          usuario: 'Sistema'
+        })
+      });
+
+      console.log(`✅ Candidato ${candidatoData.email || doc.id} actualizado con Score: ${analisis.score}`);
+      res.json({ success: true });
+
+    } catch (error) {
+      const fs = require('fs');
+      fs.appendFileSync('webhook_debug.log', `[${new Date().toISOString()}] ❌ ERROR: ${error.stack}\n`);
+      console.error("❌ Error procesando webhook:", error);
+      res.status(500).json({ error: error.message });
     }
-
-    const candidato = docSnap.data();
-
-    // 2. Validar que tenga texto extraído del CV
-    if (!candidato.texto_extraido) {
-      return res.status(400).json({ error: "El candidato no tiene texto de CV extraído" });
-    }
-
-    // 3. Generar reseña del CV si no existe
-    let reseñaCV = candidato.reseña_cv;
-    if (!reseñaCV) {
-      console.log("📝 Generando reseña del CV...");
-      reseñaCV = await generarResenaCV(candidato.texto_extraido, candidato.puesto || "General");
-    }
-
-    // 4. Preparar datos para el análisis (incluir respuestas_filtro si existen)
-    const datosParaAnalisis = candidato.respuestas_filtro
-      ? JSON.stringify(candidato.respuestas_filtro)
-      : "";
-
-    // 5. Ejecutar análisis IA usando verificaConocimientosMinimos
-    console.log("🤖 Ejecutando análisis IA manual...");
-    const analisisIA = await verificaConocimientosMinimos(
-      candidato.puesto || "General",
-      candidato.texto_extraido, // Texto del CV
-      datosParaAnalisis, // Respuestas del filtro (Datos Clave y Skills) como JSON string
-      reseñaCV, // Reseña del CV
-      null // No hay video en análisis manual inicial
-    );
-
-    // Limitar score inicial a máximo 70 para carga manual (antes de la entrevista)
-    analisisIA.score = Math.min(analisisIA.score, 70);
-
-    // 6. Actualizar candidato en Firestore
-    await docRef.update({
-      ia_score: analisisIA.score,
-      ia_motivos: analisisIA.motivos || "Análisis manual completado",
-      ia_alertas: analisisIA.alertas || [],
-      ia_status: "processed",
-      reseña_cv: reseñaCV,
-      actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
-
-      // HISTORIAL: Análisis manual realizado
-      historial_movimientos: admin.firestore.FieldValue.arrayUnion({
-        date: new Date().toISOString(),
-        event: 'Análisis Manual',
-        detail: `Análisis manual completado. Score: ${analisisIA.score}/100`,
-        usuario: responsable
-      })
-    });
-
-    console.log(`✅ Análisis manual completado para candidato ${id} - Score: ${analisisIA.score}`);
-    res.json({
-      ok: true,
-      score: analisisIA.score,
-      motivos: analisisIA.motivos,
-      alertas: analisisIA.alertas || [],
-      reseña_cv: reseñaCV
-    });
-
-  } catch (e) {
-    console.error("Error en análisis manual:", e);
-    res.status(500).json({ error: e.message });
-  }
-});
-// ==========================================
-// 🎣 WEBHOOK ZOHO FORM 2: VALIDACIÓN TÉCNICA (CONECTADO)
-// ==========================================
-app.post("/webhook-form2", async (req, res) => {
-  try {
-    const data = req.body;
-    console.log("📩 [Webhook Form 2] Datos recibidos:", JSON.stringify(data));
-    await registrarEstadoWebhook("zoho_form2", true); // Registro de ejecución exitosa
-
-    // 1. Normalizar Email (Es la llave que configuramos en Zoho)
-    const emailCandidate = (data.email || data.Email || "").trim().toLowerCase();
-
-    if (!emailCandidate) {
-      console.error("❌ Form 2 recibido SIN email. Imposible asociar.");
-      return res.status(400).send("Falta el campo email para identificar al candidato.");
-    }
-
-    // 2. Buscar al candidato en la base de datos (CVs_staging)
-    const snapshot = await firestore.collection(MAIN_COLLECTION)
-      .where('email', '==', emailCandidate)
-      .limit(1)
-      .get();
-
-    if (snapshot.empty) {
-      console.warn(`⚠️ Webhook recibido pero no encontré candidato con email: ${emailCandidate}`);
-      // Respondemos 200 a Zoho para que no se quede reintentando infinitamente
-      return res.status(200).send("Candidato no encontrado en DB.");
-    }
-
-    const doc = snapshot.docs[0];
-
-    // 3. Guardar las respuestas
-    // Guardamos todo el objeto 'data' porque ya hiciste el trabajo duro de mapear
-    // los nombres bonitos (herramienta_1, nivel_1, etc.) en Zoho.
-    await doc.ref.update({
-      process_step_2_form: 'received',  // 🔥 Enciende el semáforo VERDE
-      respuestas_form2: {
-        fecha_recepcion: new Date().toISOString(),
-        data: data // Aquí va todo el paquete limpio que configuraste
-      },
-      actualizado_en: new Date().toISOString(),
-
-      // HISTORIAL: Respuestas del Zoho 2 recibido
-      historial_movimientos: admin.firestore.FieldValue.arrayUnion({
-        date: new Date().toISOString(),
-        event: 'Respuestas del Zoho 2 Recibido',
-        detail: 'El candidato completó la validación técnica (Zoho Form 2)',
-        usuario: 'Sistema (Zoho)'
-      })
-    });
-
-    console.log(`✅ [Webhook Form 2] Respuestas guardadas para: ${emailCandidate}`);
-    await registrarEstadoWebhook("zoho_form2", true); // Confirmación final de éxito
-    res.status(200).send("Recibido y procesado exitosamente.");
-
-  } catch (error) {
-    console.error("❌ Error procesando Webhook Form 2:", error);
-    await registrarEstadoWebhook("zoho_form2", false, error.message); // Registro de error
-    res.status(500).send("Error interno del servidor");
-  }
-});
-
-// ==========================================
-// 🔥 ENDPOINT DE CONFIGURACIÓN FIREBASE (PÚBLICO)
-// ==========================================
-app.get("/firebase-config", (req, res) => {
-  // Configuración pública para el cliente de Firebase Auth
-  // Estas variables deben estar en .env: FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN
-  res.json({
-    apiKey: process.env.FIREBASE_API_KEY || "",
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${process.env.FIREBASE_PROJECT_ID}.firebaseapp.com`,
-    projectId: process.env.FIREBASE_PROJECT_ID || "",
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "",
-    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "",
-    appId: process.env.FIREBASE_APP_ID || ""
   });
-});
 
-// ==========================================
-// 🚀 INICIO DEL SERVIDOR (CON BUCLE AUTOMÁTICO)
-// ==========================================
-app.listen(PORT, "0.0.0.0", async () => {
-  console.log(`✅ Servidor activo en http://0.0.0.0:${PORT}`);
-  console.log("🔎 Inicializando Firebase...");
+  // ==========================================
+  // 🔍 ENDPOINT: ANÁLISIS MANUAL DE CANDIDATO (CARGA MANUAL)
+  // ==========================================
+  app.post("/candidatos/:id/analizar", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const responsable = req.body.responsable || req.body.usuario_accion || "Admin";
 
-  // Validación de entorno
-  const resolved = process.env.FIREBASE_STORAGE_BUCKET;
-  if (!resolved) {
-    console.error("❌ Falta FIREBASE_STORAGE_BUCKET en el archivo .env");
-    return;
-  }
+      // 1. Obtener candidato de Firestore
+      const docRef = firestore.collection(MAIN_COLLECTION).doc(id);
+      const docSnap = await docRef.get();
 
-  // Inicialización global
-  try {
-    firestore = admin.firestore();
-    bucket = admin.storage().bucket();
-    console.log(`🪣 Bucket en uso: ${bucket.name}`);
+      if (!docSnap.exists) {
+        return res.status(404).json({ error: "Candidato no encontrado" });
+      }
 
-    // Verificamos conexión
-    STORAGE_READY = await storageProbe();
+      const candidato = docSnap.data();
 
-    if (!STORAGE_READY) {
-      console.warn("⚠️ Storage no respondió correctamente, pero el servidor seguirá activo.");
-    } else {
-      console.log("✅ Storage OK — sistema operativo");
+      // 2. Validar que tenga texto extraído del CV
+      if (!candidato.texto_extraido) {
+        return res.status(400).json({ error: "El candidato no tiene texto de CV extraído" });
+      }
+
+      // 3. Generar reseña del CV si no existe
+      let reseñaCV = candidato.reseña_cv;
+      if (!reseñaCV) {
+        console.log("📝 Generando reseña del CV...");
+        reseñaCV = await generarResenaCV(candidato.texto_extraido, candidato.puesto || "General");
+      }
+
+      // 4. Preparar datos para el análisis (incluir respuestas_filtro si existen)
+      const datosParaAnalisis = candidato.respuestas_filtro
+        ? JSON.stringify(candidato.respuestas_filtro)
+        : "";
+
+      // 5. Ejecutar análisis IA usando verificaConocimientosMinimos
+      console.log("🤖 Ejecutando análisis IA manual...");
+      const analisisIA = await verificaConocimientosMinimos(
+        candidato.puesto || "General",
+        candidato.texto_extraido, // Texto del CV
+        datosParaAnalisis, // Respuestas del filtro (Datos Clave y Skills) como JSON string
+        reseñaCV, // Reseña del CV
+        null // No hay video en análisis manual inicial
+      );
+
+      // Limitar score inicial a máximo 70 para carga manual (antes de la entrevista)
+      analisisIA.score = Math.min(analisisIA.score, 70);
+
+      // 6. Actualizar candidato en Firestore
+      await docRef.update({
+        ia_score: analisisIA.score,
+        ia_motivos: analisisIA.motivos || "Análisis manual completado",
+        ia_alertas: analisisIA.alertas || [],
+        ia_status: "processed",
+        reseña_cv: reseñaCV,
+        actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
+
+        // HISTORIAL: Análisis manual realizado
+        historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+          date: new Date().toISOString(),
+          event: 'Análisis Manual',
+          detail: `Análisis manual completado. Score: ${analisisIA.score}/100`,
+          usuario: responsable
+        })
+      });
+
+      console.log(`✅ Análisis manual completado para candidato ${id} - Score: ${analisisIA.score}`);
+      res.json({
+        ok: true,
+        score: analisisIA.score,
+        motivos: analisisIA.motivos,
+        alertas: analisisIA.alertas || [],
+        reseña_cv: reseñaCV
+      });
+
+    } catch (e) {
+      console.error("Error en análisis manual:", e);
+      res.status(500).json({ error: e.message });
     }
+  });
+  // ==========================================
+  // 🎣 WEBHOOK ZOHO FORM 2: VALIDACIÓN TÉCNICA (CONECTADO)
+  // ==========================================
+  app.post("/webhook-form2", async (req, res) => {
+    try {
+      const data = req.body;
+      console.log("📩 [Webhook Form 2] Datos recibidos:", JSON.stringify(data));
+      await registrarEstadoWebhook("zoho_form2", true); // Registro de ejecución exitosa
 
-  } catch (error) {
-    console.error("❌ Error fatal inicializando servicios de Firebase:", error);
-  }
+      // 1. Normalizar Email (Es la llave que configuramos en Zoho)
+      const emailCandidate = (data.email || data.Email || "").trim().toLowerCase();
 
-  // 🔥 LA CORRECCIÓN: CICLO INFINITO 🔥
-  console.log("🔌 Iniciando servicio de lectura de correos (Ciclo Automático)...");
+      if (!emailCandidate) {
+        console.error("❌ Form 2 recibido SIN email. Imposible asociar.");
+        return res.status(400).send("Falta el campo email para identificar al candidato.");
+      }
 
-  // SEMÁFORO: Evita que se solapen los procesos si uno tarda mucho
-  let isProcessing = false;
+      // 2. Buscar al candidato en la base de datos (CVs_staging)
+      const snapshot = await firestore.collection(MAIN_COLLECTION)
+        .where('email', '==', emailCandidate)
+        .limit(1)
+        .get();
 
-  // 1. Ejecutar inmediatamente al arrancar para no esperar
-  analizarCorreos();
+      if (snapshot.empty) {
+        console.warn(`⚠️ Webhook recibido pero no encontré candidato con email: ${emailCandidate}`);
+        // Respondemos 200 a Zoho para que no se quede reintentando infinitamente
+        return res.status(200).send("Candidato no encontrado en DB.");
+      }
 
-  // 2. Programar repetición cada 120 segundos (120000 ms)
-  setInterval(async () => {
-    if (isProcessing) {
-      console.log("⚠️ Saltando ciclo: El proceso anterior todavía no terminó.");
+      const doc = snapshot.docs[0];
+
+      // 3. Guardar las respuestas
+      // Guardamos todo el objeto 'data' porque ya hiciste el trabajo duro de mapear
+      // los nombres bonitos (herramienta_1, nivel_1, etc.) en Zoho.
+      await doc.ref.update({
+        process_step_2_form: 'received',  // 🔥 Enciende el semáforo VERDE
+        respuestas_form2: {
+          fecha_recepcion: new Date().toISOString(),
+          data: data // Aquí va todo el paquete limpio que configuraste
+        },
+        actualizado_en: new Date().toISOString(),
+
+        // HISTORIAL: Respuestas del Zoho 2 recibido
+        historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+          date: new Date().toISOString(),
+          event: 'Respuestas del Zoho 2 Recibido',
+          detail: 'El candidato completó la validación técnica (Zoho Form 2)',
+          usuario: 'Sistema (Zoho)'
+        })
+      });
+
+      console.log(`✅ [Webhook Form 2] Respuestas guardadas para: ${emailCandidate}`);
+      await registrarEstadoWebhook("zoho_form2", true); // Confirmación final de éxito
+      res.status(200).send("Recibido y procesado exitosamente.");
+
+    } catch (error) {
+      console.error("❌ Error procesando Webhook Form 2:", error);
+      await registrarEstadoWebhook("zoho_form2", false, error.message); // Registro de error
+      res.status(500).send("Error interno del servidor");
+    }
+  });
+
+  // ==========================================
+  // 🔥 ENDPOINT DE CONFIGURACIÓN FIREBASE (PÚBLICO)
+  // ==========================================
+  app.get("/firebase-config", (req, res) => {
+    // Configuración pública para el cliente de Firebase Auth
+    // Estas variables deben estar en .env: FIREBASE_API_KEY, FIREBASE_AUTH_DOMAIN
+    res.json({
+      apiKey: process.env.FIREBASE_API_KEY || "",
+      authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${process.env.FIREBASE_PROJECT_ID}.firebaseapp.com`,
+      projectId: process.env.FIREBASE_PROJECT_ID || "",
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "",
+      messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "",
+      appId: process.env.FIREBASE_APP_ID || ""
+    });
+  });
+
+  // ==========================================
+  // 🚀 INICIO DEL SERVIDOR (CON BUCLE AUTOMÁTICO)
+  // ==========================================
+  app.listen(PORT, "0.0.0.0", async () => {
+    console.log(`✅ Servidor activo en http://0.0.0.0:${PORT}`);
+    console.log("🔎 Inicializando Firebase...");
+
+    // Validación de entorno
+    const resolved = process.env.FIREBASE_STORAGE_BUCKET;
+    if (!resolved) {
+      console.error("❌ Falta FIREBASE_STORAGE_BUCKET en el archivo .env");
       return;
     }
 
-    isProcessing = true; // 🔴 Bloquear semáforo
-    console.log("⏰ Ciclo programado: Buscando nuevos correos...");
-
+    // Inicialización global
     try {
-      await analizarCorreos();
+      firestore = admin.firestore();
+      bucket = admin.storage().bucket();
+      console.log(`🪣 Bucket en uso: ${bucket.name}`);
+
+      // Verificamos conexión
+      STORAGE_READY = await storageProbe();
+
+      if (!STORAGE_READY) {
+        console.warn("⚠️ Storage no respondió correctamente, pero el servidor seguirá activo.");
+      } else {
+        console.log("✅ Storage OK — sistema operativo");
+      }
+
     } catch (error) {
-      console.error("❌ Error crítico en el ciclo:", error);
-    } finally {
-      isProcessing = false; // 🟢 Liberar semáforo (siempre)
+      console.error("❌ Error fatal inicializando servicios de Firebase:", error);
     }
-  }, 120000);
-});
+
+    // 🔥 LA CORRECCIÓN: CICLO INFINITO 🔥
+    console.log("🔌 Iniciando servicio de lectura de correos (Ciclo Automático)...");
+
+    // SEMÁFORO: Evita que se solapen los procesos si uno tarda mucho
+    let isProcessing = false;
+
+    // 1. Ejecutar inmediatamente al arrancar para no esperar
+    analizarCorreos();
+
+    // 2. Programar repetición cada 120 segundos (120000 ms)
+    setInterval(async () => {
+      if (isProcessing) {
+        console.log("⚠️ Saltando ciclo: El proceso anterior todavía no terminó.");
+        return;
+      }
+
+      isProcessing = true; // 🔴 Bloquear semáforo
+      console.log("⏰ Ciclo programado: Buscando nuevos correos...");
+
+      try {
+        await analizarCorreos();
+      } catch (error) {
+        console.error("❌ Error crítico en el ciclo:", error);
+      } finally {
+        isProcessing = false; // 🟢 Liberar semáforo (siempre)
+      }
+    }, 120000);
+  });

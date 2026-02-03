@@ -391,20 +391,20 @@ function DashboardView({ candidates, onNavigate }) {
                     <div className="grid grid-cols-1 gap-3">
                         {/* Card Zoho Form 1 - Estado dinámico */}
                         <div className={`p-3 bg-slate-950 rounded-lg border flex items-center gap-3 ${webhookStatus.zoho_form1?.status === "verde"
-                                ? "border-green-500/50"
-                                : "border-red-500/50"
+                            ? "border-green-500/50"
+                            : "border-red-500/50"
                             }`}>
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${webhookStatus.zoho_form1?.status === "verde"
-                                    ? "bg-green-500/10 text-green-500"
-                                    : "bg-red-500/10 text-red-500"
+                                ? "bg-green-500/10 text-green-500"
+                                : "bg-red-500/10 text-red-500"
                                 }`}>
                                 <Globe size={16} />
                             </div>
                             <div className="flex-1">
                                 <p className="text-xs font-bold text-white">Zoho Forms (Form 1)</p>
                                 <p className={`text-[10px] ${webhookStatus.zoho_form1?.status === "verde"
-                                        ? "text-green-400"
-                                        : "text-red-400"
+                                    ? "text-green-400"
+                                    : "text-red-400"
                                     }`}>
                                     {webhookStatus.zoho_form1?.status === "verde" ? "Online" : "Error"}
                                 </p>
@@ -418,20 +418,20 @@ function DashboardView({ candidates, onNavigate }) {
 
                         {/* Card Zoho Form 2 - Estado dinámico */}
                         <div className={`p-3 bg-slate-950 rounded-lg border flex items-center gap-3 ${webhookStatus.zoho_form2?.status === "verde"
-                                ? "border-green-500/50"
-                                : "border-red-500/50"
+                            ? "border-green-500/50"
+                            : "border-red-500/50"
                             }`}>
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${webhookStatus.zoho_form2?.status === "verde"
-                                    ? "bg-green-500/10 text-green-500"
-                                    : "bg-red-500/10 text-red-500"
+                                ? "bg-green-500/10 text-green-500"
+                                : "bg-red-500/10 text-red-500"
                                 }`}>
                                 <Globe size={16} />
                             </div>
                             <div className="flex-1">
                                 <p className="text-xs font-bold text-white">Zoho Forms (Form 2)</p>
                                 <p className={`text-[10px] ${webhookStatus.zoho_form2?.status === "verde"
-                                        ? "text-green-400"
-                                        : "text-red-400"
+                                    ? "text-green-400"
+                                    : "text-red-400"
                                     }`}>
                                     {webhookStatus.zoho_form2?.status === "verde" ? "Online" : "Error"}
                                 </p>
@@ -1274,10 +1274,10 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
                                             </td>
                                             <td className="p-4 text-center">
                                                 <div className={`inline-flex items-center justify-center px-2.5 py-1 rounded border ${(c.ia_score || 0) >= 90
-                                                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                                        : (c.ia_score || 0) >= 70
-                                                            ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                                                            : 'bg-slate-800/50 border-slate-700 text-slate-400'
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                                    : (c.ia_score || 0) >= 70
+                                                        ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                                                        : 'bg-slate-800/50 border-slate-700 text-slate-400'
                                                     }`}>
                                                     <span className="text-xs font-bold">{c.ia_score || 0}</span>
                                                 </div>
@@ -2480,8 +2480,8 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                         <div className="md:col-span-2 mt-2">
                             <button
                                 className={`w-full py-4 font-black text-sm uppercase tracking-[0.15em] rounded-xl flex items-center justify-center gap-3 transition-all transform active:scale-[0.99] shadow-lg ${isGenerating
-                                        ? 'bg-slate-800 text-slate-500 cursor-wait'
-                                        : 'bg-gradient-to-r from-amber-700 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-amber-50 shadow-amber-900/20 border border-amber-500/20'
+                                    ? 'bg-slate-800 text-slate-500 cursor-wait'
+                                    : 'bg-gradient-to-r from-amber-700 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-amber-50 shadow-amber-900/20 border border-amber-500/20'
                                     }`}
                                 disabled={isGenerating || (!manualFile && !manualNotes)}
                                 onClick={handleManualUpload}
@@ -2544,8 +2544,8 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                                             onClick={() => handleOpenCandidate(c)}
                                             disabled={generatingReportId === c.id}
                                             className={`px-4 py-2 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2 ${generatingReportId === c.id
-                                                    ? 'bg-blue-700 cursor-wait opacity-75'
-                                                    : 'bg-blue-600 hover:bg-blue-500'
+                                                ? 'bg-blue-700 cursor-wait opacity-75'
+                                                : 'bg-blue-600 hover:bg-blue-500'
                                                 }`}
                                         >
                                             {generatingReportId === c.id ? (
@@ -2845,6 +2845,7 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     // 🤖 ESTADOS PARA GENERACIÓN DE LINK CON IA (GTC)
     const [localLink, setLocalLink] = React.useState(null);
     const [loadingAI, setLoadingAI] = React.useState(false);
+    const [isSyncing, setIsSyncing] = React.useState(false); // 🔄 Sync Manual
 
     // 🔥 SINCRONIZAR ESTADOS CUANDO CANDIDATE CAMBIA (para que persistan después de F5)
     React.useEffect(() => {
@@ -3103,6 +3104,42 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
             alert(`❌ Error al generar link de entrevista: ${error.message || 'Error desconocido'}`);
         } finally {
             setLoadingAI(false);
+        }
+    };
+
+    // --- NUEVO: Sincronización Manual (Rescue) ---
+    const handleSyncInterview = async () => {
+        const conversationId = prompt("Por favor ingresa el ID de conversación de ElevenLabs (ej: conv_...):");
+        if (!conversationId) return;
+
+        setIsSyncing(true);
+        const API_URL = window.API_URL || 'http://localhost:3004';
+
+        try {
+            // Obtener headers
+            const headers = { 'Content-Type': 'application/json' };
+            const token = localStorage.getItem('firebase_token');
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch(`${API_URL}/candidatos/${candidate.id}/sync-elevenlabs`, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({ conversation_id: conversationId })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                alert("✅ Sincronización exitosa. Los datos se han actualizado.");
+                // Recargar página para asegurar datos frescos
+                window.location.reload();
+            } else {
+                alert("❌ Error: " + (data.error || "Desconocido"));
+            }
+        } catch (e) {
+            console.error(e);
+            alert("❌ Error de conexión al sincronizar.");
+        } finally {
+            setIsSyncing(false);
         }
     };
 
@@ -4244,10 +4281,10 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                 onClick={generarLink}
                                                 disabled={loadingAI || !candidate?.email}
                                                 className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${loadingAI || !candidate?.email
-                                                        ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
-                                                        : (localLink || candidate?.meet_link)
-                                                            ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400'
-                                                            : 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-lg'
+                                                    ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+                                                    : (localLink || candidate?.meet_link)
+                                                        ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400'
+                                                        : 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-lg'
                                                     }`}
                                                 title={loadingAI ? "Generando link..." : (localLink || candidate?.meet_link) ? "Link generado exitosamente" : "Generar link de entrevista con bot de IA"}
                                             >
@@ -4269,6 +4306,17 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                             >
                                                 <Mail size={14} /> ENVIAR MAIL
                                             </button>
+
+                                            {/* BOTÓN: SYNC MANUAL (Rescue) */}
+                                            <button
+                                                onClick={handleSyncInterview}
+                                                disabled={isSyncing}
+                                                className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${isSyncing ? 'bg-slate-800 border-slate-700 text-slate-500' : 'bg-amber-900/40 hover:bg-amber-800/60 text-amber-400 border-amber-500/50 shadow-lg'}`}
+                                                title="Sincronizar manualmente con ID de ElevenLabs"
+                                            >
+                                                {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <CloudDownload size={14} />}
+                                                SYNC
+                                            </button>
                                         </div>
                                     </div>
 
@@ -4281,8 +4329,8 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                     <LucideIcon name="Bot" size={18} /> ANÁLISIS DEL BOT
                                                 </h3>
                                                 <div className={`px-3 py-1 rounded-full text-sm font-bold border ${(candidate.ia_score ?? candidate.entrevista_analisis?.score ?? 0) >= 70 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                                        (candidate.ia_score ?? candidate.entrevista_analisis?.score ?? 0) >= 50 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                                            'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                                    (candidate.ia_score ?? candidate.entrevista_analisis?.score ?? 0) >= 50 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                                        'bg-rose-500/10 text-rose-400 border-rose-500/20'
                                                     }`}>
                                                     SCORE: {candidate.ia_score ?? candidate.entrevista_analisis?.score ?? 0}/100
                                                 </div>
@@ -4382,7 +4430,7 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                 <div className="bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden">
                                     {/* Decoración lateral según estado */}
                                     <div className={`absolute top-0 left-0 w-1 h-full transition-colors duration-500 ${form2Status === 'received' ? 'bg-emerald-500' :
-                                            form2Status === 'sent' ? 'bg-amber-500' : 'bg-slate-700'
+                                        form2Status === 'sent' ? 'bg-amber-500' : 'bg-slate-700'
                                         }`}></div>
 
 
@@ -4399,8 +4447,8 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                 {/* 1. PENDIENTE (GRIS) - SOLO VISUAL */}
                                                 <div
                                                     className={`py-2 px-3 rounded-md text-[10px] font-bold uppercase text-center ${form2Status === 'pending'
-                                                            ? 'bg-slate-700 text-white shadow-sm'
-                                                            : 'text-slate-600'
+                                                        ? 'bg-slate-700 text-white shadow-sm'
+                                                        : 'text-slate-600'
                                                         }`}
                                                 >
                                                     ⚪ Pendiente
@@ -4411,8 +4459,8 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                 <button
                                                     onClick={handleSendForm2}
                                                     className={`py-2 rounded-md text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-2 ${form2Status === 'sent'
-                                                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-md'
-                                                            : 'text-slate-500 hover:text-amber-400'
+                                                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-md'
+                                                        : 'text-slate-500 hover:text-amber-400'
                                                         }`}
                                                 >
                                                     {form2Status === 'sent' ? <Mail size={12} /> : <Send size={12} />}
@@ -4425,8 +4473,8 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                 <button
                                                     disabled={true}
                                                     className={`py-2 rounded-md text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-2 cursor-default ${form2Status === 'received'
-                                                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-md'
-                                                            : 'bg-slate-900 border-slate-800 text-slate-600 opacity-50'
+                                                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-md'
+                                                        : 'bg-slate-900 border-slate-800 text-slate-600 opacity-50'
                                                         }`}
                                                 >
                                                     {form2Status === 'received' ? <CheckCircle size={12} /> : <div className="w-3 h-3 rounded-full border border-slate-600"></div>}
@@ -4490,10 +4538,10 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                     onClick={() => updateChecklist('result', 'qualified')}
                                                     disabled={!canMakeDecision}
                                                     className={`py-3 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2 ${finalResult === 'qualified'
-                                                            ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-900/30 ring-1 ring-emerald-400'
-                                                            : canMakeDecision
-                                                                ? 'bg-slate-900 text-slate-400 border-slate-700 hover:border-emerald-500/50 hover:text-emerald-400'
-                                                                : 'bg-slate-900 text-slate-400 border-slate-700 cursor-not-allowed opacity-50'
+                                                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-900/30 ring-1 ring-emerald-400'
+                                                        : canMakeDecision
+                                                            ? 'bg-slate-900 text-slate-400 border-slate-700 hover:border-emerald-500/50 hover:text-emerald-400'
+                                                            : 'bg-slate-900 text-slate-400 border-slate-700 cursor-not-allowed opacity-50'
                                                         }`}
                                                 >
                                                     <ThumbsUp size={16} /> Calificado
@@ -4502,10 +4550,10 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                     onClick={() => setShowDisqualifiedModal(true)}
                                                     disabled={!canMakeDecision}
                                                     className={`py-3 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2 ${finalResult === 'disqualified'
-                                                            ? 'bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-900/30 ring-1 ring-rose-400'
-                                                            : canMakeDecision
-                                                                ? 'bg-slate-900 text-slate-400 border-slate-700 hover:border-rose-500/50 hover:text-rose-400'
-                                                                : 'bg-slate-900 text-slate-400 border-slate-700 cursor-not-allowed opacity-50'
+                                                        ? 'bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-900/30 ring-1 ring-rose-400'
+                                                        : canMakeDecision
+                                                            ? 'bg-slate-900 text-slate-400 border-slate-700 hover:border-rose-500/50 hover:text-rose-400'
+                                                            : 'bg-slate-900 text-slate-400 border-slate-700 cursor-not-allowed opacity-50'
                                                         }`}
                                                 >
                                                     <ThumbsDown size={16} /> No Calificado
@@ -4609,8 +4657,8 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                             key={tipo.valor}
                                             onClick={() => setMarcadorTipo(tipo.valor)}
                                             className={`p-3 rounded-lg border text-left transition-all ${marcadorTipo === tipo.valor
-                                                    ? 'bg-blue-500/20 border-blue-500/50'
-                                                    : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                                                ? 'bg-blue-500/20 border-blue-500/50'
+                                                : 'bg-slate-950 border-slate-800 hover:border-slate-700'
                                                 }`}
                                         >
                                             <div className="text-sm font-bold text-white mb-1">{tipo.label}</div>
