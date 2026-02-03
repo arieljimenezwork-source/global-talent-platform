@@ -82,6 +82,22 @@ async function crearEntrevistaEnGTC(candidato) {
       const status = error.response.status;
       const data = error.response.data;
       console.error(`❌ [GTC Service] Error HTTP ${status}:`, data);
+
+      // INTENTO DE RECUPERACIÓN: Si el error dice "ya existe", busquemos si nos devolvió el ID
+      if (data && (data.interview_id || data.data?.interview_id)) {
+        const recoveredId = data.interview_id || data.data.interview_id;
+        const recoveredLink = data.link || data.data?.link;
+
+        console.warn(`⚠️ [GTC Service] Error indicando duplicado, pero se recuperó ID: ${recoveredId}`);
+
+        // Devolvemos SUCCESS fake para que el backend guarde el ID y permita el Pull Mode
+        return {
+          success: true,
+          link: recoveredLink || "https://global-talent-platform-v2.vercel.app/entrevista/" + recoveredId,
+          interview_id: recoveredId
+        };
+      }
+
       return {
         success: false,
         error: `Error del servidor GTC (${status}): ${data?.error || data?.message || 'Error desconocido'}`
@@ -98,6 +114,31 @@ async function crearEntrevistaEnGTC(candidato) {
   }
 }
 
+
+/**
+ * Intenta recuperar la transcripción manualmente desde GTC (Pull Mode)
+ */
+async function obtenerTranscripcionDeGTC(interviewId) {
+  try {
+    const url = `${GTC_URL}/api/interviews/${interviewId}/transcript`;
+    console.log(`🔄 [GTC PULL] Solicitando transcripción para: ${interviewId}`);
+
+    const response = await axios.get(url, {
+      headers: { 'Authorization': `Bearer ${API_KEY}` }
+    });
+
+    if (response.data && response.data.transcript) {
+      return { success: true, transcript: response.data.transcript };
+    }
+    return { success: false, error: "No transcript data" };
+
+  } catch (error) {
+    console.error(`❌ [GTC PULL] Falló al traer transcripción: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
-  crearEntrevistaEnGTC
+  crearEntrevistaEnGTC,
+  obtenerTranscripcionDeGTC
 };
