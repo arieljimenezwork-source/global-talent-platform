@@ -1,287 +1,287 @@
 
 
-        // --- 1. ARQUITECTURA DE DATOS (CEREBRO) ---
+// --- 1. ARQUITECTURA DE DATOS (CEREBRO) ---
 
-        const MOCK_DB = [
-        { 
-            id: 'c1', 
-            nombre: 'Sofia Martínez', 
-            email: 'sofia.m@example.com', 
-            puesto: 'Asistente de Marketing', 
-            ia_score: 94, 
-            fecha: '2023-10-24T10:00:00Z', 
-            stage: 'stage_1', 
-            status_interno: 'new', // Esto activa la alerta de "Nuevo"
-            cv_url: '#', 
-            video_url: '#', 
-            notes: 'Experiencia sólida en Meta Ads. Perfil interesante.', 
-            alerts: ['Inglés C1', 'Certificada Google'],
-            history: [
-                { date: '2023-10-24T10:00:00Z', event: 'Ingreso al Pipeline', detail: 'Vía Zoho Forms' }
-            ]
-        },
-        { 
-            id: 'c2', 
-            nombre: 'Lucas Ramirez', 
-            email: 'lucas.r@example.com', 
-            puesto: 'Asistente IA', 
-            ia_score: 88, 
-            fecha: '2023-10-24T09:30:00Z', 
-            stage: 'stage_1', 
-            status_interno: 'viewed', 
-            cv_url: '#', 
-            video_url: null, 
-            notes: '', 
-            alerts: ['Experto en Zapier'],
-            history: [
-                { date: '2023-10-24T09:30:00Z', event: 'Ingreso al Pipeline', detail: 'Vía Zoho Forms' },
-                { date: '2023-10-24T11:00:00Z', event: 'Revisión Inicial', detail: 'Abierto por Admin' }
-            ]
-        },
-        { 
-            id: 'c3', 
-            nombre: 'Mariana Lopez', 
-            email: 'mariana.l@example.com', 
-            puesto: 'Asistente Financiero', 
-            ia_score: 91, 
-            fecha: '2023-10-22T14:00:00Z', 
-            stage: 'stage_2', 
-            status_interno: 'interview_scheduled', 
-            assignedTo: 'Admin', 
-            interview_date: '2023-10-26T10:00:00Z', 
-            meet_link: 'https://meet.google.com/abc-defg-hij',
-            cv_url: '#', 
-            video_url: 'https://loom.com/share/demo', 
-            form2_received: false, 
-            form2_sent: false,
-            qualified: null, 
-            notes: 'Pre-calificada correctamente. Agendar técnica.',
-            history: [
-                { date: '2023-10-22T14:00:00Z', event: 'Ingreso al Pipeline', detail: 'Vía Web' },
-                { date: '2023-10-23T09:00:00Z', event: 'Aprobado a Gestión', detail: 'Por Admin' },
-                { date: '2023-10-23T10:30:00Z', event: 'Entrevista Agendada', detail: 'Para 26/10' }
-            ]
-        },
-        { 
-            id: 'c4', 
-            nombre: 'Javier Costa', 
-            email: 'javier.c@example.com', 
-            puesto: 'Desarrollador Web', 
-            ia_score: 75, 
-            fecha: '2023-10-20T11:00:00Z', 
-            stage: 'trash', 
-            status_interno: 'discarded', 
-            cv_url: '#', 
-            notes: 'Salario fuera de rango', 
-            alerts: ['Salario Alto'],
-            history: [
-                { date: '2023-10-20T11:00:00Z', event: 'Ingreso', detail: '' },
-                { date: '2023-10-21T09:00:00Z', event: 'Descarte', detail: 'Salario fuera de rango' }
-            ]
-        },
-        { 
-            id: 'c5', 
-            nombre: 'Elena Volkov', 
-            email: 'elena@example.com', 
-            puesto: 'Project Manager', 
-            ia_score: 98, 
-            fecha: '2023-10-15T09:00:00Z', 
-            stage: 'stage_3', 
-            status_interno: 'ready_for_report', 
-            cv_url: '#', 
-            video_url: '#', 
-            form2_received: true, 
-            form2_sent: true,
-            qualified: true, 
-            report_generated: false, 
-            notes: 'Lista para presentar al cliente.',
-            history: [
-                { date: '2023-10-15T09:00:00Z', event: 'Ingreso', detail: '' },
-                { date: '2023-10-16T14:00:00Z', event: 'Aprobado a Gestión', detail: 'Por Admin' },
-                { date: '2023-10-18T10:00:00Z', event: 'Entrevista Completada', detail: 'Exitosa' },
-                { date: '2023-10-19T11:00:00Z', event: 'Calificado Positivo', detail: 'Pasa a Informe' }
-            ]
-        },
-        ];
+const MOCK_DB = [
+    {
+        id: 'c1',
+        nombre: 'Sofia Martínez',
+        email: 'sofia.m@example.com',
+        puesto: 'Asistente de Marketing',
+        ia_score: 94,
+        fecha: '2023-10-24T10:00:00Z',
+        stage: 'stage_1',
+        status_interno: 'new', // Esto activa la alerta de "Nuevo"
+        cv_url: '#',
+        video_url: '#',
+        notes: 'Experiencia sólida en Meta Ads. Perfil interesante.',
+        alerts: ['Inglés C1', 'Certificada Google'],
+        history: [
+            { date: '2023-10-24T10:00:00Z', event: 'Ingreso al Pipeline', detail: 'Vía Zoho Forms' }
+        ]
+    },
+    {
+        id: 'c2',
+        nombre: 'Lucas Ramirez',
+        email: 'lucas.r@example.com',
+        puesto: 'Asistente IA',
+        ia_score: 88,
+        fecha: '2023-10-24T09:30:00Z',
+        stage: 'stage_1',
+        status_interno: 'viewed',
+        cv_url: '#',
+        video_url: null,
+        notes: '',
+        alerts: ['Experto en Zapier'],
+        history: [
+            { date: '2023-10-24T09:30:00Z', event: 'Ingreso al Pipeline', detail: 'Vía Zoho Forms' },
+            { date: '2023-10-24T11:00:00Z', event: 'Revisión Inicial', detail: 'Abierto por Admin' }
+        ]
+    },
+    {
+        id: 'c3',
+        nombre: 'Mariana Lopez',
+        email: 'mariana.l@example.com',
+        puesto: 'Asistente Financiero',
+        ia_score: 91,
+        fecha: '2023-10-22T14:00:00Z',
+        stage: 'stage_2',
+        status_interno: 'interview_scheduled',
+        assignedTo: 'Admin',
+        interview_date: '2023-10-26T10:00:00Z',
+        meet_link: 'https://meet.google.com/abc-defg-hij',
+        cv_url: '#',
+        video_url: 'https://loom.com/share/demo',
+        form2_received: false,
+        form2_sent: false,
+        qualified: null,
+        notes: 'Pre-calificada correctamente. Agendar técnica.',
+        history: [
+            { date: '2023-10-22T14:00:00Z', event: 'Ingreso al Pipeline', detail: 'Vía Web' },
+            { date: '2023-10-23T09:00:00Z', event: 'Aprobado a Gestión', detail: 'Por Admin' },
+            { date: '2023-10-23T10:30:00Z', event: 'Entrevista Agendada', detail: 'Para 26/10' }
+        ]
+    },
+    {
+        id: 'c4',
+        nombre: 'Javier Costa',
+        email: 'javier.c@example.com',
+        puesto: 'Desarrollador Web',
+        ia_score: 75,
+        fecha: '2023-10-20T11:00:00Z',
+        stage: 'trash',
+        status_interno: 'discarded',
+        cv_url: '#',
+        notes: 'Salario fuera de rango',
+        alerts: ['Salario Alto'],
+        history: [
+            { date: '2023-10-20T11:00:00Z', event: 'Ingreso', detail: '' },
+            { date: '2023-10-21T09:00:00Z', event: 'Descarte', detail: 'Salario fuera de rango' }
+        ]
+    },
+    {
+        id: 'c5',
+        nombre: 'Elena Volkov',
+        email: 'elena@example.com',
+        puesto: 'Project Manager',
+        ia_score: 98,
+        fecha: '2023-10-15T09:00:00Z',
+        stage: 'stage_3',
+        status_interno: 'ready_for_report',
+        cv_url: '#',
+        video_url: '#',
+        form2_received: true,
+        form2_sent: true,
+        qualified: true,
+        report_generated: false,
+        notes: 'Lista para presentar al cliente.',
+        history: [
+            { date: '2023-10-15T09:00:00Z', event: 'Ingreso', detail: '' },
+            { date: '2023-10-16T14:00:00Z', event: 'Aprobado a Gestión', detail: 'Por Admin' },
+            { date: '2023-10-18T10:00:00Z', event: 'Entrevista Completada', detail: 'Exitosa' },
+            { date: '2023-10-19T11:00:00Z', event: 'Calificado Positivo', detail: 'Pasa a Informe' }
+        ]
+    },
+];
 
-        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 
-        const formatDate = (isoString) => {
-            if (!isoString) return '-';
-            try {
-                return new Date(isoString).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
-            } catch (e) {
-                return '-';
-            }
-        };
+const formatDate = (isoString) => {
+    if (!isoString) return '-';
+    try {
+        return new Date(isoString).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+    } catch (e) {
+        return '-';
+    }
+};
 
-        const formatTime = (isoString) => {
-            if (!isoString) return '';
-            try {
-                return new Date(isoString).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-            } catch (e) {
-                return '';
-            }
-        };
+const formatTime = (isoString) => {
+    if (!isoString) return '';
+    try {
+        return new Date(isoString).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+        return '';
+    }
+};
 
-        const STATUS_LABELS = {
-            'new': 'Nuevo Ingreso',
-            'viewed': 'En Revisión',
-            'interview_pending': 'Pendiente Entrevista',
-            'interview_scheduled': 'Entrevista Agendada',
-            'interview_completed': 'Entrevista Realizada',
-            'pending_form2': 'Pendiente Formulario 2',
-            'ready_for_report': 'Listo para Informe',
-            'discarded': 'Descartado'
-        };
+const STATUS_LABELS = {
+    'new': 'Nuevo Ingreso',
+    'viewed': 'En Revisión',
+    'interview_pending': 'Pendiente Entrevista',
+    'interview_scheduled': 'Entrevista Agendada',
+    'interview_completed': 'Entrevista Realizada',
+    'pending_form2': 'Pendiente Formulario 2',
+    'ready_for_report': 'Listo para Informe',
+    'discarded': 'Descartado'
+};
 
-        const getStatusLabel = (status) => STATUS_LABELS[status] || status || 'En Proceso';     
+const getStatusLabel = (status) => STATUS_LABELS[status] || status || 'En Proceso';
 
-        // Función para normalizar nombres: "Nombre Apellido" (primera letra mayúscula, resto minúsculas)
-        const normalizarNombre = (nombre) => {
-            if (!nombre || typeof nombre !== 'string') return nombre || '';
-            return nombre
-                .toLowerCase()
-                .split(' ')
-                .map(palabra => {
-                    if (palabra.length === 0) return palabra;
-                    return palabra.charAt(0).toUpperCase() + palabra.slice(1);
-                })
-                .join(' ')
-                .trim();
-        };
+// Función para normalizar nombres: "Nombre Apellido" (primera letra mayúscula, resto minúsculas)
+const normalizarNombre = (nombre) => {
+    if (!nombre || typeof nombre !== 'string') return nombre || '';
+    return nombre
+        .toLowerCase()
+        .split(' ')
+        .map(palabra => {
+            if (palabra.length === 0) return palabra;
+            return palabra.charAt(0).toUpperCase() + palabra.slice(1);
+        })
+        .join(' ')
+        .trim();
+};
 
-        // --- 3. VISTAS DEL SISTEMA ---
+// --- 3. VISTAS DEL SISTEMA ---
 
-        function DashboardView({ candidates, onNavigate }) {
-        // Calculamos estadísticas con lógica de "Nuevos sin ver"
-        const stats = {
-            new: candidates.filter(c => c.stage === 'stage_1').length,
-            newUnseen: candidates.filter(c => c.stage === 'stage_1' && c.status_interno === 'new').length,
-            interview: candidates.filter(c => c.stage === 'stage_2').length,
-            ready: candidates.filter(c => c.stage === 'stage_3').length,
-            trash: candidates.filter(c => c.stage === 'trash').length,
-            total: candidates.filter(c => c.stage !== 'trash').length
-        };
-        
-        // Calcular métricas rápidas
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        
-        const parseFirebaseDate = (dateValue) => {
-            if (!dateValue) return null;
-            if (typeof dateValue === 'object' && dateValue._seconds) {
-                return new Date(dateValue._seconds * 1000);
-            }
-            if (typeof dateValue === 'string') {
-                return new Date(dateValue);
-            }
+function DashboardView({ candidates, onNavigate }) {
+    // Calculamos estadísticas con lógica de "Nuevos sin ver"
+    const stats = {
+        new: candidates.filter(c => c.stage === 'stage_1').length,
+        newUnseen: candidates.filter(c => c.stage === 'stage_1' && c.status_interno === 'new').length,
+        interview: candidates.filter(c => c.stage === 'stage_2').length,
+        ready: candidates.filter(c => c.stage === 'stage_3').length,
+        trash: candidates.filter(c => c.stage === 'trash').length,
+        total: candidates.filter(c => c.stage !== 'trash').length
+    };
+
+    // Calcular métricas rápidas
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const parseFirebaseDate = (dateValue) => {
+        if (!dateValue) return null;
+        if (typeof dateValue === 'object' && dateValue._seconds) {
+            return new Date(dateValue._seconds * 1000);
+        }
+        if (typeof dateValue === 'string') {
             return new Date(dateValue);
-        };
-        
-        const candidatosHoy = candidates.filter(c => {
-            const fecha = parseFirebaseDate(c.fecha || c.creado_en);
-            if (!fecha) return false;
-            return fecha >= hoy;
-        }).length;
-        
-        const tasaExplorarAGestion = stats.new > 0 
-            ? Math.round((stats.interview / stats.new) * 100) 
-            : 0;
-        
-        const tasaGestionAInforme = stats.interview > 0 
-            ? Math.round((stats.ready / stats.interview) * 100) 
-            : 0;
-        
-        // Entrevistas pendientes a programar (stage_2 sin meet_link)
-        const entrevistasPendientes = candidates.filter(c => 
-            c.stage === 'stage_2' && !c.meet_link
-        ).length;
-        
-        // Candidatos listos para informes (stage_3 sin informe_final_data)
-        const listosParaInformes = candidates.filter(c => 
-            c.stage === 'stage_3' && !c.informe_final_data
-        ).length;
-        
-        // Cantidad de Form 2 recibido
-        const form2Recibidos = candidates.filter(c => 
-            c.respuestas_form2 || c.process_step_2_form === 'received'
-        ).length;
-        
-        // Tiempo promedio en cada etapa (en días)
-        const calcularTiempoPromedio = (stage) => {
-            const candidatosEnStage = candidates.filter(c => c.stage === stage);
-            if (candidatosEnStage.length === 0) return 0;
-            
-            const ahora = new Date();
-            const tiempos = candidatosEnStage.map(c => {
-                // Buscar en el historial cuándo entró a este stage
-                const historial = c.history || c.historial_movimientos || [];
-                
-                // Buscar eventos relacionados con el cambio a este stage
-                let fechaEntrada = null;
-                if (historial.length > 0) {
-                    // Buscar el último evento que indica entrada a este stage
-                    const eventosRelevantes = historial.filter(h => {
-                        if (!h.event || !h.date) return false;
-                        const eventLower = h.event.toLowerCase();
-                        return (
-                            (stage === 'stage_1' && (eventLower.includes('ingreso') || eventLower.includes('pipeline'))) ||
-                            (stage === 'stage_2' && (eventLower.includes('gestión') || eventLower.includes('aprobado') || eventLower.includes('gestion'))) ||
-                            (stage === 'stage_3' && (eventLower.includes('informe') || eventLower.includes('listo')))
-                        );
-                    });
-                    
-                    if (eventosRelevantes.length > 0) {
-                        // Tomar el más reciente
-                        const ultimoEvento = eventosRelevantes[eventosRelevantes.length - 1];
-                        fechaEntrada = parseFirebaseDate(ultimoEvento.date);
-                    }
-                }
-                
-                // Si no encontramos en historial, usar fecha de creación como fallback
-                if (!fechaEntrada) {
-                    fechaEntrada = parseFirebaseDate(c.fecha || c.creado_en);
-                }
-                
-                if (fechaEntrada) {
-                    const diffMs = ahora - fechaEntrada;
-                    const dias = diffMs / (1000 * 60 * 60 * 24);
-                    return dias > 0 ? dias : 0; // Solo días positivos
-                }
-                
-                return 0;
-            }).filter(t => t > 0);
-            
-            if (tiempos.length === 0) return 0;
-            return Math.round(tiempos.reduce((a, b) => a + b, 0) / tiempos.length);
-        };
-        
-        const tiempoPromedioStage1 = calcularTiempoPromedio('stage_1');
-        const tiempoPromedioStage2 = calcularTiempoPromedio('stage_2');
-        const tiempoPromedioStage3 = calcularTiempoPromedio('stage_3');
-        
-        // Estado para monitorear webhooks
-        const [webhookStatus, setWebhookStatus] = useState({
-            zoho_form1: { status: "verde", razon: "Cargando..." },
-            zoho_form2: { status: "verde", razon: "Cargando..." }
-        });
-        
-        useEffect(() => {
-            const cargarEstado = async () => {
-                const estado = await api.webhooks.getStatus();
-                setWebhookStatus(estado);
-            };
-            
-            cargarEstado(); // Cargar inmediatamente
-            const intervalo = setInterval(cargarEstado, 300000); // Cada 5 minutos  (300000 ms)
-            
-            return () => clearInterval(intervalo); // Limpiar al desmontar
-        }, []);
+        }
+        return new Date(dateValue);
+    };
 
-        return (
-            <div className="animate-in fade-in duration-500 max-w-7xl mx-auto">
+    const candidatosHoy = candidates.filter(c => {
+        const fecha = parseFirebaseDate(c.fecha || c.creado_en);
+        if (!fecha) return false;
+        return fecha >= hoy;
+    }).length;
+
+    const tasaExplorarAGestion = stats.new > 0
+        ? Math.round((stats.interview / stats.new) * 100)
+        : 0;
+
+    const tasaGestionAInforme = stats.interview > 0
+        ? Math.round((stats.ready / stats.interview) * 100)
+        : 0;
+
+    // Entrevistas pendientes a programar (stage_2 sin meet_link)
+    const entrevistasPendientes = candidates.filter(c =>
+        c.stage === 'stage_2' && !c.meet_link
+    ).length;
+
+    // Candidatos listos para informes (stage_3 sin informe_final_data)
+    const listosParaInformes = candidates.filter(c =>
+        c.stage === 'stage_3' && !c.informe_final_data
+    ).length;
+
+    // Cantidad de Form 2 recibido
+    const form2Recibidos = candidates.filter(c =>
+        c.respuestas_form2 || c.process_step_2_form === 'received'
+    ).length;
+
+    // Tiempo promedio en cada etapa (en días)
+    const calcularTiempoPromedio = (stage) => {
+        const candidatosEnStage = candidates.filter(c => c.stage === stage);
+        if (candidatosEnStage.length === 0) return 0;
+
+        const ahora = new Date();
+        const tiempos = candidatosEnStage.map(c => {
+            // Buscar en el historial cuándo entró a este stage
+            const historial = c.history || c.historial_movimientos || [];
+
+            // Buscar eventos relacionados con el cambio a este stage
+            let fechaEntrada = null;
+            if (historial.length > 0) {
+                // Buscar el último evento que indica entrada a este stage
+                const eventosRelevantes = historial.filter(h => {
+                    if (!h.event || !h.date) return false;
+                    const eventLower = h.event.toLowerCase();
+                    return (
+                        (stage === 'stage_1' && (eventLower.includes('ingreso') || eventLower.includes('pipeline'))) ||
+                        (stage === 'stage_2' && (eventLower.includes('gestión') || eventLower.includes('aprobado') || eventLower.includes('gestion'))) ||
+                        (stage === 'stage_3' && (eventLower.includes('informe') || eventLower.includes('listo')))
+                    );
+                });
+
+                if (eventosRelevantes.length > 0) {
+                    // Tomar el más reciente
+                    const ultimoEvento = eventosRelevantes[eventosRelevantes.length - 1];
+                    fechaEntrada = parseFirebaseDate(ultimoEvento.date);
+                }
+            }
+
+            // Si no encontramos en historial, usar fecha de creación como fallback
+            if (!fechaEntrada) {
+                fechaEntrada = parseFirebaseDate(c.fecha || c.creado_en);
+            }
+
+            if (fechaEntrada) {
+                const diffMs = ahora - fechaEntrada;
+                const dias = diffMs / (1000 * 60 * 60 * 24);
+                return dias > 0 ? dias : 0; // Solo días positivos
+            }
+
+            return 0;
+        }).filter(t => t > 0);
+
+        if (tiempos.length === 0) return 0;
+        return Math.round(tiempos.reduce((a, b) => a + b, 0) / tiempos.length);
+    };
+
+    const tiempoPromedioStage1 = calcularTiempoPromedio('stage_1');
+    const tiempoPromedioStage2 = calcularTiempoPromedio('stage_2');
+    const tiempoPromedioStage3 = calcularTiempoPromedio('stage_3');
+
+    // Estado para monitorear webhooks
+    const [webhookStatus, setWebhookStatus] = useState({
+        zoho_form1: { status: "verde", razon: "Cargando..." },
+        zoho_form2: { status: "verde", razon: "Cargando..." }
+    });
+
+    useEffect(() => {
+        const cargarEstado = async () => {
+            const estado = await api.webhooks.getStatus();
+            setWebhookStatus(estado);
+        };
+
+        cargarEstado(); // Cargar inmediatamente
+        const intervalo = setInterval(cargarEstado, 300000); // Cada 5 minutos  (300000 ms)
+
+        return () => clearInterval(intervalo); // Limpiar al desmontar
+    }, []);
+
+    return (
+        <div className="animate-in fade-in duration-500 max-w-7xl mx-auto">
             <header className="mb-6 flex justify-between items-end">
                 <div>
                     <h1 className="text-2xl font-bold text-white mb-1 tracking-tight">Panel de Control</h1>
@@ -292,7 +292,7 @@
                     <span className="text-[10px] font-bold text-slate-400 uppercase">Sistema Online</span>
                 </div>
             </header>
-            
+
             {/* Nuevo Grafico de Embudo Horizontal Compacto */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                 <div className="lg:col-span-2">
@@ -312,7 +312,7 @@
                                 )}
                             </div>
                         </div>
-                        <UserPlus className="text-blue-500 group-hover:scale-110 transition-transform" size={24}/>
+                        <UserPlus className="text-blue-500 group-hover:scale-110 transition-transform" size={24} />
                     </button>
 
                     <button onClick={() => onNavigate('trash')} className="w-full p-4 bg-slate-900 border border-slate-800 rounded-xl hover:border-rose-500/50 transition-all group flex items-center justify-between">
@@ -320,63 +320,63 @@
                             <p className="text-[10px] uppercase font-bold text-slate-500">Papelera</p>
                             <span className="text-2xl font-bold text-white">{stats.trash}</span>
                         </div>
-                        <Trash2 className="text-rose-500 group-hover:scale-110 transition-transform" size={24}/>
+                        <Trash2 className="text-rose-500 group-hover:scale-110 transition-transform" size={24} />
                     </button>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-                    <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><Activity size={16}/> Métricas Rápidas</h3>
+                    <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><Activity size={16} /> Métricas Rápidas</h3>
                     <div className="grid grid-cols-2 gap-3">
                         {/* Candidatos Procesados Hoy */}
                         <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
                             <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Procesados Hoy</p>
                             <p className="text-2xl font-bold text-white">{candidatosHoy}</p>
                         </div>
-                        
+
                         {/* Tasa Explorar → Gestión */}
                         <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
                             <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Explorar → Gestión</p>
                             <p className="text-2xl font-bold text-blue-400">{tasaExplorarAGestion}%</p>
                             <p className="text-[9px] text-slate-600 mt-0.5">{stats.interview} de {stats.new}</p>
                         </div>
-                        
+
                         {/* Tasa Gestión → Informe */}
                         <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
                             <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Gestión → Informe</p>
                             <p className="text-2xl font-bold text-emerald-400">{tasaGestionAInforme}%</p>
                             <p className="text-[9px] text-slate-600 mt-0.5">{stats.ready} de {stats.interview}</p>
                         </div>
-                        
+
                         {/* Entrevistas Pendientes */}
                         <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
                             <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Entrevistas Pendientes</p>
                             <p className="text-2xl font-bold text-amber-400">{entrevistasPendientes}</p>
                             <p className="text-[9px] text-slate-600 mt-0.5">sin programar</p>
                         </div>
-                        
+
                         {/* Candidatos Listos para Informes */}
                         <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
                             <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Listos para Informes</p>
                             <p className="text-2xl font-bold text-purple-400">{listosParaInformes}</p>
                             <p className="text-[9px] text-slate-600 mt-0.5">pendientes</p>
                         </div>
-                        
+
                         {/* Form 2 Recibido */}
                         <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
                             <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Form 2 Recibido</p>
                             <p className="text-2xl font-bold text-cyan-400">{form2Recibidos}</p>
                             <p className="text-[9px] text-slate-600 mt-0.5">completados</p>
                         </div>
-                        
+
                         {/* Tiempo Promedio Stage 1 */}
                         <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
                             <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Tiempo Prom. Explorar</p>
                             <p className="text-2xl font-bold text-slate-300">{tiempoPromedioStage1}</p>
                             <p className="text-[9px] text-slate-600 mt-0.5">días</p>
                         </div>
-                        
+
                         {/* Tiempo Promedio Stage 2 */}
                         <div className="bg-slate-950/50 rounded-lg p-3 border border-slate-800/50">
                             <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Tiempo Prom. Gestión</p>
@@ -385,317 +385,310 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-                        <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><Globe size={16}/> Integraciones</h3>
-                        <div className="grid grid-cols-1 gap-3">
-                            {/* Card Zoho Form 1 - Estado dinámico */}
-                            <div className={`p-3 bg-slate-950 rounded-lg border flex items-center gap-3 ${
-                                webhookStatus.zoho_form1?.status === "verde" 
-                                    ? "border-green-500/50" 
-                                    : "border-red-500/50"
+                    <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><Globe size={16} /> Integraciones</h3>
+                    <div className="grid grid-cols-1 gap-3">
+                        {/* Card Zoho Form 1 - Estado dinámico */}
+                        <div className={`p-3 bg-slate-950 rounded-lg border flex items-center gap-3 ${webhookStatus.zoho_form1?.status === "verde"
+                                ? "border-green-500/50"
+                                : "border-red-500/50"
                             }`}>
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                    webhookStatus.zoho_form1?.status === "verde"
-                                        ? "bg-green-500/10 text-green-500"
-                                        : "bg-red-500/10 text-red-500"
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${webhookStatus.zoho_form1?.status === "verde"
+                                    ? "bg-green-500/10 text-green-500"
+                                    : "bg-red-500/10 text-red-500"
                                 }`}>
-                                    <Globe size={16}/>
-                                </div>
-                                <div className="flex-1">
-                                    <p className="text-xs font-bold text-white">Zoho Forms (Form 1)</p>
-                                    <p className={`text-[10px] ${
-                                        webhookStatus.zoho_form1?.status === "verde"
-                                            ? "text-green-400"
-                                            : "text-red-400"
-                                    }`}>
-                                        {webhookStatus.zoho_form1?.status === "verde" ? "Online" : "Error"}
-                                    </p>
-                                    {webhookStatus.zoho_form1?.razon && (
-                                        <p className="text-[9px] text-slate-500 mt-0.5">
-                                            {webhookStatus.zoho_form1.razon}
-                                        </p>
-                                    )}
-                                </div>
+                                <Globe size={16} />
                             </div>
-                            
-                            {/* Card Zoho Form 2 - Estado dinámico */}
-                            <div className={`p-3 bg-slate-950 rounded-lg border flex items-center gap-3 ${
-                                webhookStatus.zoho_form2?.status === "verde" 
-                                    ? "border-green-500/50" 
-                                    : "border-red-500/50"
-                            }`}>
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                    webhookStatus.zoho_form2?.status === "verde"
-                                        ? "bg-green-500/10 text-green-500"
-                                        : "bg-red-500/10 text-red-500"
-                                }`}>
-                                    <Globe size={16}/>
-                                </div>
-                                <div className="flex-1">
-                                    <p className="text-xs font-bold text-white">Zoho Forms (Form 2)</p>
-                                    <p className={`text-[10px] ${
-                                        webhookStatus.zoho_form2?.status === "verde"
-                                            ? "text-green-400"
-                                            : "text-red-400"
+                            <div className="flex-1">
+                                <p className="text-xs font-bold text-white">Zoho Forms (Form 1)</p>
+                                <p className={`text-[10px] ${webhookStatus.zoho_form1?.status === "verde"
+                                        ? "text-green-400"
+                                        : "text-red-400"
                                     }`}>
-                                        {webhookStatus.zoho_form2?.status === "verde" ? "Online" : "Error"}
+                                    {webhookStatus.zoho_form1?.status === "verde" ? "Online" : "Error"}
+                                </p>
+                                {webhookStatus.zoho_form1?.razon && (
+                                    <p className="text-[9px] text-slate-500 mt-0.5">
+                                        {webhookStatus.zoho_form1.razon}
                                     </p>
-                                    {webhookStatus.zoho_form2?.razon && (
-                                        <p className="text-[9px] text-slate-500 mt-0.5">
-                                            {webhookStatus.zoho_form2.razon}
-                                        </p>
-                                    )}
-                                </div>
+                                )}
                             </div>
                         </div>
+
+                        {/* Card Zoho Form 2 - Estado dinámico */}
+                        <div className={`p-3 bg-slate-950 rounded-lg border flex items-center gap-3 ${webhookStatus.zoho_form2?.status === "verde"
+                                ? "border-green-500/50"
+                                : "border-red-500/50"
+                            }`}>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${webhookStatus.zoho_form2?.status === "verde"
+                                    ? "bg-green-500/10 text-green-500"
+                                    : "bg-red-500/10 text-red-500"
+                                }`}>
+                                <Globe size={16} />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-xs font-bold text-white">Zoho Forms (Form 2)</p>
+                                <p className={`text-[10px] ${webhookStatus.zoho_form2?.status === "verde"
+                                        ? "text-green-400"
+                                        : "text-red-400"
+                                    }`}>
+                                    {webhookStatus.zoho_form2?.status === "verde" ? "Online" : "Error"}
+                                </p>
+                                {webhookStatus.zoho_form2?.razon && (
+                                    <p className="text-[9px] text-slate-500 mt-0.5">
+                                        {webhookStatus.zoho_form2.razon}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            </div>
-        );
+        </div>
+    );
+}
+
+// --- LISTA COMPARTIDA DE PUESTOS DISPONIBLES ---
+const PUESTOS_DISPONIBLES = [
+    "Asistente Administrativo Inteligente",
+    "Asistente de Arquitectura",
+    "Asistente de Comunicación Corporativa",
+    "Asistente Financiero y Contable",
+    "Asistente de Marketing Digital",
+    "Asistente para E commerce",
+    "Asistente para Desarrollo Web",
+    "Asistente de Diseño Gráfico",
+    "Asistente de Automatización con IA",
+    "Asistente de Gestión y Calidad",
+    "Asistente de Recursos Humanos",
+    "Asistente de Gestión de Procesos",
+    "Asistente Diseñador/a de Productos e Interiores",
+    "Asistente Técnico/a de Proyectos Acústicos",
+    "Asistente de Atención al Cliente",
+    "Asistente de Ventas y Prospección",
+    "Asistente de Soporte Técnico/TI",
+    "Asistente Valoración Inmobiliaria y Tasación",
+    "Asistente Diseñador UX/UI",
+    "Asistente Desarrollador/a Senior - Magnolia CMS",
+    "Asistente Delineante técnico",
+    "Asistente Ingeniero/a de Caminos",
+    "Asistente de Gestión de Proyectos",
+    "Asistente Virtual Ejecutiva",
+    "Asistente Project Manager",
+    "Asistente de Marketing con Elementor",
+    "Asistente Especialista en Calidad con Power BI",
+    "Asistente Ingeniero Mecatronico/Automatización",
+    "Asistente en Estrategia y Operaciones",
+    "Asistente Financiero",
+    "Asistente Desarrollador/a de Automatizaciones Zoho",
+    "Asistente Aparejador / Arquitecto Técnico",
+    "Asistente Comercial - Remodelaciones, Reformas y Construcción",
+    "Asistente Desarrollador Odoo + Shopify",
+    "Asistente Programador web (Power BI + Integración ERP/CRM",
+    "Asistente de Seguridad y Salud Laboral",
+    "Asistente de Operaciones Comerciales",
+    "Asistente de Comercio Exterior"
+];
+
+// --- NUEVA VISTA: BUSQUEDA Y TRACKING ---
+function SearchView({ candidates, onSelect }) {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedTerm, setDebouncedTerm] = useState('');  //agregado Debounce
+    const [roleFilter, setRoleFilter] = useState('Todos');
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedTerm(searchTerm);
+        }, 300);
+        return () => clearTimeout(timer); // Limpia el timer si el usuario sigue escribiendo
+    }, [searchTerm]);
+
+    // Cerrar dropdown al hacer clic fuera
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (isFilterOpen && !event.target.closest('.filter-dropdown-container')) {
+                setIsFilterOpen(false);
+            }
+        };
+        if (isFilterOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
         }
+    }, [isFilterOpen]);
 
-        // --- LISTA COMPARTIDA DE PUESTOS DISPONIBLES ---
-        const PUESTOS_DISPONIBLES = [
-            "Asistente Administrativo Inteligente",
-            "Asistente de Arquitectura",
-            "Asistente de Comunicación Corporativa",
-            "Asistente Financiero y Contable",
-            "Asistente de Marketing Digital",
-            "Asistente para E commerce",
-            "Asistente para Desarrollo Web",
-            "Asistente de Diseño Gráfico",
-            "Asistente de Automatización con IA",
-            "Asistente de Gestión y Calidad",
-            "Asistente de Recursos Humanos",
-            "Asistente de Gestión de Procesos",
-            "Asistente Diseñador/a de Productos e Interiores",
-            "Asistente Técnico/a de Proyectos Acústicos",
-            "Asistente de Atención al Cliente",
-            "Asistente de Ventas y Prospección",
-            "Asistente de Soporte Técnico/TI",
-            "Asistente Valoración Inmobiliaria y Tasación",
-            "Asistente Diseñador UX/UI",
-            "Asistente Desarrollador/a Senior - Magnolia CMS",
-            "Asistente Delineante técnico",
-            "Asistente Ingeniero/a de Caminos",
-            "Asistente de Gestión de Proyectos",
-            "Asistente Virtual Ejecutiva",
-            "Asistente Project Manager",
-            "Asistente de Marketing con Elementor",
-            "Asistente Especialista en Calidad con Power BI",
-            "Asistente Ingeniero Mecatronico/Automatización",
-            "Asistente en Estrategia y Operaciones",
-            "Asistente Financiero",
-            "Asistente Desarrollador/a de Automatizaciones Zoho",
-            "Asistente Aparejador / Arquitecto Técnico",
-            "Asistente Comercial - Remodelaciones, Reformas y Construcción",
-            "Asistente Desarrollador Odoo + Shopify",
-            "Asistente Programador web (Power BI + Integración ERP/CRM",
-            "Asistente de Seguridad y Salud Laboral",
-            "Asistente de Operaciones Comerciales",
-            "Asistente de Comercio Exterior"
-        ];
+    // 3. Ahora filtramos usando 'debouncedTerm' en lugar de 'searchTerm'
 
-        // --- NUEVA VISTA: BUSQUEDA Y TRACKING ---
-        function SearchView({ candidates, onSelect }) {
-            const [searchTerm, setSearchTerm] = useState('');
-            const [debouncedTerm, setDebouncedTerm] = useState('');  //agregado Debounce
-            const [roleFilter, setRoleFilter] = useState('Todos');
-            const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const results = candidates.filter(c => {
+        const matchesText = c.nombre.toLowerCase().includes(debouncedTerm.toLowerCase()) ||
+            c.email.toLowerCase().includes(debouncedTerm.toLowerCase());
+        const matchesRole = roleFilter === 'Todos' || c.puesto === roleFilter;
+        return matchesText && matchesRole;
+    });
 
-            useEffect(() => {
-                const timer = setTimeout(() => {
-                    setDebouncedTerm(searchTerm);
-                }, 300);
-                return () => clearTimeout(timer); // Limpia el timer si el usuario sigue escribiendo
-            }, [searchTerm]);
+    // Usar todos los puestos disponibles
+    const roles = ['Todos', ...PUESTOS_DISPONIBLES];
 
-            // Cerrar dropdown al hacer clic fuera
-            useEffect(() => {
-                const handleClickOutside = (event) => {
-                    if (isFilterOpen && !event.target.closest('.filter-dropdown-container')) {
-                        setIsFilterOpen(false);
-                    }
-                };
-                if (isFilterOpen) {
-                    document.addEventListener('mousedown', handleClickOutside);
-                    return () => document.removeEventListener('mousedown', handleClickOutside);
-                }
-            }, [isFilterOpen]);
-        
-            // 3. Ahora filtramos usando 'debouncedTerm' en lugar de 'searchTerm'
-           
-            const results = candidates.filter(c => {
-                const matchesText = c.nombre.toLowerCase().includes(debouncedTerm.toLowerCase()) || 
-                                  c.email.toLowerCase().includes(debouncedTerm.toLowerCase());
-                const matchesRole = roleFilter === 'Todos' || c.puesto === roleFilter;
-                return matchesText && matchesRole;
-            });
+    return (
+        <div className="h-full flex flex-col max-w-7xl mx-auto">
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold text-white">Búsqueda y Seguimiento</h1>
+                <p className="text-slate-400 text-sm mt-1">Localiza candidatos y revisa su estado actual.</p>
+            </div>
 
-            // Usar todos los puestos disponibles
-            const roles = ['Todos', ...PUESTOS_DISPONIBLES];
-
-            return (
-                <div className="h-full flex flex-col max-w-7xl mx-auto">
-                    <div className="mb-6">
-                        <h1 className="text-2xl font-bold text-white">Búsqueda y Seguimiento</h1>
-                        <p className="text-slate-400 text-sm mt-1">Localiza candidatos y revisa su estado actual.</p>
-                    </div>
-
-                    <div className="flex gap-4 mb-6 items-stretch">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16}/>
-                            <input 
-                                type="text" 
-                                placeholder="Buscar por nombre o email..." 
-                                className="w-full h-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-white focus:border-blue-500 focus:outline-none"
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                            />
+            <div className="flex gap-4 mb-6 items-stretch">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                    <input
+                        type="text"
+                        placeholder="Buscar por nombre o email..."
+                        className="w-full h-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-white focus:border-blue-500 focus:outline-none"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <div className="relative filter-dropdown-container flex">
+                    <button
+                        onClick={() => setIsFilterOpen(!isFilterOpen)}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-white text-sm hover:border-blue-500 focus:border-blue-500 focus:outline-none transition-colors h-full"
+                    >
+                        <Filter size={16} />
+                        <span className="min-w-[100px] text-left">{roleFilter}</span>
+                        <ChevronDown size={16} className={`transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {isFilterOpen && (
+                        <div className="absolute top-full mt-2 right-0 bg-slate-900 border border-slate-800 rounded-xl shadow-xl z-50 max-h-[300px] overflow-y-auto min-w-[250px]">
+                            {roles.map(r => (
+                                <button
+                                    key={r}
+                                    onClick={() => {
+                                        setRoleFilter(r);
+                                        setIsFilterOpen(false);
+                                    }}
+                                    className={`w-full text-left px-4 py-2.5 text-sm text-white hover:bg-slate-800 transition-colors ${roleFilter === r ? 'bg-blue-500/20 text-blue-400' : ''
+                                        }`}
+                                >
+                                    {r}
+                                </button>
+                            ))}
                         </div>
-                        <div className="relative filter-dropdown-container flex">
-                            <button
-                                onClick={() => setIsFilterOpen(!isFilterOpen)}
-                                className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-white text-sm hover:border-blue-500 focus:border-blue-500 focus:outline-none transition-colors h-full"
-                            >
-                                <Filter size={16} />
-                                <span className="min-w-[100px] text-left">{roleFilter}</span>
-                                <ChevronDown size={16} className={`transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
-                            </button>
-                            {isFilterOpen && (
-                                <div className="absolute top-full mt-2 right-0 bg-slate-900 border border-slate-800 rounded-xl shadow-xl z-50 max-h-[300px] overflow-y-auto min-w-[250px]">
-                                    {roles.map(r => (
-                                        <button
-                                            key={r}
-                                            onClick={() => {
-                                                setRoleFilter(r);
-                                                setIsFilterOpen(false);
-                                            }}
-                                            className={`w-full text-left px-4 py-2.5 text-sm text-white hover:bg-slate-800 transition-colors ${
-                                                roleFilter === r ? 'bg-blue-500/20 text-blue-400' : ''
-                                            }`}
-                                        >
-                                            {r}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    )}
+                </div>
+            </div>
 
-                    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex-1">
-                        <div className="overflow-y-auto h-full">
-                            <table className="w-full text-left">
-                                <thead className="bg-slate-950 text-xs uppercase text-slate-500 sticky top-0 z-10">
-                                    <tr>
-                                        <th className="p-4 font-bold">Candidato</th>
-                                        <th className="p-4 font-bold">Etapa Actual</th>
-                                        <th className="p-4 font-bold">Estado Detallado</th>
-                                        <th className="p-4 font-bold text-right">Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-800">
-                                    {results.map(c => (
-                                        <tr key={c.id} className="hover:bg-slate-800/50 group">
-                                            <td className="p-4">
-                                                <div className="flex items-center gap-3">
-                                                    <Avatar name={c.nombre} size="sm"/>
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <p className="font-bold text-sm text-white">{c.nombre}</p>
-                                                            {/* Badge de Marcadores */}
-                                                            {c.marcadores && c.marcadores.length > 0 && (() => {
-                                                                const primerMarcador = c.marcadores[0];
-                                                                const iconos = {
-                                                                    estrella: { icon: '⭐', bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
-                                                                    redflag: { icon: '🚩', bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
-                                                                    warning: { icon: '⚠️', bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
-                                                                    info: { icon: 'ℹ️', bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' }
-                                                                };
-                                                                const estilo = iconos[primerMarcador.tipo] || iconos.info;
-                                                                return (
-                                                                    <div className="relative group">
-                                                                        <span className={`inline-block px-1.5 py-0.5 ${estilo.bg} ${estilo.text} text-[9px] font-bold rounded shadow-sm whitespace-nowrap border ${estilo.border} cursor-help`}>
-                                                                            {estilo.icon} {c.marcadores.length}
-                                                                        </span>
-                                                                    {/* Tooltip */}
-                                                                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-64">
-                                                                        <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-xl">
-                                                                            <div className="text-xs font-bold text-yellow-400 mb-2">Marcadores:</div>
-                                                                            <div className="space-y-2">
-                                                                                {c.marcadores.map((m, idx) => {
-                                                                                    const iconos = {
-                                                                                        estrella: '⭐',
-                                                                                        redflag: '🚩',
-                                                                                        warning: '⚠️',
-                                                                                        info: 'ℹ️'
-                                                                                    };
-                                                                                    return (
-                                                                                        <div key={idx} className="text-[10px] text-slate-300">
-                                                                                            <span className="text-yellow-400">{iconos[m.tipo] || 'ℹ️'}</span> {m.razon}
-                                                                                            <div className="text-[9px] text-slate-500 mt-0.5">Por: {m.usuario}</div>
-                                                                                        </div>
-                                                                                    );
-                                                                                })}
-                                                                            </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex-1">
+                <div className="overflow-y-auto h-full">
+                    <table className="w-full text-left">
+                        <thead className="bg-slate-950 text-xs uppercase text-slate-500 sticky top-0 z-10">
+                            <tr>
+                                <th className="p-4 font-bold">Candidato</th>
+                                <th className="p-4 font-bold">Etapa Actual</th>
+                                <th className="p-4 font-bold">Estado Detallado</th>
+                                <th className="p-4 font-bold text-right">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                            {results.map(c => (
+                                <tr key={c.id} className="hover:bg-slate-800/50 group">
+                                    <td className="p-4">
+                                        <div className="flex items-center gap-3">
+                                            <Avatar name={c.nombre} size="sm" />
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-bold text-sm text-white">{c.nombre}</p>
+                                                    {/* Badge de Marcadores */}
+                                                    {c.marcadores && c.marcadores.length > 0 && (() => {
+                                                        const primerMarcador = c.marcadores[0];
+                                                        const iconos = {
+                                                            estrella: { icon: '⭐', bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
+                                                            redflag: { icon: '🚩', bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
+                                                            warning: { icon: '⚠️', bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
+                                                            info: { icon: 'ℹ️', bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' }
+                                                        };
+                                                        const estilo = iconos[primerMarcador.tipo] || iconos.info;
+                                                        return (
+                                                            <div className="relative group">
+                                                                <span className={`inline-block px-1.5 py-0.5 ${estilo.bg} ${estilo.text} text-[9px] font-bold rounded shadow-sm whitespace-nowrap border ${estilo.border} cursor-help`}>
+                                                                    {estilo.icon} {c.marcadores.length}
+                                                                </span>
+                                                                {/* Tooltip */}
+                                                                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-64">
+                                                                    <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-xl">
+                                                                        <div className="text-xs font-bold text-yellow-400 mb-2">Marcadores:</div>
+                                                                        <div className="space-y-2">
+                                                                            {c.marcadores.map((m, idx) => {
+                                                                                const iconos = {
+                                                                                    estrella: '⭐',
+                                                                                    redflag: '🚩',
+                                                                                    warning: '⚠️',
+                                                                                    info: 'ℹ️'
+                                                                                };
+                                                                                return (
+                                                                                    <div key={idx} className="text-[10px] text-slate-300">
+                                                                                        <span className="text-yellow-400">{iconos[m.tipo] || 'ℹ️'}</span> {m.razon}
+                                                                                        <div className="text-[9px] text-slate-500 mt-0.5">Por: {m.usuario}</div>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
                                                                         </div>
                                                                     </div>
                                                                 </div>
-                                                            );
-                                                            })()}
-                                                        </div>
-                                                        <p className="text-xs text-slate-500">{c.email}</p>
-                                                    </div>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
-                                            </td>
-                                            <td className="p-4">
-                                                <Badge type={c.stage === 'stage_3' ? 'green' : c.stage === 'trash' ? 'danger' : 'blue'}>
-                                                    {c.stage === 'stage_1' ? 'Explorar' : c.stage === 'stage_2' ? 'Gestión' : c.stage === 'stage_3' ? 'Informes' : 'Papelera'}
-                                                </Badge>
-                                            </td>
-                                            <td className="p-4 text-xs text-slate-400">
-                                                {getStatusLabel(c.status_interno)}
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <Button size="sm" variant="secondary" onClick={() => onSelect(c.id, c)}>
-                                                    Ver Ficha
-                                                </Button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {results.length === 0 && (
-                                        <tr>
-                                            <td colSpan={4} className="p-8 text-center text-slate-500 text-sm">
-                                                No se encontraron resultados.
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                                                <p className="text-xs text-slate-500">{c.email}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="p-4">
+                                        <Badge type={c.stage === 'stage_3' ? 'green' : c.stage === 'trash' ? 'danger' : 'blue'}>
+                                            {c.stage === 'stage_1' ? 'Explorar' : c.stage === 'stage_2' ? 'Gestión' : c.stage === 'stage_3' ? 'Informes' : 'Papelera'}
+                                        </Badge>
+                                    </td>
+                                    <td className="p-4 text-xs text-slate-400">
+                                        {getStatusLabel(c.status_interno)}
+                                    </td>
+                                    <td className="p-4 text-right">
+                                        <Button size="sm" variant="secondary" onClick={() => onSelect(c.id, c)}>
+                                            Ver Ficha
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {results.length === 0 && (
+                                <tr>
+                                    <td colSpan={4} className="p-8 text-center text-slate-500 text-sm">
+                                        No se encontraron resultados.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
-            );
-        }
-        // --- VISTA DE CARGA MANUAL ---
-        function ManualUploadModal({ isOpen, onClose, onUploadSuccess, currentUser }) {
+            </div>
+        </div>
+    );
+}
+// --- VISTA DE CARGA MANUAL ---
+function ManualUploadModal({ isOpen, onClose, onUploadSuccess, currentUser }) {
     const [loading, setLoading] = React.useState(false);
     const [file, setFile] = React.useState(null);
     const [step, setStep] = React.useState(1); // 1 = analizar, 2 = confirmar
     const [puesto, setPuesto] = React.useState("");
     const [nombreExtraido, setNombreExtraido] = React.useState("");
     const [emailExtraido, setEmailExtraido] = React.useState("");
-    
+
     // Estados para datos clave
     const [salario, setSalario] = React.useState('');
     const [monitoreo, setMonitoreo] = React.useState('');
     const [disponibilidad, setDisponibilidad] = React.useState('');
     const [herramientas, setHerramientas] = React.useState('');
-    
+
     // Usar la lista compartida de puestos disponibles
     const puestosDisponibles = PUESTOS_DISPONIBLES;
-    
+
     if (!isOpen) return null;
 
     // Paso 1: Analizar CV con IA
@@ -705,11 +698,11 @@
             alert("❌ Por favor selecciona un puesto y sube el CV");
             return;
         }
-        
+
         setLoading(true);
         const formData = new FormData();
         formData.append('cv', file);
-        
+
         const result = await api.candidates.analizarCV(formData);
         if (result.ok) {
             setNombreExtraido(result.nombre || "");
@@ -728,7 +721,7 @@
             alert("❌ El email es obligatorio");
             return;
         }
-        
+
         setLoading(true);
         const formData = new FormData();
         formData.append('cv', file);
@@ -736,13 +729,13 @@
         formData.append('nombre', nombreExtraido);
         formData.append('email', emailExtraido.trim());
         formData.append('usuario_accion', currentUser || 'Sistema');
-        
+
         // Agregar datos clave
         formData.append('salario', salario);
         formData.append('monitoreo', monitoreo);
         formData.append('disponibilidad', disponibilidad);
         formData.append('herramientas', herramientas);
-        
+
         const result = await api.candidates.manualUpload(formData);
         if (result.ok || result.id) {
             alert("✅ Candidato cargado y analizado con éxito");
@@ -782,14 +775,14 @@
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-2xl max-h-[90vh] shadow-2xl animate-in zoom-in duration-200 flex flex-col">
                 <h2 className="text-xl font-bold text-white mb-4">Carga Manual de Candidato</h2>
-                
+
                 {step === 1 ? (
                     // PASO 1: Seleccionar puesto y subir CV
                     <form onSubmit={handleAnalizar} className="space-y-4">
                         <div>
                             <label className="block text-sm text-slate-400 mb-2">Puesto Objetivo</label>
-                            <select 
-                                value={puesto} 
+                            <select
+                                value={puesto}
                                 onChange={e => setPuesto(e.target.value)}
                                 required
                                 className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500"
@@ -801,12 +794,12 @@
                             </select>
                         </div>
                         <div className="border-2 border-dashed border-slate-800 rounded-xl p-4 text-center">
-                            <input 
-                                type="file" 
-                                accept=".pdf" 
-                                required 
-                                onChange={e => setFile(e.target.files[0])} 
-                                className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500" 
+                            <input
+                                type="file"
+                                accept=".pdf"
+                                required
+                                onChange={e => setFile(e.target.files[0])}
+                                className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500"
                             />
                         </div>
                         <div className="flex gap-3 mt-6">
@@ -822,77 +815,77 @@
                         <div className="flex-1 overflow-y-auto space-y-4 pr-2">
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Nombre Completo</label>
-                                <input 
-                                    type="text" 
-                                    value={nombreExtraido} 
+                                <input
+                                    type="text"
+                                    value={nombreExtraido}
                                     onChange={e => setNombreExtraido(e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500"
                                     placeholder="Nombre Completo"
                                 />
                             </div>
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Email <span className="text-yellow-400">* Este es el ID del candidato, presta atención</span></label>
-                                <input 
-                                    type="email" 
-                                    value={emailExtraido} 
+                                <input
+                                    type="email"
+                                    value={emailExtraido}
                                     onChange={e => setEmailExtraido(e.target.value)}
                                     required
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500"
                                     placeholder="Email"
                                 />
                             </div>
                             <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-xs text-blue-400">
                                 <strong>Puesto seleccionado:</strong> {puesto}
                             </div>
-                            
+
                             {/* Datos Clave */}
                             <div className="border-t border-slate-800 pt-4">
                                 <h3 className="text-sm font-bold text-white mb-3">Datos Clave</h3>
                                 <div className="space-y-3">
                                     <div>
                                         <label className="block text-xs text-slate-400 mb-1">Salario</label>
-                                        <input 
-                                            type="text" 
-                                            value={salario} 
+                                        <input
+                                            type="text"
+                                            value={salario}
                                             onChange={e => setSalario(e.target.value)}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500"
                                             placeholder="Ej: 100-800$"
                                         />
                                     </div>
                                     <div>
                                         <label className="block text-xs text-slate-400 mb-1">Monitoreo</label>
-                                        <input 
-                                            type="text" 
-                                            value={monitoreo} 
+                                        <input
+                                            type="text"
+                                            value={monitoreo}
                                             onChange={e => setMonitoreo(e.target.value)}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500"
                                             placeholder="Ej: Si, No"
                                         />
                                     </div>
                                     <div>
                                         <label className="block text-xs text-slate-400 mb-1">Disponibilidad</label>
-                                        <input 
-                                            type="text" 
-                                            value={disponibilidad} 
+                                        <input
+                                            type="text"
+                                            value={disponibilidad}
                                             onChange={e => setDisponibilidad(e.target.value)}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500"
                                             placeholder="Ej: Inmediata"
                                         />
                                     </div>
                                     <div>
                                         <label className="block text-xs text-slate-400 mb-1">Herramientas (separar con coma)</label>
-                                        <input 
-                                            type="text" 
-                                            value={herramientas} 
+                                        <input
+                                            type="text"
+                                            value={herramientas}
                                             onChange={e => setHerramientas(e.target.value)}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500" 
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm outline-none focus:border-blue-500"
                                             placeholder="Ej: React, Node.js, MongoDB"
                                         />
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div className="flex gap-3 mt-6 pt-4 border-t border-slate-800">
                             <button type="button" onClick={() => setStep(1)} className="flex-1 px-4 py-2 bg-slate-800 text-slate-400 rounded-lg text-sm font-bold">Volver</button>
                             <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold disabled:opacity-50">
@@ -906,7 +899,7 @@
     );
 }
 
-        // --- VISTA EXPLORAR TALENTO (CORREGIDA) ---
+// --- VISTA EXPLORAR TALENTO (CORREGIDA) ---
 function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
     const [filter, setFilter] = useState('');
     const [debouncedFilter, setDebouncedFilter] = useState('');
@@ -973,15 +966,15 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
     // Función para cargar más candidatos
     const cargarMas = async () => {
         if (loadingMore || !hasMore || !lastDoc) return;
-        
+
         setLoadingMore(true);
         try {
-            const data = await api.candidates.list({ 
-                limit: 100, 
+            const data = await api.candidates.list({
+                limit: 100,
                 startAfter: lastDoc,
                 q: debouncedFilter || undefined
             });
-            
+
             const nuevosCandidatos = data.candidatos || [];
             setAllCandidates(prev => [...prev, ...nuevosCandidatos]);
             setHasMore(data.hasMore || false);
@@ -992,11 +985,11 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
             setLoadingMore(false);
         }
     };
-    
+
     // Resetear paginación cuando cambia el filtro de búsqueda
     useEffect(() => {
         const termino = debouncedFilter.trim();
-        
+
         if (termino) {
             // Si hay búsqueda, buscar en el backend
             setIsSearching(true);
@@ -1014,7 +1007,7 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
         } else {
             // Si se borró la búsqueda, restaurar candidatos originales
             setIsSearching(false);
-            
+
             // Si tenemos candidatos originales guardados, restaurarlos
             if (originalCandidates.length > 0) {
                 setAllCandidates(originalCandidates);
@@ -1044,9 +1037,9 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
         }
     }, [debouncedFilter]); // Solo depende de debouncedFilter
 
-    
 
-    
+
+
 
 
     // --- HELPERS INTERNOS (CORREGIDOS PARA FIREBASE) ---
@@ -1067,43 +1060,43 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
     const isToday = (iso) => {
         const d = parseFirebaseDate(iso);
         if (!d || isNaN(d.getTime())) return false;
-        
+
         const today = new Date();
-        return d.getDate() === today.getDate() && 
-               d.getMonth() === today.getMonth() && 
-               d.getFullYear() === today.getFullYear();
+        return d.getDate() === today.getDate() &&
+            d.getMonth() === today.getMonth() &&
+            d.getFullYear() === today.getFullYear();
     };
-    
+
     // 1. Ordenamiento Seguro (Nuevos arriba)
     const sortedCandidates = [...allCandidates].sort((a, b) => {
         const dateA = parseFirebaseDate(a.fecha) || new Date(0);
         const dateB = parseFirebaseDate(b.fecha) || new Date(0);
         return dateB - dateA;
     });
-    
+
     // 2. Filtrado (ÚNICA DECLARACIÓN) - Busca por nombre, email y puesto
     const filtered = sortedCandidates.filter(c => {
         if (c.stage !== 'stage_1') return false;
-        
+
         // Filtro por puesto
         const matchesRole = roleFilter === 'Todos' || c.puesto === roleFilter;
         if (!matchesRole) return false;
-        
+
         // Filtro de búsqueda de texto
         if (!debouncedFilter.trim()) return true; // Si no hay filtro, mostrar todos
-        
+
         const termino = debouncedFilter.toLowerCase().trim();
         const nombreMatch = c.nombre?.toLowerCase().includes(termino) || false;
         const emailMatch = c.email?.toLowerCase().includes(termino) || false;
         const puestoMatch = c.puesto?.toLowerCase().includes(termino) || false;
-        
+
         return nombreMatch || emailMatch || puestoMatch;
     });
 
     // Usar todos los puestos disponibles
     const roles = ['Todos', ...PUESTOS_DISPONIBLES];
 
-    
+
 
     return (
         <div className="h-full flex flex-col max-w-7xl mx-auto px-4 pb-0">
@@ -1111,22 +1104,22 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
                 <div>
                     <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                        Explorar Talento 
+                        Explorar Talento
                         <span className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-800 text-blue-400 text-sm font-bold border border-slate-700">
                             {filtered.length}
                         </span>
                     </h1>
                     <p className="text-slate-400 text-sm mt-2">Revisa los perfiles ingresados recientemente.</p>
                 </div>
-                
+
                 <div className="flex gap-3 w-full md:w-auto items-stretch">
                     <div className="relative group flex-1 md:w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16}/>
-                        <input 
-                            type="text" 
-                            placeholder="Buscar..." 
-                            value={filter} 
-                            onChange={(e) => setFilter(e.target.value)} 
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Buscar..."
+                            value={filter}
+                            onChange={(e) => setFilter(e.target.value)}
                             className="w-full h-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-300 focus:border-blue-500 focus:outline-none transition-all placeholder-slate-600"
                         />
                     </div>
@@ -1148,9 +1141,8 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
                                             setRoleFilter(r);
                                             setIsFilterOpen(false);
                                         }}
-                                        className={`w-full text-left px-4 py-2.5 text-sm text-white hover:bg-slate-800 transition-colors ${
-                                            roleFilter === r ? 'bg-blue-500/20 text-blue-400' : ''
-                                        }`}
+                                        className={`w-full text-left px-4 py-2.5 text-sm text-white hover:bg-slate-800 transition-colors ${roleFilter === r ? 'bg-blue-500/20 text-blue-400' : ''
+                                            }`}
                                     >
                                         {r}
                                     </button>
@@ -1159,12 +1151,12 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
                         )}
                     </div>
                     {/* BOTÓN ESTILIZADO CON ICONO */}
-                    <button 
+                    <button
                         onClick={onAddClick}
                         className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all shadow-lg shadow-blue-900/20 flex items-center gap-2 whitespace-nowrap active:scale-95"
                     >
                         <UserPlus size={22} />
-                        
+
                     </button>
                 </div>
             </div>
@@ -1205,126 +1197,125 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-800">
-                                {filtered.map(c => (
-                                    <tr 
-                                        key={c.id} 
-                                        onClick={() => onSelect(c.id, c)}
-                                        className="hover:bg-slate-800/30 cursor-pointer transition-colors group"
-                                    >
-                                        <td className="p-4">
-                                            <div className="flex items-center gap-3">
-                                                <Avatar name={normalizarNombre(c.nombre)} size="sm"/>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <p className="font-bold text-sm text-white group-hover:text-blue-400 transition-colors truncate">
-                                                            {normalizarNombre(c.nombre) || "Sin Nombre"}
-                                                        </p>
-                                                        {/* Badges inline */}
-                                                        {isToday(c.fecha) && c.status_interno === 'new' && (
-                                                            <span className="inline-block px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded shadow-sm animate-pulse whitespace-nowrap">
-                                                                NUEVO
-                                                            </span>
-                                                        )}
-                                                        {(c.origen === "carga_manual" || c.origen === "manual") && (
-                                                            <span className="inline-block px-1.5 py-0.5 bg-purple-600 text-white text-[9px] font-bold rounded shadow-sm whitespace-nowrap">
-                                                                MANUAL
-                                                            </span>
-                                                        )}
-                                                        {/* Badge de Marcadores */}
-                                                        {c.marcadores && c.marcadores.length > 0 && (() => {
-                                                            const primerMarcador = c.marcadores[0];
-                                                            const iconos = {
-                                                                estrella: { icon: '⭐', bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
-                                                                redflag: { icon: '🚩', bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
-                                                                warning: { icon: '⚠️', bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
-                                                                info: { icon: 'ℹ️', bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' }
-                                                            };
-                                                            const estilo = iconos[primerMarcador.tipo] || iconos.info;
-                                                            return (
-                                                                <div className="relative group">
-                                                                    <span className={`inline-block px-1.5 py-0.5 ${estilo.bg} ${estilo.text} text-[9px] font-bold rounded shadow-sm whitespace-nowrap border ${estilo.border} cursor-help`}>
-                                                                        {estilo.icon} {c.marcadores.length}
-                                                                    </span>
-                                                                {/* Tooltip */}
-                                                                <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-64">
-                                                                    <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-xl">
-                                                                        <div className="text-xs font-bold text-yellow-400 mb-2">Marcadores:</div>
-                                                                        <div className="space-y-2">
-                                                                            {c.marcadores.map((m, idx) => {
-                                                                                const iconos = {
-                                                                                    estrella: '⭐',
-                                                                                    redflag: '🚩',
-                                                                                    warning: '⚠️',
-                                                                                    info: 'ℹ️'
-                                                                                };
-                                                                                return (
-                                                                                    <div key={idx} className="text-[10px] text-slate-300">
-                                                                                        <span className="text-yellow-400">{iconos[m.tipo] || 'ℹ️'}</span> {m.razon}
-                                                                                        <div className="text-[9px] text-slate-500 mt-0.5">Por: {m.usuario}</div>
-                                                                                    </div>
-                                                                                );
-                                                                            })}
+                                    {filtered.map(c => (
+                                        <tr
+                                            key={c.id}
+                                            onClick={() => onSelect(c.id, c)}
+                                            className="hover:bg-slate-800/30 cursor-pointer transition-colors group"
+                                        >
+                                            <td className="p-4">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar name={normalizarNombre(c.nombre)} size="sm" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <p className="font-bold text-sm text-white group-hover:text-blue-400 transition-colors truncate">
+                                                                {normalizarNombre(c.nombre) || "Sin Nombre"}
+                                                            </p>
+                                                            {/* Badges inline */}
+                                                            {isToday(c.fecha) && c.status_interno === 'new' && (
+                                                                <span className="inline-block px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded shadow-sm animate-pulse whitespace-nowrap">
+                                                                    NUEVO
+                                                                </span>
+                                                            )}
+                                                            {(c.origen === "carga_manual" || c.origen === "manual") && (
+                                                                <span className="inline-block px-1.5 py-0.5 bg-purple-600 text-white text-[9px] font-bold rounded shadow-sm whitespace-nowrap">
+                                                                    MANUAL
+                                                                </span>
+                                                            )}
+                                                            {/* Badge de Marcadores */}
+                                                            {c.marcadores && c.marcadores.length > 0 && (() => {
+                                                                const primerMarcador = c.marcadores[0];
+                                                                const iconos = {
+                                                                    estrella: { icon: '⭐', bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
+                                                                    redflag: { icon: '🚩', bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
+                                                                    warning: { icon: '⚠️', bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
+                                                                    info: { icon: 'ℹ️', bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' }
+                                                                };
+                                                                const estilo = iconos[primerMarcador.tipo] || iconos.info;
+                                                                return (
+                                                                    <div className="relative group">
+                                                                        <span className={`inline-block px-1.5 py-0.5 ${estilo.bg} ${estilo.text} text-[9px] font-bold rounded shadow-sm whitespace-nowrap border ${estilo.border} cursor-help`}>
+                                                                            {estilo.icon} {c.marcadores.length}
+                                                                        </span>
+                                                                        {/* Tooltip */}
+                                                                        <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-64">
+                                                                            <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-xl">
+                                                                                <div className="text-xs font-bold text-yellow-400 mb-2">Marcadores:</div>
+                                                                                <div className="space-y-2">
+                                                                                    {c.marcadores.map((m, idx) => {
+                                                                                        const iconos = {
+                                                                                            estrella: '⭐',
+                                                                                            redflag: '🚩',
+                                                                                            warning: '⚠️',
+                                                                                            info: 'ℹ️'
+                                                                                        };
+                                                                                        return (
+                                                                                            <div key={idx} className="text-[10px] text-slate-300">
+                                                                                                <span className="text-yellow-400">{iconos[m.tipo] || 'ℹ️'}</span> {m.razon}
+                                                                                                <div className="text-[9px] text-slate-500 mt-0.5">Por: {m.usuario}</div>
+                                                                                            </div>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
-                                                                </div>
-                                                            </div>
-                                                            );
+                                                                );
                                                             })()}
+                                                        </div>
+                                                        <p className="text-xs text-slate-500 truncate">{c.email || "S/E"}</p>
                                                     </div>
-                                                    <p className="text-xs text-slate-500 truncate">{c.email || "S/E"}</p>
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td className="p-4">
-                                            <span className="text-xs font-medium text-blue-400">
-                                                {c.puesto || "Candidatura General"}
-                                            </span>
-                                        </td>
-                                        <td className="p-4 text-center">
-                                            <div className={`inline-flex items-center justify-center px-2.5 py-1 rounded border ${
-                                                (c.ia_score || 0) >= 90 
-                                                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                                                : (c.ia_score || 0) >= 70
-                                                ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                                                : 'bg-slate-800/50 border-slate-700 text-slate-400'
-                                            }`}>
-                                                <span className="text-xs font-bold">{c.ia_score || 0}</span>
-                                            </div>
-                                        </td>
-                                        <td className="p-4">
-                                            <span className="text-xs text-slate-500 font-medium">
-                                                {simpleDate(c.fecha)}
-                                            </span>
-                                        </td>
-                                        <td className="p-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                {/* Botón abrir en nueva pestaña */}
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        window.open(`${window.location.pathname}?candidato=${c.id}`, '_blank');
-                                                    }}
-                                                    title="Abrir en nueva pestaña"
-                                                    className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors text-slate-500 hover:text-slate-300"
-                                                >
-                                                    <ExternalLink size={14} />
-                                                </button>
-                                                {/* Botón ver ficha */}
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onSelect(c.id, c);
-                                                    }}
-                                                    className="px-3 py-1.5 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 hover:border-blue-500/50 text-blue-400 hover:text-blue-300 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 group shadow-sm hover:shadow-blue-500/20"
-                                                >
-                                                    <Eye size={14} className="group-hover:scale-110 transition-transform"/>
-                                                    Ver
-                                                    <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform"/>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td className="p-4">
+                                                <span className="text-xs font-medium text-blue-400">
+                                                    {c.puesto || "Candidatura General"}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-center">
+                                                <div className={`inline-flex items-center justify-center px-2.5 py-1 rounded border ${(c.ia_score || 0) >= 90
+                                                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                                        : (c.ia_score || 0) >= 70
+                                                            ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                                                            : 'bg-slate-800/50 border-slate-700 text-slate-400'
+                                                    }`}>
+                                                    <span className="text-xs font-bold">{c.ia_score || 0}</span>
+                                                </div>
+                                            </td>
+                                            <td className="p-4">
+                                                <span className="text-xs text-slate-500 font-medium">
+                                                    {simpleDate(c.fecha)}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {/* Botón abrir en nueva pestaña */}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            window.open(`${window.location.pathname}?candidato=${c.id}`, '_blank');
+                                                        }}
+                                                        title="Abrir en nueva pestaña"
+                                                        className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors text-slate-500 hover:text-slate-300"
+                                                    >
+                                                        <ExternalLink size={14} />
+                                                    </button>
+                                                    {/* Botón ver ficha */}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onSelect(c.id, c);
+                                                        }}
+                                                        className="px-3 py-1.5 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 hover:border-blue-500/50 text-blue-400 hover:text-blue-300 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 group shadow-sm hover:shadow-blue-500/20"
+                                                    >
+                                                        <Eye size={14} className="group-hover:scale-110 transition-transform" />
+                                                        Ver
+                                                        <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
@@ -1338,7 +1329,7 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
                                 >
                                     {loadingMore ? (
                                         <>
-                                            <Loader2 size={16} className="animate-spin"/> Cargando...
+                                            <Loader2 size={16} className="animate-spin" /> Cargando...
                                         </>
                                     ) : (
                                         <>
@@ -1358,14 +1349,14 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
 
 function ManageView({ candidates, onSelect, currentUser }) {
     const stage2 = candidates.filter(c => c.stage === 'stage_2');
-    
+
     // 🔧 FUNCIÓN PARA DETERMINAR ESTADO REAL DEL CANDIDATO (Dinámico)
     const getEstadoReal = (candidato) => {
         // Prioridad 1: Si está calificado y listo para informe
         if (candidato.process_step_3_result === 'qualified') {
             return { label: 'Calificado', type: 'success' };
         }
-        
+
         // Prioridad 2: Si tiene transcripción analizada
         if (candidato.transcripcion_entrevista) {
             // Si además tiene Form2 recibido
@@ -1379,29 +1370,29 @@ function ManageView({ candidates, onSelect, currentUser }) {
             // Solo tiene entrevista realizada
             return { label: 'Entrevista Realizada', type: 'success' };
         }
-        
+
         // Prioridad 3: Si tiene Form2 recibido pero no entrevista
         if (candidato.process_step_2_form === 'received' || candidato.skip_form2) {
             return { label: 'Form2 Recibido', type: 'blue' }; // Azul
         }
-        
+
         // Prioridad 4: Si tiene Form2 enviado
         if (candidato.process_step_2_form === 'sent') {
             return { label: 'Esperando Form2', type: 'warning' }; // Amarillo
         }
-        
+
         // Prioridad 5: Si tiene meet_link (entrevista agendada)
         if (candidato.meet_link) {
             return { label: 'Entrevista Agendada', type: 'purple' }; // Lila
         }
-        
+
         // Prioridad 6: Estado por defecto según status_interno (Pendiente Entrevista)
-        return { 
-            label: getStatusLabel(candidato.status_interno), 
+        return {
+            label: getStatusLabel(candidato.status_interno),
             type: 'orange' // Naranja
         };
     };
-    
+
     return (
         <div className="h-full flex flex-col max-w-7xl mx-auto px-4">
             <div className="mb-6">
@@ -1448,30 +1439,30 @@ function ManageView({ candidates, onSelect, currentUser }) {
                                                                         <span className={`inline-block px-1.5 py-0.5 ${estilo.bg} ${estilo.text} text-[9px] font-bold rounded shadow-sm whitespace-nowrap border ${estilo.border} cursor-help`}>
                                                                             {estilo.icon} {c.marcadores.length}
                                                                         </span>
-                                                                    {/* Tooltip */}
-                                                                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-64">
-                                                                        <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-xl">
-                                                                            <div className="text-xs font-bold text-yellow-400 mb-2">Marcadores:</div>
-                                                                            <div className="space-y-2">
-                                                                                {c.marcadores.map((m, idx) => {
-                                                                                    const iconos = {
-                                                                                        estrella: '⭐',
-                                                                                        redflag: '🚩',
-                                                                                        warning: '⚠️',
-                                                                                        info: 'ℹ️'
-                                                                                    };
-                                                                                    return (
-                                                                                        <div key={idx} className="text-[10px] text-slate-300">
-                                                                                            <span className="text-yellow-400">{iconos[m.tipo] || 'ℹ️'}</span> {m.razon}
-                                                                                            <div className="text-[9px] text-slate-500 mt-0.5">Por: {m.usuario}</div>
-                                                                                        </div>
-                                                                                    );
-                                                                                })}
+                                                                        {/* Tooltip */}
+                                                                        <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-64">
+                                                                            <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-xl">
+                                                                                <div className="text-xs font-bold text-yellow-400 mb-2">Marcadores:</div>
+                                                                                <div className="space-y-2">
+                                                                                    {c.marcadores.map((m, idx) => {
+                                                                                        const iconos = {
+                                                                                            estrella: '⭐',
+                                                                                            redflag: '🚩',
+                                                                                            warning: '⚠️',
+                                                                                            info: 'ℹ️'
+                                                                                        };
+                                                                                        return (
+                                                                                            <div key={idx} className="text-[10px] text-slate-300">
+                                                                                                <span className="text-yellow-400">{iconos[m.tipo] || 'ℹ️'}</span> {m.razon}
+                                                                                                <div className="text-[9px] text-slate-500 mt-0.5">Por: {m.usuario}</div>
+                                                                                            </div>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
                                                                             </div>
                                                                         </div>
                                                                     </div>
-                                                                </div>
-                                                            );
+                                                                );
                                                             })()}
                                                         </div>
                                                         <p className="text-[10px] text-slate-500">{c.email}</p>
@@ -1483,7 +1474,7 @@ function ManageView({ candidates, onSelect, currentUser }) {
                                             <td className="px-6 py-3">
                                                 {c.assignedTo ? (
                                                     <div className="flex items-center gap-2">
-                                                        <Avatar name={c.assignedTo} size="sm"/>
+                                                        <Avatar name={c.assignedTo} size="sm" />
                                                         <span className={`text-xs ${c.assignedTo === currentUser ? 'text-blue-400 font-bold' : 'text-slate-500'}`}>
                                                             {c.assignedTo}
                                                         </span>
@@ -1492,7 +1483,7 @@ function ManageView({ candidates, onSelect, currentUser }) {
                                             </td>
                                             <td className="px-6 py-3 text-right">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <button 
+                                                    <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             window.open(`${window.location.pathname}?candidato=${c.id}`, '_blank');
@@ -1502,7 +1493,7 @@ function ManageView({ candidates, onSelect, currentUser }) {
                                                     >
                                                         <ExternalLink size={14} />
                                                     </button>
-                                                    <ChevronRight size={16} className="text-slate-600 group-hover:text-white transition-transform group-hover:translate-x-1"/>
+                                                    <ChevronRight size={16} className="text-slate-600 group-hover:text-white transition-transform group-hover:translate-x-1" />
                                                 </div>
                                             </td>
                                         </tr>
@@ -1528,7 +1519,7 @@ function ManageView({ candidates, onSelect, currentUser }) {
 function TrashView({ candidates, onUpdate, onRefresh }) {
     // Filtramos solo los que están en 'trash'
     const discarded = candidates.filter(c => c.stage === 'trash');
-    
+
     // Recargar candidatos cuando se entra a la vista de papelera
     React.useEffect(() => {
         if (onRefresh) {
@@ -1558,93 +1549,93 @@ function TrashView({ candidates, onUpdate, onRefresh }) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/50">
-                        {discarded.length === 0 ? (
-                            <tr>
-                                <td colSpan="3" className="p-8 text-center text-slate-500 italic">
-                                    La papelera está vacía.
-                                </td>
-                            </tr>
-                        ) : (
-                            discarded.map(c => (
-                                <tr key={c.id} className="hover:bg-slate-800/30 transition-colors group">
-                                    <td className="px-6 py-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-xs">
-                                                {c.nombre.charAt(0)}
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-bold text-slate-300 text-sm block">{c.nombre}</span>
-                                                    {/* Badge de Marcadores */}
-                                                    {c.marcadores && c.marcadores.length > 0 && (() => {
-                                                        const primerMarcador = c.marcadores[0];
-                                                        const iconos = {
-                                                            estrella: { icon: '⭐', bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
-                                                            redflag: { icon: '🚩', bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
-                                                            warning: { icon: '⚠️', bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
-                                                            info: { icon: 'ℹ️', bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' }
-                                                        };
-                                                        const estilo = iconos[primerMarcador.tipo] || iconos.info;
-                                                        return (
-                                                            <div className="relative group">
-                                                                <span className={`inline-block px-1.5 py-0.5 ${estilo.bg} ${estilo.text} text-[9px] font-bold rounded shadow-sm whitespace-nowrap border ${estilo.border} cursor-help`}>
-                                                                    {estilo.icon} {c.marcadores.length}
-                                                                </span>
-                                                            {/* Tooltip */}
-                                                            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-64">
-                                                                <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-xl">
-                                                                    <div className="text-xs font-bold text-yellow-400 mb-2">Marcadores:</div>
-                                                                    <div className="space-y-2">
-                                                                        {c.marcadores.map((m, idx) => {
-                                                                            const iconos = {
-                                                                                estrella: '⭐',
-                                                                                redflag: '🚩',
-                                                                                warning: '⚠️',
-                                                                                info: 'ℹ️'
-                                                                            };
-                                                                            return (
-                                                                                <div key={idx} className="text-[10px] text-slate-300">
-                                                                                    <span className="text-yellow-400">{iconos[m.tipo] || 'ℹ️'}</span> {m.razon}
-                                                                                    <div className="text-[9px] text-slate-500 mt-0.5">Por: {m.usuario}</div>
-                                                                                </div>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                    })()}
-                                                </div>
-                                                <span className="text-[10px] text-slate-500">{c.puesto}</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-3">
-                                        <span className="text-xs text-rose-300 bg-rose-900/10 px-2 py-1 rounded border border-rose-900/20">
-                                            {c.notes || c.motivo || "Sin motivo especificado"}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-3 text-right">
-                                        <button 
-                                            onClick={async () => {
-                                                if(confirm(`¿Restaurar a ${c.nombre} a la etapa de Exploración?`)) {
-                                                    await onUpdate(c.id, { stage: 'stage_1', status_interno: 'viewed', notes: "" });
-                                                    // Recargar después de restaurar para actualizar la vista
-                                                    if (onRefresh) {
-                                                        setTimeout(() => onRefresh(), 500);
-                                                    }
-                                                }
-                                            }}
-                                            className="text-xs font-bold text-emerald-500 hover:text-emerald-400 border border-emerald-900/30 bg-emerald-900/10 px-3 py-1.5 rounded hover:bg-emerald-900/20 transition-all"
-                                        >
-                                            <Undo2 size={14} className="inline mr-1"/> RESTAURAR
-                                        </button>
+                            {discarded.length === 0 ? (
+                                <tr>
+                                    <td colSpan="3" className="p-8 text-center text-slate-500 italic">
+                                        La papelera está vacía.
                                     </td>
                                 </tr>
-                            ))
-                        )}
-                    </tbody>
+                            ) : (
+                                discarded.map(c => (
+                                    <tr key={c.id} className="hover:bg-slate-800/30 transition-colors group">
+                                        <td className="px-6 py-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-xs">
+                                                    {c.nombre.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-slate-300 text-sm block">{c.nombre}</span>
+                                                        {/* Badge de Marcadores */}
+                                                        {c.marcadores && c.marcadores.length > 0 && (() => {
+                                                            const primerMarcador = c.marcadores[0];
+                                                            const iconos = {
+                                                                estrella: { icon: '⭐', bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
+                                                                redflag: { icon: '🚩', bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
+                                                                warning: { icon: '⚠️', bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
+                                                                info: { icon: 'ℹ️', bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' }
+                                                            };
+                                                            const estilo = iconos[primerMarcador.tipo] || iconos.info;
+                                                            return (
+                                                                <div className="relative group">
+                                                                    <span className={`inline-block px-1.5 py-0.5 ${estilo.bg} ${estilo.text} text-[9px] font-bold rounded shadow-sm whitespace-nowrap border ${estilo.border} cursor-help`}>
+                                                                        {estilo.icon} {c.marcadores.length}
+                                                                    </span>
+                                                                    {/* Tooltip */}
+                                                                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50 w-64">
+                                                                        <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 shadow-xl">
+                                                                            <div className="text-xs font-bold text-yellow-400 mb-2">Marcadores:</div>
+                                                                            <div className="space-y-2">
+                                                                                {c.marcadores.map((m, idx) => {
+                                                                                    const iconos = {
+                                                                                        estrella: '⭐',
+                                                                                        redflag: '🚩',
+                                                                                        warning: '⚠️',
+                                                                                        info: 'ℹ️'
+                                                                                    };
+                                                                                    return (
+                                                                                        <div key={idx} className="text-[10px] text-slate-300">
+                                                                                            <span className="text-yellow-400">{iconos[m.tipo] || 'ℹ️'}</span> {m.razon}
+                                                                                            <div className="text-[9px] text-slate-500 mt-0.5">Por: {m.usuario}</div>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                    <span className="text-[10px] text-slate-500">{c.puesto}</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3">
+                                            <span className="text-xs text-rose-300 bg-rose-900/10 px-2 py-1 rounded border border-rose-900/20">
+                                                {c.notes || c.motivo || "Sin motivo especificado"}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-3 text-right">
+                                            <button
+                                                onClick={async () => {
+                                                    if (confirm(`¿Restaurar a ${c.nombre} a la etapa de Exploración?`)) {
+                                                        await onUpdate(c.id, { stage: 'stage_1', status_interno: 'viewed', notes: "" });
+                                                        // Recargar después de restaurar para actualizar la vista
+                                                        if (onRefresh) {
+                                                            setTimeout(() => onRefresh(), 500);
+                                                        }
+                                                    }
+                                                }}
+                                                className="text-xs font-bold text-emerald-500 hover:text-emerald-400 border border-emerald-900/30 bg-emerald-900/10 px-3 py-1.5 rounded hover:bg-emerald-900/20 transition-all"
+                                            >
+                                                <Undo2 size={14} className="inline mr-1" /> RESTAURAR
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
                     </table>
                 </div>
             </div>
@@ -1721,8 +1712,8 @@ const ProfessionalReport = ({ data, onBack, onEdit }) => {
             margin: [10, 10, 10, 10],
             filename: `Informe_${data.nombre.replace(/\s+/g, '_')}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { 
-                scale: 2, 
+            html2canvas: {
+                scale: 2,
                 useCORS: true,
                 logging: false,
                 letterRendering: true
@@ -1749,7 +1740,7 @@ const ProfessionalReport = ({ data, onBack, onEdit }) => {
 
     return (
         <div className="flex flex-col min-h-screen w-full bg-slate-900">
-            
+
             {/* --- BARRA SUPERIOR FIJA --- */}
             <div className="flex justify-between items-center px-8 py-4 bg-slate-800 border-b border-slate-700 shadow-md sticky top-0 z-50">
                 <div className="flex items-center gap-4">
@@ -1768,20 +1759,20 @@ const ProfessionalReport = ({ data, onBack, onEdit }) => {
                     <button onClick={onEdit} className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors border border-slate-600 hover:border-slate-500">
                         ✏️ Seguir Editando
                     </button>
-                    <button 
-                        onClick={handleDownloadPDF} 
+                    <button
+                        onClick={handleDownloadPDF}
                         disabled={downloadingPDF}
                         className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg shadow-lg shadow-emerald-900/20 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-wait"
                     >
-                        {downloadingPDF ? <Loader2 className="animate-spin" size={18}/> : <FileText size={18}/>}
+                        {downloadingPDF ? <Loader2 className="animate-spin" size={18} /> : <FileText size={18} />}
                         {downloadingPDF ? "Generando..." : "Descargar PDF"}
                     </button>
-                    <button 
-                        onClick={handleDownload} 
+                    <button
+                        onClick={handleDownload}
                         disabled={downloading}
                         className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg shadow-lg shadow-blue-900/20 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-wait"
                     >
-                        {downloading ? <Loader2 className="animate-spin" size={18}/> : <Download size={18}/>}
+                        {downloading ? <Loader2 className="animate-spin" size={18} /> : <Download size={18} />}
                         {downloading ? "Generando..." : "Descargar Word"}
                     </button>
                 </div>
@@ -1789,10 +1780,10 @@ const ProfessionalReport = ({ data, onBack, onEdit }) => {
 
             {/* --- CONTENEDOR PAPEL (SCROLLABLE) --- */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden py-8 px-4 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex justify-center">
-                
+
                 {/* HOJA A4 DIGITAL (TAMAÑO ESCALADO) */}
                 <div ref={reportRef} className="bg-white text-slate-900 w-full max-w-[850px] shadow-2xl mx-auto mb-8 flex flex-col rounded-lg overflow-hidden">
-                    
+
                     {/* ENCABEZADO ELEGANTE */}
                     <header className="px-10 sm:px-12 pt-10 sm:pt-12 pb-6 sm:pb-8 border-b-4 border-slate-900 mb-6 sm:mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 bg-slate-50">
                         <div className="flex-1">
@@ -1884,12 +1875,12 @@ const ProfessionalReport = ({ data, onBack, onEdit }) => {
                         {(data.herramientas && data.herramientas.length > 0) && (
                             <section style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
                                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] mb-4">Stack Tecnológico</h3>
-                                <div 
+                                <div
                                     className="flex flex-wrap gap-x-4 gap-y-2 items-center"
                                     style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}
                                 >
                                     {data.herramientas.map((t, i) => (
-                                        <span 
+                                        <span
                                             key={i}
                                             className="inline-flex items-center gap-1.5 text-xs"
                                             style={{ pageBreakInside: 'avoid', breakInside: 'avoid', whiteSpace: 'nowrap' }}
@@ -1906,7 +1897,7 @@ const ProfessionalReport = ({ data, onBack, onEdit }) => {
                         {/* 5. PLUS / OBSERVACIONES */}
                         <section className="bg-blue-50/50 p-4 sm:p-6 rounded-r-xl border-l-4 border-blue-600">
                             <h3 className="text-[10px] font-bold text-blue-900 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                <Sparkles size={12}/> Valor Agregado
+                                <Sparkles size={12} /> Valor Agregado
                             </h3>
                             <p className="text-sm text-blue-900 italic leading-relaxed">
                                 "{data.plus || "Sin observaciones adicionales."}"
@@ -1946,13 +1937,13 @@ const ProfessionalReport = ({ data, onBack, onEdit }) => {
 // =========================================================
 function ReportView({ candidates, onUpdate, setCurrentReport }) {
     // ESTADOS INTERNOS
-    const [view, setView] = React.useState('list'); 
+    const [view, setView] = React.useState('list');
     const [selectedCandidate, setSelectedCandidate] = React.useState(null);
     const [editorData, setEditorData] = React.useState(null);
     const [loading, setLoading] = React.useState(false);
     const [isGenerating, setIsGenerating] = React.useState(false);
     const [generatingReportId, setGeneratingReportId] = React.useState(null); // Estado para rastrear qué candidato está generando informe
-    
+
     // ESTADOS PARA CARGA MANUAL
     const [showManual, setShowManual] = React.useState(false);
     const [manualFile, setManualFile] = React.useState(null);
@@ -1972,10 +1963,10 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
         }
 
         const candidate = selectedCandidateForHistory;
-        
+
         // Encabezados del CSV
         const headers = ['Nombre', 'Email', 'Puesto', 'Fecha y Hora', 'Evento', 'Detalles', 'Usuario'];
-        
+
         // Convertir historial a filas CSV
         const rows = candidate.history.map(h => {
             const fecha = h.date ? new Date(h.date).toLocaleString('es-AR') : 'Fecha desconocida';
@@ -1989,13 +1980,13 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                 h.usuario || 'Sistema'
             ];
         });
-        
+
         // Crear contenido CSV
         const csvContent = [
             headers.join(','),
             ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
         ].join('\n');
-        
+
         // Crear blob y descargar
         const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' }); // BOM para Excel
         const url = window.URL.createObjectURL(blob);
@@ -2016,13 +2007,13 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
     React.useEffect(() => {
         const savedDraft = localStorage.getItem('report_draft_manual_notes');
         const savedEditor = localStorage.getItem('report_draft_editor_data');
-        
+
         if (savedDraft) {
             setManualNotes(savedDraft);
             setShowManual(true); // Abrimos el panel si había notas
             setAutoSaveMsg("Borrador de notas restaurado");
         }
-        
+
         if (savedEditor) {
             setEditorData(JSON.parse(savedEditor));
             setView('editor'); // Vamos directo al editor si había datos
@@ -2060,7 +2051,7 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
     // --- MANEJADOR DE UPLOAD MANUAL ---
     const handleManualUpload = async () => {
         if (!manualFile && !manualNotes) return alert("Por favor adjunta un CV o escribe notas.");
-        
+
         setIsGenerating(true);
         const formData = new FormData();
         if (manualFile) formData.append("cv", manualFile);
@@ -2071,14 +2062,14 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
         try {
             const res = await fetch(`${API_URL}/manual-upload`, { method: 'POST', body: formData });
             if (!res.ok) throw new Error("Error en el servidor");
-            
+
             const data = await res.json();
-            
+
             // Al tener éxito, guardamos el editorData (Magia 3 se activa sola) y borramos las notas crudas viejas
             setEditorData(data);
-            setSelectedCandidate({ nombre: data.nombre || "Candidato Manual", puesto: data.puesto }); 
-            setView('editor'); 
-            
+            setSelectedCandidate({ nombre: data.nombre || "Candidato Manual", puesto: data.puesto });
+            setView('editor');
+
             // Opcional: Borramos el draft de notas crudas porque ya tenemos el procesado
             localStorage.removeItem('report_draft_manual_notes');
 
@@ -2140,12 +2131,12 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
     // =========================================================
     if (view === 'preview') {
         return (
-            <ProfessionalReport 
-                data={editorData} 
-                onBack={() => setView('editor')} 
-                onEdit={() => setView('editor')} 
-                // Pasamos la función de limpieza al componente de reporte si descarga OK
-                // (Opcional: podrías limpiar acá si consideras que llegar al preview es "terminar")
+            <ProfessionalReport
+                data={editorData}
+                onBack={() => setView('editor')}
+                onEdit={() => setView('editor')}
+            // Pasamos la función de limpieza al componente de reporte si descarga OK
+            // (Opcional: podrías limpiar acá si consideras que llegar al preview es "terminar")
             />
         );
     }
@@ -2170,14 +2161,14 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                     </div>
                     <div className="flex gap-2">
                         {/* ⚡ Botón de Cancelar ahora limpia el borrador explícitamente */}
-                        <button onClick={() => { 
-                            if(confirm("¿Descartar cambios y salir?")) clearDrafts(); 
+                        <button onClick={() => {
+                            if (confirm("¿Descartar cambios y salir?")) clearDrafts();
                         }} className="px-3 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors">
                             Descartar y Salir
                         </button>
-                        
+
                         <button onClick={handleSaveEditor} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
-                            <Eye size={16}/> Previsualizar
+                            <Eye size={16} /> Previsualizar
                         </button>
                     </div>
                 </div>
@@ -2185,14 +2176,14 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                 <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-hidden">
                     {/* COLUMNA IZQUIERDA: FORMULARIOS */}
                     <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-y-auto custom-scrollbar p-6 space-y-6">
-                        
+
                         {/* 1. Resumen */}
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-blue-400 uppercase">Resumen Ejecutivo</label>
-                            <textarea 
+                            <textarea
                                 className="w-full h-32 bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-slate-300 focus:border-blue-500 outline-none resize-none"
                                 value={editorData.resumen_ejecutivo || editorData.resumen_profesional || ""}
-                                onChange={(e) => setEditorData({...editorData, resumen_ejecutivo: e.target.value})}
+                                onChange={(e) => setEditorData({ ...editorData, resumen_ejecutivo: e.target.value })}
                             />
                         </div>
 
@@ -2200,18 +2191,18 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-blue-400 uppercase">Ficha Técnica</label>
                             <div className="grid grid-cols-2 gap-3">
-                                <input placeholder="Ubicación" className="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" 
-                                    value={editorData.ficha_tecnica?.ubicacion || ""} 
-                                    onChange={(e) => setEditorData({...editorData, ficha_tecnica: {...editorData.ficha_tecnica, ubicacion: e.target.value}})} />
-                                <input placeholder="Experiencia" className="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" 
-                                    value={editorData.ficha_tecnica?.nivel_experiencia || ""} 
-                                    onChange={(e) => setEditorData({...editorData, ficha_tecnica: {...editorData.ficha_tecnica, nivel_experiencia: e.target.value}})} />
-                                <input placeholder="Inglés" className="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" 
-                                    value={editorData.ficha_tecnica?.nivel_ingles || editorData.ficha_tecnica?.idiomas || ""} 
-                                    onChange={(e) => setEditorData({...editorData, ficha_tecnica: {...editorData.ficha_tecnica, nivel_ingles: e.target.value}})} />
-                                <input placeholder="Disponibilidad" className="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" 
-                                    value={editorData.ficha_tecnica?.disponibilidad || ""} 
-                                    onChange={(e) => setEditorData({...editorData, ficha_tecnica: {...editorData.ficha_tecnica, disponibilidad: e.target.value}})} />
+                                <input placeholder="Ubicación" className="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white"
+                                    value={editorData.ficha_tecnica?.ubicacion || ""}
+                                    onChange={(e) => setEditorData({ ...editorData, ficha_tecnica: { ...editorData.ficha_tecnica, ubicacion: e.target.value } })} />
+                                <input placeholder="Experiencia" className="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white"
+                                    value={editorData.ficha_tecnica?.nivel_experiencia || ""}
+                                    onChange={(e) => setEditorData({ ...editorData, ficha_tecnica: { ...editorData.ficha_tecnica, nivel_experiencia: e.target.value } })} />
+                                <input placeholder="Inglés" className="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white"
+                                    value={editorData.ficha_tecnica?.nivel_ingles || editorData.ficha_tecnica?.idiomas || ""}
+                                    onChange={(e) => setEditorData({ ...editorData, ficha_tecnica: { ...editorData.ficha_tecnica, nivel_ingles: e.target.value } })} />
+                                <input placeholder="Disponibilidad" className="bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white"
+                                    value={editorData.ficha_tecnica?.disponibilidad || ""}
+                                    onChange={(e) => setEditorData({ ...editorData, ficha_tecnica: { ...editorData.ficha_tecnica, disponibilidad: e.target.value } })} />
                             </div>
                         </div>
 
@@ -2219,25 +2210,25 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-blue-400 uppercase flex justify-between">
                                 Competencias Técnicas
-                                <button onClick={() => setEditorData({...editorData, competencias_tecnicas: [...(editorData.competencias_tecnicas||[]), {competencia: "", nivel: "Alto"}]})} className="text-emerald-400 hover:text-emerald-300">+ Agregar</button>
+                                <button onClick={() => setEditorData({ ...editorData, competencias_tecnicas: [...(editorData.competencias_tecnicas || []), { competencia: "", nivel: "Alto" }] })} className="text-emerald-400 hover:text-emerald-300">+ Agregar</button>
                             </label>
                             {(editorData.competencias_tecnicas || []).map((c, i) => (
                                 <div key={i} className="flex gap-2">
-                                    <input className="flex-1 bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" value={c.competencia} 
+                                    <input className="flex-1 bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" value={c.competencia}
                                         onChange={(e) => {
                                             const newArr = [...editorData.competencias_tecnicas];
                                             newArr[i].competencia = e.target.value;
-                                            setEditorData({...editorData, competencias_tecnicas: newArr});
+                                            setEditorData({ ...editorData, competencias_tecnicas: newArr });
                                         }} />
                                     <input className="w-24 bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" value={c.nivel}
                                         onChange={(e) => {
                                             const newArr = [...editorData.competencias_tecnicas];
                                             newArr[i].nivel = e.target.value;
-                                            setEditorData({...editorData, competencias_tecnicas: newArr});
+                                            setEditorData({ ...editorData, competencias_tecnicas: newArr });
                                         }} />
                                     <button onClick={() => {
                                         const newArr = editorData.competencias_tecnicas.filter((_, idx) => idx !== i);
-                                        setEditorData({...editorData, competencias_tecnicas: newArr});
+                                        setEditorData({ ...editorData, competencias_tecnicas: newArr });
                                     }} className="text-rose-500 px-2">×</button>
                                 </div>
                             ))}
@@ -2247,25 +2238,25 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-blue-400 uppercase flex justify-between">
                                 Habilidades Blandas
-                                <button onClick={() => setEditorData({...editorData, habilidades_blandas: [...(editorData.habilidades_blandas||[]), {habilidad: "", nivel: "Alto"}]})} className="text-emerald-400 hover:text-emerald-300">+ Agregar</button>
+                                <button onClick={() => setEditorData({ ...editorData, habilidades_blandas: [...(editorData.habilidades_blandas || []), { habilidad: "", nivel: "Alto" }] })} className="text-emerald-400 hover:text-emerald-300">+ Agregar</button>
                             </label>
                             {(editorData.habilidades_blandas || []).map((h, i) => (
                                 <div key={i} className="flex gap-2">
-                                    <input className="flex-1 bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" value={h.habilidad} 
+                                    <input className="flex-1 bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" value={h.habilidad}
                                         onChange={(e) => {
-                                            const newArr = [...(editorData.habilidades_blandas||[])];
+                                            const newArr = [...(editorData.habilidades_blandas || [])];
                                             newArr[i].habilidad = e.target.value;
-                                            setEditorData({...editorData, habilidades_blandas: newArr});
+                                            setEditorData({ ...editorData, habilidades_blandas: newArr });
                                         }} />
                                     <input className="w-24 bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" value={h.nivel}
                                         onChange={(e) => {
-                                            const newArr = [...(editorData.habilidades_blandas||[])];
+                                            const newArr = [...(editorData.habilidades_blandas || [])];
                                             newArr[i].nivel = e.target.value;
-                                            setEditorData({...editorData, habilidades_blandas: newArr});
+                                            setEditorData({ ...editorData, habilidades_blandas: newArr });
                                         }} />
                                     <button onClick={() => {
-                                        const newArr = (editorData.habilidades_blandas||[]).filter((_, idx) => idx !== i);
-                                        setEditorData({...editorData, habilidades_blandas: newArr});
+                                        const newArr = (editorData.habilidades_blandas || []).filter((_, idx) => idx !== i);
+                                        setEditorData({ ...editorData, habilidades_blandas: newArr });
                                     }} className="text-rose-500 px-2">×</button>
                                 </div>
                             ))}
@@ -2275,25 +2266,25 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-blue-400 uppercase flex justify-between">
                                 Herramientas
-                                <button onClick={() => setEditorData({...editorData, herramientas: [...(editorData.herramientas||[]), {herramienta: "", nivel: "Avanzado"}]})} className="text-emerald-400 hover:text-emerald-300">+ Agregar</button>
+                                <button onClick={() => setEditorData({ ...editorData, herramientas: [...(editorData.herramientas || []), { herramienta: "", nivel: "Avanzado" }] })} className="text-emerald-400 hover:text-emerald-300">+ Agregar</button>
                             </label>
                             {(editorData.herramientas || []).map((t, i) => (
                                 <div key={i} className="flex gap-2">
-                                    <input className="flex-1 bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" value={t.herramienta} 
+                                    <input className="flex-1 bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" value={t.herramienta}
                                         onChange={(e) => {
-                                            const newArr = [...(editorData.herramientas||[])];
+                                            const newArr = [...(editorData.herramientas || [])];
                                             newArr[i].herramienta = e.target.value;
-                                            setEditorData({...editorData, herramientas: newArr});
+                                            setEditorData({ ...editorData, herramientas: newArr });
                                         }} />
                                     <input className="w-24 bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white" value={t.nivel}
                                         onChange={(e) => {
-                                            const newArr = [...(editorData.herramientas||[])];
+                                            const newArr = [...(editorData.herramientas || [])];
                                             newArr[i].nivel = e.target.value;
-                                            setEditorData({...editorData, herramientas: newArr});
+                                            setEditorData({ ...editorData, herramientas: newArr });
                                         }} />
                                     <button onClick={() => {
-                                        const newArr = (editorData.herramientas||[]).filter((_, idx) => idx !== i);
-                                        setEditorData({...editorData, herramientas: newArr});
+                                        const newArr = (editorData.herramientas || []).filter((_, idx) => idx !== i);
+                                        setEditorData({ ...editorData, herramientas: newArr });
                                     }} className="text-rose-500 px-2">×</button>
                                 </div>
                             ))}
@@ -2302,30 +2293,30 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                         {/* 6. Plus */}
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-blue-400 uppercase">Plus / Valor Agregado</label>
-                            <textarea 
+                            <textarea
                                 className="w-full h-20 bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-slate-300 focus:border-blue-500 outline-none resize-none"
                                 value={editorData.plus || ""}
-                                onChange={(e) => setEditorData({...editorData, plus: e.target.value})}
+                                onChange={(e) => setEditorData({ ...editorData, plus: e.target.value })}
                             />
                         </div>
 
                         {/* 7. Formación Sugerida */}
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-blue-400 uppercase">Formación Sugerida</label>
-                            <textarea 
+                            <textarea
                                 className="w-full h-20 bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-slate-300 focus:border-blue-500 outline-none resize-none"
                                 value={editorData.formacion_sugerida || ""}
-                                onChange={(e) => setEditorData({...editorData, formacion_sugerida: e.target.value})}
+                                onChange={(e) => setEditorData({ ...editorData, formacion_sugerida: e.target.value })}
                             />
                         </div>
 
                         {/* 8. Recomendación */}
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-blue-400 uppercase">Recomendación Final</label>
-                            <textarea 
+                            <textarea
                                 className="w-full h-24 bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-slate-300 focus:border-blue-500 outline-none resize-none"
                                 value={editorData.recomendacion_final || editorData.conclusion_final || ""}
-                                onChange={(e) => setEditorData({...editorData, recomendacion_final: e.target.value})}
+                                onChange={(e) => setEditorData({ ...editorData, recomendacion_final: e.target.value })}
                             />
                         </div>
 
@@ -2356,7 +2347,7 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                 <div className="mb-6 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                            <History size={20}/> Cronología de Movimientos
+                            <History size={20} /> Cronología de Movimientos
                         </h2>
                         <p className="text-slate-400 text-sm mt-1">
                             {selectedCandidateForHistory.nombre} - {selectedCandidateForHistory.puesto || "Candidato"}
@@ -2364,14 +2355,14 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                     </div>
                     <div className="flex items-center gap-3">
                         {selectedCandidateForHistory.history && selectedCandidateForHistory.history.length > 0 && (
-                            <button 
+                            <button
                                 onClick={handleExportHistory}
                                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-2"
                             >
-                                <Download size={16}/> Exportar CSV
+                                <Download size={16} /> Exportar CSV
                             </button>
                         )}
-                        <button 
+                        <button
                             onClick={() => setSelectedCandidateForHistory(null)}
                             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-lg transition-colors"
                         >
@@ -2382,9 +2373,9 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
 
                 <Card className="bg-slate-900 border-slate-800 p-8">
                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                        <History size={16}/> Historial de Movimientos
+                        <History size={16} /> Historial de Movimientos
                     </h3>
-                    
+
                     {!selectedCandidateForHistory.history || selectedCandidateForHistory.history.length === 0 ? (
                         <div className="text-center py-10 border-2 border-dashed border-slate-800 rounded-xl">
                             <p className="text-slate-500 text-sm">No hay movimientos registrados aún.</p>
@@ -2417,7 +2408,7 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
     // =========================================================
     return (
         <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
-            
+
             {/* CABECERA */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-6">
                 <div>
@@ -2426,11 +2417,11 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                     {/* ⚡ MENSAJE DE RESTAURACIÓN SI APLICA */}
                     {autoSaveMsg && (
                         <div className="mt-2 text-xs font-bold text-emerald-400 flex items-center gap-1 animate-pulse">
-                            <Clock size={12}/> {autoSaveMsg}
+                            <Clock size={12} /> {autoSaveMsg}
                         </div>
                     )}
                 </div>
-                <button 
+                <button
                     disabled
                     className="px-4 py-2 rounded-lg text-xs font-bold transition-all border bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed opacity-50"
                 >
@@ -2445,29 +2436,29 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                     <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-                        
+
                         {/* COLUMNA IZQUIERDA: PDF */}
                         <div className="flex flex-col gap-3">
                             <label className="text-[11px] font-bold text-amber-500 uppercase tracking-[0.2em] flex items-center gap-2">
-                                <FileText size={14}/> 1. Adjuntar Currículum (PDF)
+                                <FileText size={14} /> 1. Adjuntar Currículum (PDF)
                             </label>
-                            
+
                             {/* ⚡ AVISO DE ARCHIVO NO PERSISTENTE */}
                             <label className={`flex flex-col items-center justify-center w-full h-56 border-2 border-dashed rounded-xl cursor-pointer transition-all group ${manualFile ? 'border-amber-500/50 bg-amber-500/5' : 'border-slate-800 bg-slate-950 hover:bg-slate-900 hover:border-slate-700'}`}>
                                 <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
                                     <div className={`mb-3 p-3 rounded-full transition-all ${manualFile ? 'bg-amber-500 text-slate-900' : 'bg-slate-800 text-slate-500 group-hover:text-amber-500'}`}>
-                                        {manualFile ? <CheckCircle size={24}/> : <Download size={24}/>}
+                                        {manualFile ? <CheckCircle size={24} /> : <Download size={24} />}
                                     </div>
                                     <p className={`text-sm font-medium ${manualFile ? 'text-amber-400' : 'text-slate-400'}`}>
                                         {manualFile ? manualFile.name : "Click para buscar PDF o TXT"}
                                     </p>
                                     {!manualFile && <p className="text-xs text-slate-600 mt-1">Si recargas la página, deberás subirlo de nuevo.</p>}
                                 </div>
-                                <input 
-                                    type="file" 
-                                    className="hidden" 
-                                    accept=".pdf,.txt,.doc,.docx" 
-                                    onChange={(e) => setManualFile(e.target.files[0])} 
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    accept=".pdf,.txt,.doc,.docx"
+                                    onChange={(e) => setManualFile(e.target.files[0])}
                                 />
                             </label>
                         </div>
@@ -2475,9 +2466,9 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                         {/* COLUMNA DERECHA: NOTAS */}
                         <div className="flex flex-col gap-3">
                             <label className="text-[11px] font-bold text-amber-500 uppercase tracking-[0.2em] flex items-center gap-2">
-                                <Sparkles size={14}/> 2. Notas y Análisis (Autoguardado)
+                                <Sparkles size={14} /> 2. Notas y Análisis (Autoguardado)
                             </label>
-                            <textarea 
+                            <textarea
                                 className="w-full h-56 bg-slate-950 border border-slate-800 rounded-xl p-5 text-sm text-slate-200 focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 focus:outline-none transition-all resize-none custom-scrollbar leading-relaxed placeholder-slate-700"
                                 placeholder="Pega aquí tu evaluación. Si se corta internet, este texto se guarda solo."
                                 value={manualNotes}
@@ -2487,19 +2478,18 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
 
                         {/* BOTÓN DE ACCIÓN */}
                         <div className="md:col-span-2 mt-2">
-                            <button 
-                                className={`w-full py-4 font-black text-sm uppercase tracking-[0.15em] rounded-xl flex items-center justify-center gap-3 transition-all transform active:scale-[0.99] shadow-lg ${
-                                    isGenerating 
-                                    ? 'bg-slate-800 text-slate-500 cursor-wait' 
-                                    : 'bg-gradient-to-r from-amber-700 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-amber-50 shadow-amber-900/20 border border-amber-500/20'
-                                }`}
+                            <button
+                                className={`w-full py-4 font-black text-sm uppercase tracking-[0.15em] rounded-xl flex items-center justify-center gap-3 transition-all transform active:scale-[0.99] shadow-lg ${isGenerating
+                                        ? 'bg-slate-800 text-slate-500 cursor-wait'
+                                        : 'bg-gradient-to-r from-amber-700 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-amber-50 shadow-amber-900/20 border border-amber-500/20'
+                                    }`}
                                 disabled={isGenerating || (!manualFile && !manualNotes)}
                                 onClick={handleManualUpload}
                             >
                                 {isGenerating ? (
-                                    <><Loader2 className="animate-spin" size={20}/> ANALIZANDO CON GEMINI...</>
+                                    <><Loader2 className="animate-spin" size={20} /> ANALIZANDO CON GEMINI...</>
                                 ) : (
-                                    <><Sparkles size={20}/> GENERAR FICHA DE INFORME FINAL </>
+                                    <><Sparkles size={20} /> GENERAR FICHA DE INFORME FINAL </>
                                 )}
                             </button>
                         </div>
@@ -2520,7 +2510,7 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                             <div key={c.id} className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between hover:bg-slate-800/50 transition-colors group">
                                 <div className="flex items-center gap-4">
                                     <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs">
-                                        {c.nombre.substring(0,2).toUpperCase()}
+                                        {c.nombre.substring(0, 2).toUpperCase()}
                                     </div>
                                     <div>
                                         <h4 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{c.nombre}</h4>
@@ -2528,44 +2518,43 @@ function ReportView({ candidates, onUpdate, setCurrentReport }) {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <button 
+                                    <button
                                         onClick={() => setSelectedCandidateForHistory(c)}
                                         className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
                                     >
-                                        <History size={14}/> Ver Cronología
+                                        <History size={14} /> Ver Cronología
                                     </button>
                                     {onUpdate && (
-                                        <button 
+                                        <button
                                             onClick={() => onUpdate(c.id, { stage: 'stage_2' })}
                                             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
                                         >
-                                            <Undo2 size={14}/> Volver a Gestión
+                                            <Undo2 size={14} /> Volver a Gestión
                                         </button>
                                     )}
                                     {c.informe_final_data ? (
-                                        <button 
+                                        <button
                                             onClick={() => handleOpenCandidate(c)}
                                             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
                                         >
-                                            <Eye size={14}/> Ver Informe
+                                            <Eye size={14} /> Ver Informe
                                         </button>
                                     ) : (
-                                        <button 
+                                        <button
                                             onClick={() => handleOpenCandidate(c)}
                                             disabled={generatingReportId === c.id}
-                                            className={`px-4 py-2 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2 ${
-                                                generatingReportId === c.id 
-                                                    ? 'bg-blue-700 cursor-wait opacity-75' 
+                                            className={`px-4 py-2 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2 ${generatingReportId === c.id
+                                                    ? 'bg-blue-700 cursor-wait opacity-75'
                                                     : 'bg-blue-600 hover:bg-blue-500'
-                                            }`}
+                                                }`}
                                         >
                                             {generatingReportId === c.id ? (
                                                 <>
-                                                    <Loader2 size={14} className="animate-spin"/> Generando...
+                                                    <Loader2 size={14} className="animate-spin" /> Generando...
                                                 </>
                                             ) : (
                                                 <>
-                                                    <FileText size={14}/> Generar Informe
+                                                    <FileText size={14} /> Generar Informe
                                                 </>
                                             )}
                                         </button>
@@ -2589,7 +2578,7 @@ function ReportsView({ candidates, setCurrentReport, onUpdate }) {
 
     // Filtrar solo candidatos con informe generado
     const reportsWithData = candidates.filter(c => c.informe_final_data && c.stage === 'stage_3');
-    
+
     // Ordenar por fecha de creación (más recientes primero)
     const sortedReports = [...reportsWithData].sort((a, b) => {
         const dateA = a.informe_final_data?.fecha_generacion || a.creado_en || 0;
@@ -2606,12 +2595,12 @@ function ReportsView({ candidates, setCurrentReport, onUpdate }) {
     const formatDate = (dateValue) => {
         if (!dateValue) return 'Fecha no disponible';
         try {
-            const date = typeof dateValue === 'object' && dateValue._seconds 
+            const date = typeof dateValue === 'object' && dateValue._seconds
                 ? new Date(dateValue._seconds * 1000)
                 : new Date(dateValue);
-            return date.toLocaleDateString('es-AR', { 
-                year: 'numeric', 
-                month: 'short', 
+            return date.toLocaleDateString('es-AR', {
+                year: 'numeric',
+                month: 'short',
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
@@ -2630,7 +2619,7 @@ function ReportsView({ candidates, setCurrentReport, onUpdate }) {
 
         const candidate = selectedCandidateForHistory;
         const historial = candidate.history || candidate.historial_movimientos || [];
-        
+
         if (!historial || historial.length === 0) {
             alert("No hay cronología disponible para este candidato.");
             return;
@@ -2638,7 +2627,7 @@ function ReportsView({ candidates, setCurrentReport, onUpdate }) {
 
         // Encabezados del CSV
         const headers = ['Nombre', 'Email', 'Puesto', 'Fecha y Hora', 'Evento', 'Detalles', 'Usuario'];
-        
+
         // Convertir historial a filas CSV
         const rows = historial.map(h => {
             const fecha = h.date ? new Date(h.date).toLocaleString('es-AR') : 'Fecha desconocida';
@@ -2652,13 +2641,13 @@ function ReportsView({ candidates, setCurrentReport, onUpdate }) {
                 h.usuario || 'Sistema'
             ];
         });
-        
+
         // Crear contenido CSV
         const csvContent = [
             headers.join(','),
             ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
         ].join('\n');
-        
+
         // Crear blob y descargar
         const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' }); // BOM para Excel
         const url = window.URL.createObjectURL(blob);
@@ -2680,7 +2669,7 @@ function ReportsView({ candidates, setCurrentReport, onUpdate }) {
                 <div className="mb-6 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                            <History size={20}/> Cronología de Movimientos
+                            <History size={20} /> Cronología de Movimientos
                         </h2>
                         <p className="text-slate-400 text-sm mt-1">
                             {selectedCandidateForHistory.nombre} - {selectedCandidateForHistory.puesto || "Candidato"}
@@ -2690,15 +2679,15 @@ function ReportsView({ candidates, setCurrentReport, onUpdate }) {
                         {(() => {
                             const historial = selectedCandidateForHistory.history || selectedCandidateForHistory.historial_movimientos || [];
                             return historial.length > 0 && (
-                                <button 
+                                <button
                                     onClick={handleExportHistory}
                                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-2"
                                 >
-                                    <Download size={16}/> Exportar CSV
+                                    <Download size={16} /> Exportar CSV
                                 </button>
                             );
                         })()}
-                        <button 
+                        <button
                             onClick={() => setSelectedCandidateForHistory(null)}
                             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-lg transition-colors"
                         >
@@ -2709,9 +2698,9 @@ function ReportsView({ candidates, setCurrentReport, onUpdate }) {
 
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-8">
                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                        <History size={16}/> Historial de Movimientos
+                        <History size={16} /> Historial de Movimientos
                     </h3>
-                    
+
                     {(() => {
                         const historial = selectedCandidateForHistory.history || selectedCandidateForHistory.historial_movimientos || [];
                         return historial.length === 0 ? (
@@ -2721,20 +2710,20 @@ function ReportsView({ candidates, setCurrentReport, onUpdate }) {
                         ) : (
                             <div className="relative border-l-2 border-slate-800 ml-3 space-y-8 pl-8 py-2">
                                 {historial.map((h, idx) => (
-                                <div key={idx} className="relative group">
-                                    <div className="absolute -left-[39px] top-1 w-5 h-5 rounded-full bg-slate-900 border-2 border-blue-500 z-10 group-hover:scale-125 transition-transform shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
-                                    <div className="flex flex-col gap-1">
-                                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">
-                                            {h.date ? new Date(h.date).toLocaleString('es-AR') : 'Fecha desconocida'}
-                                        </span>
-                                        <h4 className="text-white font-bold text-sm">{h.event || 'Evento del sistema'}</h4>
-                                        <p className="text-xs text-slate-400 bg-slate-950/50 p-2 rounded border border-slate-800 inline-block mt-1">
-                                            {h.detail || 'Sin detalles adicionales.'}
-                                        </p>
+                                    <div key={idx} className="relative group">
+                                        <div className="absolute -left-[39px] top-1 w-5 h-5 rounded-full bg-slate-900 border-2 border-blue-500 z-10 group-hover:scale-125 transition-transform shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">
+                                                {h.date ? new Date(h.date).toLocaleString('es-AR') : 'Fecha desconocida'}
+                                            </span>
+                                            <h4 className="text-white font-bold text-sm">{h.event || 'Evento del sistema'}</h4>
+                                            <p className="text-xs text-slate-400 bg-slate-950/50 p-2 rounded border border-slate-800 inline-block mt-1">
+                                                {h.detail || 'Sin detalles adicionales.'}
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
                         );
                     })()}
                 </div>
@@ -2772,7 +2761,7 @@ function ReportsView({ candidates, setCurrentReport, onUpdate }) {
                                 <div key={c.id} className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between hover:bg-slate-800/50 transition-colors group">
                                     <div className="flex items-center gap-4 flex-1">
                                         <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold text-xs">
-                                            {c.nombre.substring(0,2).toUpperCase()}
+                                            {c.nombre.substring(0, 2).toUpperCase()}
                                         </div>
                                         <div className="flex-1">
                                             <h4 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">
@@ -2785,25 +2774,25 @@ function ReportsView({ candidates, setCurrentReport, onUpdate }) {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        <button 
+                                        <button
                                             onClick={() => setSelectedCandidateForHistory(c)}
                                             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
                                         >
-                                            <History size={14}/> Ver Cronología
+                                            <History size={14} /> Ver Cronología
                                         </button>
                                         {onUpdate && (
-                                            <button 
+                                            <button
                                                 onClick={() => onUpdate(c.id, { stage: 'stage_2' })}
                                                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
                                             >
-                                                <Undo2 size={14}/> Volver a Gestión
+                                                <Undo2 size={14} /> Volver a Gestión
                                             </button>
                                         )}
-                                        <button 
+                                        <button
                                             onClick={() => handleViewReport(c)}
                                             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
                                         >
-                                            <Eye size={14}/> Ver Informe
+                                            <Eye size={14} /> Ver Informe
                                         </button>
                                     </div>
                                 </div>
@@ -2880,9 +2869,9 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
 
     // Recuperar alertas y skills
     const flags = candidate.ia_alertas || candidate.alerts || [];
-    const hardSkills = candidate.respuestas_filtro?.herramientas 
-        ? (Array.isArray(candidate.respuestas_filtro.herramientas) 
-            ? candidate.respuestas_filtro.herramientas 
+    const hardSkills = candidate.respuestas_filtro?.herramientas
+        ? (Array.isArray(candidate.respuestas_filtro.herramientas)
+            ? candidate.respuestas_filtro.herramientas
             : candidate.respuestas_filtro.herramientas.split(',').map(s => s.trim()))
         : ['Sin datos técnicos'];
 
@@ -2890,19 +2879,19 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     const saveLinks = async () => {
         // Si se está agregando o cambiando el video, activar loader
         const videoCambio = newVideoLink && newVideoLink !== candidate.video_url;
-        
+
         if (videoCambio) {
             setIsAnalyzingVideo(true);
         }
-        
+
         // Guardar los links
-        await onUpdate(candidate.id, { 
-            cv_url: newCvLink, 
+        await onUpdate(candidate.id, {
+            cv_url: newCvLink,
             video_url: newVideoLink,
             usuario_accion: currentUser || 'Sistema'
         });
         setIsEditing(false);
-        
+
         // Si hay video, esperar a que termine el análisis y refrescar datos
         if (videoCambio) {
             // Esperar un tiempo razonable para que el backend procese el video
@@ -2910,27 +2899,27 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
             let intentos = 0;
             const maxIntentos = 15; // 30 segundos máximo (15 * 2s)
             const scoreInicial = candidate.ia_score || 0;
-            
+
             const checkVideoAnalysis = setInterval(async () => {
                 intentos++;
-                
+
                 try {
                     // Recargar datos del candidato desde la API
                     const apiClient = window.api || api;
                     const data = await apiClient.candidates.list();
                     const lista = data.candidatos || data || [];
                     const candidatoActualizado = lista.find(c => c.id === candidate.id);
-                    
+
                     if (candidatoActualizado) {
                         // Verificar si el score cambió o si hay reseña_video
                         const scoreNuevo = candidatoActualizado.ia_score || 0;
                         const tieneResenaVideo = candidatoActualizado.reseña_video || candidatoActualizado.reseñaVideo;
-                        
+
                         // Si el score cambió o hay reseña de video, el análisis terminó
                         if (scoreNuevo !== scoreInicial || tieneResenaVideo || intentos >= maxIntentos) {
                             clearInterval(checkVideoAnalysis);
                             setIsAnalyzingVideo(false);
-                            
+
                             // Actualizar el candidato en el estado
                             onUpdate(candidate.id, {
                                 ia_score: candidatoActualizado.ia_score,
@@ -2938,7 +2927,7 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
                                 reseña_video: candidatoActualizado.reseña_video || candidatoActualizado.reseñaVideo,
                                 video_url: candidatoActualizado.video_url
                             });
-                            
+
                             if (intentos >= maxIntentos) {
                                 alert("⚠️ El análisis del video está tomando más tiempo del esperado. Los datos se actualizarán automáticamente cuando termine.");
                             } else {
@@ -2968,11 +2957,11 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
         if (sendEmailOnApprove) {
             handleOpenApprovalEmail();
         }
-        
-        onUpdate(candidate.id, { 
-            stage: 'stage_2', 
+
+        onUpdate(candidate.id, {
+            stage: 'stage_2',
             status_interno: 'interview_pending',
-            assignedTo: currentUser 
+            assignedTo: currentUser
         });
         setShowApproveModal(false);
         setSendEmailOnApprove(false);
@@ -2983,7 +2972,7 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
         if (!transcript || transcript.length < 10) {
             return alert("⚠️ Por favor, escribe o pega notas de la entrevista antes de analizar.");
         }
-        
+
         setIsAnalyzing(true); // Activa el loader
         try {
             // DEBUG
@@ -2996,22 +2985,22 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ transcript })
             });
-            
+
             if (!res.ok) throw new Error("Error en la conexión con la IA");
-            
+
             const data = await res.json();
-            
+
             // Actualizamos la vista visualmente al instante
             // El backend ya guarda la transcripción en transcripcion_entrevista
-            onUpdate(candidate.id, { 
-                ia_score: data.score, 
+            onUpdate(candidate.id, {
+                ia_score: data.score,
                 ia_motivos: data.motivos,
                 ia_alertas: data.alertas,
                 transcripcion_entrevista: transcript // Guardar también en el frontend para que se muestre como "ANALIZADA"
             });
-            
+
             alert(`✅ Análisis completado.\nNuevo Score: ${data.score}/100`);
-            
+
         } catch (error) {
             console.error(error);
             alert("❌ Ocurrió un error al analizar la entrevista. Revisa la consola.");
@@ -3022,23 +3011,23 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
 
     const confirmDiscard = () => {
         if (!discardReason.trim()) return alert("Por favor escribe un motivo.");
-        
+
         // Si eligió enviar email, abrir Gmail primero
         if (sendEmailOnDiscard) {
             handleOpenDiscardEmail();
         }
-        
-        onUpdate(candidate.id, { 
-            stage: 'trash', 
-            motivo: discardReason, 
-            notes: discardReason   
+
+        onUpdate(candidate.id, {
+            stage: 'trash',
+            motivo: discardReason,
+            notes: discardReason
         });
         setShowDiscardModal(false);
         setSendEmailOnDiscard(false);
     };
 
     // --- NUEVAS ACCIONES (STAGE 2) ---
-    
+
     // 1. Guardar Link Meet (al salir del campo)
     const saveMeetLink = () => {
         const linkToSave = meetLink || candidate.meet_link;
@@ -3057,13 +3046,13 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
             }
 
             setLoadingAI(true);
-            
+
             // Obtener headers con autenticación
             const headers = { 'Content-Type': 'application/json' };
             try {
                 const token = localStorage.getItem('firebase_token');
                 const expires = localStorage.getItem('firebase_token_expires');
-                
+
                 if (token && expires && Date.now() < parseInt(expires)) {
                     headers['Authorization'] = `Bearer ${token}`;
                 } else if (window.firebaseAuth && window.firebaseAuth.currentUser) {
@@ -3076,7 +3065,7 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
             } catch (e) {
                 console.warn('⚠️ Error obteniendo token:', e);
             }
-            
+
             // Hacer fetch al nuevo endpoint
             const API_URL = window.API_URL || 'http://localhost:3001';
             const response = await fetch(`${API_URL}/candidatos/${candidate.id}/preparar-bot`, {
@@ -3094,7 +3083,7 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
             if (data && data.success && data.link) {
                 // Actualizar estado local
                 setLocalLink(data.link);
-                
+
                 // Actualizar candidato en el estado global
                 onUpdate(candidate.id, {
                     meet_link: data.link,
@@ -3104,7 +3093,7 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
 
                 // También actualizar meetLink para sincronización
                 setMeetLink(data.link);
-                
+
                 console.log('✅ Link generado exitosamente:', data.link);
             } else {
                 throw new Error(data?.error || 'No se recibió el link de la entrevista');
@@ -3128,57 +3117,57 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
         if (candidate.stage !== 'stage_1') {
             return alert("⚠️ Los marcadores solo se pueden agregar en la etapa de Exploración (Stage 1).");
         }
-        
+
         if (!marcadorRazon.trim()) {
             return alert("⚠️ Por favor escribe una razón para el marcador.");
         }
-        
+
         const nuevoMarcador = {
             tipo: marcadorTipo,
             razon: marcadorRazon.trim(),
             usuario: currentUser || 'Sistema',
             fecha: new Date().toISOString()
         };
-        
+
         const marcadoresActuales = candidate.marcadores || [];
         const nuevosMarcadores = [...marcadoresActuales, nuevoMarcador];
-        
+
         onUpdate(candidate.id, { marcadores: nuevosMarcadores });
-        
+
         // Limpiar formulario
         setMarcadorRazon('');
         setMarcadorTipo('estrella');
         setShowMarcadorModal(false);
     };
-    
+
     // Función para eliminar marcador
     const handleEliminarMarcador = (index) => {
         if (!confirm("¿Estás seguro de eliminar este marcador?")) return;
-        
+
         const marcadoresActuales = candidate.marcadores || [];
         const nuevosMarcadores = marcadoresActuales.filter((_, i) => i !== index);
-        
+
         onUpdate(candidate.id, { marcadores: nuevosMarcadores });
     };
 
-// ==========================================
-   // 📧 FUNCIONES DE CORREO (FORZANDO GMAIL WEB)
-   // ==========================================
+    // ==========================================
+    // 📧 FUNCIONES DE CORREO (FORZANDO GMAIL WEB)
+    // ==========================================
 
 
-  // 1. ABRIR GMAIL PARA LA ENTREVISTA (MEET)
-  const handleOpenMail = async () => {
-    // Usar el link guardado o el del estado local
-    const linkToUse = candidate.meet_link || meetLink;
-    if (!linkToUse) return alert("⚠️ Primero pega el link de la reunión en el campo de texto para incluirlo en el correo.");
-    
-    const recipient = candidate.email;
-    // Asunto Dinámico
-    const subject = encodeURIComponent(`¡Buenas noticias! Tu entrevista con GTC está lista 🚀`);
-    
-    // Cuerpo del mensaje con Variables Dinámicas y Formato de Texto
-    const body = encodeURIComponent(
-`Hola, ${candidate.nombre}:
+    // 1. ABRIR GMAIL PARA LA ENTREVISTA (MEET)
+    const handleOpenMail = async () => {
+        // Usar el link guardado o el del estado local
+        const linkToUse = candidate.meet_link || meetLink;
+        if (!linkToUse) return alert("⚠️ Primero pega el link de la reunión en el campo de texto para incluirlo en el correo.");
+
+        const recipient = candidate.email;
+        // Asunto Dinámico
+        const subject = encodeURIComponent(`¡Buenas noticias! Tu entrevista con GTC está lista 🚀`);
+
+        // Cuerpo del mensaje con Variables Dinámicas y Formato de Texto
+        const body = encodeURIComponent(
+            `Hola, ${candidate.nombre}:
 
 ¡Esperamos que estés teniendo un excelente día!
 
@@ -3209,37 +3198,37 @@ Agradecemos mucho tu interés en formar parte de nuestra comunidad. ¡Estamos an
 Saludos cordiales,
 
 ${currentUser || 'Equipo de Selección'} Equipo de Selección | Global Talent Connections`
-    );
-    
-    // Abrir Gmail en pestaña nueva
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
-    window.open(gmailUrl, '_blank');
-    
-    // Registrar evento en la cronología
-    try {
-        await onUpdate(candidate.id, {
-            mail_meet_enviado: true,
-            usuario_accion: currentUser || 'Sistema'
-        });
-    } catch (error) {
-        console.error("Error registrando evento de mail:", error);
-    }
-};
+        );
+
+        // Abrir Gmail en pestaña nueva
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
+        window.open(gmailUrl, '_blank');
+
+        // Registrar evento en la cronología
+        try {
+            await onUpdate(candidate.id, {
+                mail_meet_enviado: true,
+                usuario_accion: currentUser || 'Sistema'
+            });
+        } catch (error) {
+            console.error("Error registrando evento de mail:", error);
+        }
+    };
 
 
 
-// 2. ABRIR GMAIL PARA EL FORMULARIO 2 (Evaluación Técnica)
-const handleSendForm2 = () => {
-    // Guardar estado "sent" en la BD (misma lógica que updateChecklist pero directo)
-    setForm2Status('sent');
-    onUpdate(candidate.id, { process_step_2_form: 'sent', usuario_accion: currentUser });
-   
-    const recipient = candidate.email;
-    const subject = encodeURIComponent(`¡Excelentes noticias! Seguimos adelante 🚀`);
-   
-    // Cuerpo del mensaje con el Link de Zoho Fijo y Formato de Lista
-    const body = encodeURIComponent(
-`Hola, ${candidate.nombre}:
+    // 2. ABRIR GMAIL PARA EL FORMULARIO 2 (Evaluación Técnica)
+    const handleSendForm2 = () => {
+        // Guardar estado "sent" en la BD (misma lógica que updateChecklist pero directo)
+        setForm2Status('sent');
+        onUpdate(candidate.id, { process_step_2_form: 'sent', usuario_accion: currentUser });
+
+        const recipient = candidate.email;
+        const subject = encodeURIComponent(`¡Excelentes noticias! Seguimos adelante 🚀`);
+
+        // Cuerpo del mensaje con el Link de Zoho Fijo y Formato de Lista
+        const body = encodeURIComponent(
+            `Hola, ${candidate.nombre}:
 
 ¡Qué gusto saludarte! Fue un verdadero placer conversar contigo en nuestra entrevista y conocer un poco más sobre tu trayectoria.
 
@@ -3261,25 +3250,25 @@ Quedamos atentos a cualquier duda que tengas.
 Un gran saludo,
 
 ${currentUser || 'Equipo de Selección'} Equipo de Selección | Global Talent Connections`
-    );
-   
-    // Abrimos Gmail Web en pestaña nueva
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
-    window.open(gmailUrl, '_blank');
-};
+        );
 
-// 3. ABRIR GMAIL PARA EMAIL DE DESCARTE (No pasa de fase)
-const handleOpenDiscardEmail = () => {
-    if (!candidate.email) {
-        alert("⚠️ El candidato no tiene email registrado.");
-        return;
-    }
+        // Abrimos Gmail Web en pestaña nueva
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
+        window.open(gmailUrl, '_blank');
+    };
 
-    const recipient = candidate.email;
-    const subject = encodeURIComponent(`Actualización sobre tu proceso de selección – Global Talent Connections`);
-    
-    // Cuerpo del mensaje de descarte (texto proporcionado por el usuario)
-    const bodyText = `Hola, ${candidate.nombre}:
+    // 3. ABRIR GMAIL PARA EMAIL DE DESCARTE (No pasa de fase)
+    const handleOpenDiscardEmail = () => {
+        if (!candidate.email) {
+            alert("⚠️ El candidato no tiene email registrado.");
+            return;
+        }
+
+        const recipient = candidate.email;
+        const subject = encodeURIComponent(`Actualización sobre tu proceso de selección – Global Talent Connections`);
+
+        // Cuerpo del mensaje de descarte (texto proporcionado por el usuario)
+        const bodyText = `Hola, ${candidate.nombre}:
 
 Gracias por completar nuestro formulario de validación y por tu interés en formar parte de nuestro equipo.
 
@@ -3288,26 +3277,26 @@ Tras analizar los datos proporcionados, te informamos que en esta ocasión no po
 Mantendremos tu información en nuestros registros para futuras vacantes que se adapten mejor a tu perfil. Agradecemos tu tiempo y te deseamos éxito en tu búsqueda laboral.
 
 Atentamente, Equipo de Selección - Global Talent Connections`;
-    
-    const body = encodeURIComponent(bodyText);
-    
-    // Abrir Gmail en pestaña nueva
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
-    window.open(gmailUrl, '_blank');
-};
 
-// 4. ABRIR GMAIL PARA EMAIL DE APROBACIÓN (Pasa a siguiente etapa)
-const handleOpenApprovalEmail = () => {
-    if (!candidate.email) {
-        alert("⚠️ El candidato no tiene email registrado.");
-        return;
-    }
+        const body = encodeURIComponent(bodyText);
 
-    const recipient = candidate.email;
-    const subject = encodeURIComponent(`Actualización sobre tu proceso de selección – Global Talent Connections`);
-    
-    // Cuerpo del mensaje de aprobación (texto proporcionado por el usuario)
-    const bodyText = `Hola, ${candidate.nombre}:
+        // Abrir Gmail en pestaña nueva
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
+        window.open(gmailUrl, '_blank');
+    };
+
+    // 4. ABRIR GMAIL PARA EMAIL DE APROBACIÓN (Pasa a siguiente etapa)
+    const handleOpenApprovalEmail = () => {
+        if (!candidate.email) {
+            alert("⚠️ El candidato no tiene email registrado.");
+            return;
+        }
+
+        const recipient = candidate.email;
+        const subject = encodeURIComponent(`Actualización sobre tu proceso de selección – Global Talent Connections`);
+
+        // Cuerpo del mensaje de aprobación (texto proporcionado por el usuario)
+        const bodyText = `Hola, ${candidate.nombre}:
 
 Esperamos que estés muy bien.
 
@@ -3326,26 +3315,26 @@ Agradecemos el tiempo, la dedicación y el interés en formar parte de nuestra c
 ¡Un saludo! 
 Global Talent Connections
 https://globaltalentconnections.es`;
-    
-    const body = encodeURIComponent(bodyText);
-    
-    // Abrir Gmail en pestaña nueva
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
-    window.open(gmailUrl, '_blank');
-};
 
-// 5. ABRIR GMAIL PARA EMAIL DE RECHAZO (No Calificado)
-const handleOpenRejectionEmail = () => {
-    if (!candidate.email) {
-        alert("⚠️ El candidato no tiene email registrado.");
-        return;
-    }
+        const body = encodeURIComponent(bodyText);
 
-    const recipient = candidate.email;
-    const subject = encodeURIComponent(`Actualización sobre tu proceso de selección – Global Talent Connections`);
-    
-    // Cuerpo del mensaje de rechazo profesional (con HTML para negrita)
-    const bodyText = `Hola, ${candidate.nombre}:
+        // Abrir Gmail en pestaña nueva
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
+        window.open(gmailUrl, '_blank');
+    };
+
+    // 5. ABRIR GMAIL PARA EMAIL DE RECHAZO (No Calificado)
+    const handleOpenRejectionEmail = () => {
+        if (!candidate.email) {
+            alert("⚠️ El candidato no tiene email registrado.");
+            return;
+        }
+
+        const recipient = candidate.email;
+        const subject = encodeURIComponent(`Actualización sobre tu proceso de selección – Global Talent Connections`);
+
+        // Cuerpo del mensaje de rechazo profesional (con HTML para negrita)
+        const bodyText = `Hola, ${candidate.nombre}:
 
 Ha sido un gusto conocerte y avanzar contigo hasta las etapas finales de nuestro proceso de selección. Valoramos mucho el tiempo y el esfuerzo que invertiste en cada paso.
 
@@ -3356,45 +3345,45 @@ Por ello, hemos decidido incluirte en nuestro Banco de Talento Preferencial. En 
 Te agradecemos nuevamente por confiar en nosotros y esperamos colaborar contigo en el futuro cercano.
 
 Saludos cordiales, Equipo de Selección - Global Talent Connections`;
-    
-    const body = encodeURIComponent(bodyText);
-    
-    // Abrir Gmail en pestaña nueva
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
-    window.open(gmailUrl, '_blank');
-    
-    // Registrar evento en la cronología
-    try {
-        onUpdate(candidate.id, {
-            email_rechazo_abierto: true,
-            fecha_email_rechazo: new Date().toISOString(),
-            usuario_accion: currentUser || 'Sistema'
-        });
-    } catch (error) {
-        console.error("Error registrando evento de email:", error);
-    }
-};
 
-// 4. CONFIRMAR "NO CALIFICADO" (con opción de abrir email)
-const handleConfirmDisqualified = () => {
-    // Si eligió enviar email, abrir Gmail primero
-    if (sendEmailOnDisqualify) {
-        handleOpenRejectionEmail();
-    }
+        const body = encodeURIComponent(bodyText);
 
-    // Marcar como "No Calificado"
-    updateChecklist('result', 'disqualified');
-    
-    // Cerrar modal y resetear estado
-    setShowDisqualifiedModal(false);
-    setSendEmailOnDisqualify(false);
-};
+        // Abrir Gmail en pestaña nueva
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipient}&su=${subject}&body=${body}`;
+        window.open(gmailUrl, '_blank');
+
+        // Registrar evento en la cronología
+        try {
+            onUpdate(candidate.id, {
+                email_rechazo_abierto: true,
+                fecha_email_rechazo: new Date().toISOString(),
+                usuario_accion: currentUser || 'Sistema'
+            });
+        } catch (error) {
+            console.error("Error registrando evento de email:", error);
+        }
+    };
+
+    // 4. CONFIRMAR "NO CALIFICADO" (con opción de abrir email)
+    const handleConfirmDisqualified = () => {
+        // Si eligió enviar email, abrir Gmail primero
+        if (sendEmailOnDisqualify) {
+            handleOpenRejectionEmail();
+        }
+
+        // Marcar como "No Calificado"
+        updateChecklist('result', 'disqualified');
+
+        // Cerrar modal y resetear estado
+        setShowDisqualifiedModal(false);
+        setSendEmailOnDisqualify(false);
+    };
 
     // 4. Actualizar Checklist
     const updateChecklist = (field, value) => {
         if (field === 'form2') setForm2Status(value);
         if (field === 'result') setFinalResult(value);
-        
+
         const payload = {};
         if (field === 'form2') payload.process_step_2_form = value;
         if (field === 'result') payload.process_step_3_result = value;
@@ -3418,8 +3407,8 @@ const handleConfirmDisqualified = () => {
                 : "⚠️ Para avanzar, debes completar: Link de Meet, Formulario 2 Recibido, Transcripción Analizada y Calificación Positiva.";
             return alert(mensaje);
         }
-        onUpdate(candidate.id, { 
-            stage: 'stage_3', 
+        onUpdate(candidate.id, {
+            stage: 'stage_3',
             status_interno: 'ready_for_report'
         });
     };
@@ -3428,19 +3417,19 @@ const handleConfirmDisqualified = () => {
     // 🔧 TEMPORAL: Modificado para permitir saltar Form2 en carga manual
     // ORIGINAL: const canMakeDecision = form2Status === 'received' && !!candidate.transcripcion_entrevista;
     const canMakeDecision = form2Completo && !!candidate.transcripcion_entrevista;
-    
+
     // Validación visual para habilitar botón "Pasar a Informe"
     // 🔧 TEMPORAL: Modificado para permitir saltar Form2 en carga manual
     // ORIGINAL: const isStage2Complete = meetLink && form2Status === 'received' && !!candidate.transcripcion_entrevista && finalResult === 'qualified';
     const isStage2Complete = meetLink && form2Completo && !!candidate.transcripcion_entrevista && finalResult === 'qualified';
 
-// =============================================
-// 📧 MODAL SOLICITAR VIDEO
-// =============================================
-const SolicitarVideoModal = () => {
-    const [asunto, setAsunto] = useState(`Siguiente paso: Video de Presentación - Global Talent`);
-    const [mensaje, setMensaje] = useState(
-`Hola ${candidate.nombre?.split(' ')[0] || 'Candidato'},
+    // =============================================
+    // 📧 MODAL SOLICITAR VIDEO
+    // =============================================
+    const SolicitarVideoModal = () => {
+        const [asunto, setAsunto] = useState(`Siguiente paso: Video de Presentación - Global Talent`);
+        const [mensaje, setMensaje] = useState(
+            `Hola ${candidate.nombre?.split(' ')[0] || 'Candidato'},
 
 ¡Felicitaciones! Tu CV ha sido preseleccionado para la posición de ${candidate.puesto || 'la vacante'}.
 
@@ -3460,146 +3449,146 @@ Nota: El enlace estará activo solo por las próximas 24 horas. ¡No pierdas tu 
 
 Saludos, Equipo de Selección de Global Talent Connections`
 
-    );
-    const [enviando, setEnviando] = useState(false);
+        );
+        const [enviando, setEnviando] = useState(false);
 
-    const handleEnviar = async () => {
-        setEnviando(true);
-        try {
-            const response = await fetch(`${window.API_URL}/candidatos/${candidate.id}/solicitar-video`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    asunto,
-                    mensaje,
-                    solicitado_por: currentUser || 'Admin'
-                })
-            });
-            
-            const data = await response.json();
-            
-            if (data.ok) {
-                alert('✅ Email enviado exitosamente');
-                setShowSolicitarVideoModal(false);
-                onUpdate(candidate.id, { 
-                    video_solicitado: true, 
-                    video_solicitado_fecha: new Date().toISOString() 
+        const handleEnviar = async () => {
+            setEnviando(true);
+            try {
+                const response = await fetch(`${window.API_URL}/candidatos/${candidate.id}/solicitar-video`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        asunto,
+                        mensaje,
+                        solicitado_por: currentUser || 'Admin'
+                    })
                 });
-            } else {
-                alert(`❌ Error: ${data.error || 'No se pudo enviar el email'}`);
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    alert('✅ Email enviado exitosamente');
+                    setShowSolicitarVideoModal(false);
+                    onUpdate(candidate.id, {
+                        video_solicitado: true,
+                        video_solicitado_fecha: new Date().toISOString()
+                    });
+                } else {
+                    alert(`❌ Error: ${data.error || 'No se pudo enviar el email'}`);
+                }
+            } catch (error) {
+                console.error('Error enviando solicitud:', error);
+                alert('❌ Error al enviar el email');
+            } finally {
+                setEnviando(false);
             }
-        } catch (error) {
-            console.error('Error enviando solicitud:', error);
-            alert('❌ Error al enviar el email');
-        } finally {
-            setEnviando(false);
-        }
-    };
+        };
 
-    if (!showSolicitarVideoModal) return null;
+        if (!showSolicitarVideoModal) return null;
 
-    return (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                <div className="p-4 border-b border-slate-700 flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <Video size={20} className="text-purple-400"/>
-                        Solicitar Video de Presentación
-                    </h3>
-                    <button 
-                        onClick={() => setShowSolicitarVideoModal(false)}
-                        className="text-slate-400 hover:text-white"
-                    >
-                        <X size={20}/>
-                    </button>
-                </div>
-                
-                <div className="p-4 space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Para:</label>
-                        <input 
-                            type="text" 
-                            value={candidate.email || 'Sin email'} 
-                            readOnly
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm opacity-70"
-                        />
+        return (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <div className="p-4 border-b border-slate-700 flex justify-between items-center">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            <Video size={20} className="text-purple-400" />
+                            Solicitar Video de Presentación
+                        </h3>
+                        <button
+                            onClick={() => setShowSolicitarVideoModal(false)}
+                            className="text-slate-400 hover:text-white"
+                        >
+                            <X size={20} />
+                        </button>
                     </div>
-                    
-                    <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Asunto:</label>
-                        <input 
-                            type="text" 
-                            value={asunto}
-                            onChange={(e) => setAsunto(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-purple-500 focus:outline-none"
-                        />
+
+                    <div className="p-4 space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Para:</label>
+                            <input
+                                type="text"
+                                value={candidate.email || 'Sin email'}
+                                readOnly
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm opacity-70"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Asunto:</label>
+                            <input
+                                type="text"
+                                value={asunto}
+                                onChange={(e) => setAsunto(e.target.value)}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-purple-500 focus:outline-none"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Mensaje:</label>
+                            <textarea
+                                value={mensaje}
+                                onChange={(e) => setMensaje(e.target.value)}
+                                rows={12}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-purple-500 focus:outline-none resize-none"
+                            />
+                            <p className="text-[10px] text-slate-500 mt-1">
+                                💡 [LINK_VIDEO] será reemplazado automáticamente por el enlace de subida único del candidato.
+                            </p>
+                        </div>
                     </div>
-                    
-                    <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Mensaje:</label>
-                        <textarea 
-                            value={mensaje}
-                            onChange={(e) => setMensaje(e.target.value)}
-                            rows={12}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-purple-500 focus:outline-none resize-none"
-                        />
-                        <p className="text-[10px] text-slate-500 mt-1">
-                            💡 [LINK_VIDEO] será reemplazado automáticamente por el enlace de subida único del candidato.
-                        </p>
+
+                    <div className="p-4 border-t border-slate-700 flex justify-end gap-2">
+                        <button
+                            onClick={() => setShowSolicitarVideoModal(false)}
+                            className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={handleEnviar}
+                            disabled={enviando || !candidate.email}
+                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm font-medium rounded-lg flex items-center gap-2 transition-colors"
+                        >
+                            {enviando ? (
+                                <>
+                                    <Loader2 size={14} className="animate-spin" />
+                                    Enviando...
+                                </>
+                            ) : (
+                                <>
+                                    <Send size={14} />
+                                    Enviar Solicitud
+                                </>
+                            )}
+                        </button>
                     </div>
-                </div>
-                
-                <div className="p-4 border-t border-slate-700 flex justify-end gap-2">
-                    <button
-                        onClick={() => setShowSolicitarVideoModal(false)}
-                        className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors"
-                    >
-                        Cancelar
-                    </button>
-                    <button
-                        onClick={handleEnviar}
-                        disabled={enviando || !candidate.email}
-                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm font-medium rounded-lg flex items-center gap-2 transition-colors"
-                    >
-                        {enviando ? (
-                            <>
-                                <Loader2 size={14} className="animate-spin"/>
-                                Enviando...
-                            </>
-                        ) : (
-                            <>
-                                <Send size={14}/>
-                                Enviar Solicitud
-                            </>
-                        )}
-                    </button>
                 </div>
             </div>
-        </div>
-    );
-};
+        );
+    };
 
     return (
         <div className="flex flex-col h-full animate-in slide-in-from-right duration-300 pb-10 max-w-7xl mx-auto px-4 relative">
-            
+
             {/* --- MODAL DE DESCARTE (INTACTO) --- */}
             {showDiscardModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="bg-slate-900 border border-rose-900/50 rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
                         <button onClick={() => setShowDiscardModal(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white">✕</button>
-                        
+
                         <div className="flex items-center gap-3 mb-4 text-rose-500">
                             <Trash2 size={24} />
                             <h3 className="text-xl font-bold text-white">Descartar Candidato</h3>
                         </div>
-                        
+
                         <p className="text-slate-400 text-sm mb-4">
-                            Estás a punto de mover a <strong className="text-white">{candidate.nombre}</strong> a la papelera. 
+                            Estás a punto de mover a <strong className="text-white">{candidate.nombre}</strong> a la papelera.
                             Por favor, indica el motivo para futuras referencias.
                         </p>
 
                         <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Motivo del descarte</label>
-                        <textarea 
+                        <textarea
                             className="w-full h-24 bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-white focus:border-rose-500 focus:outline-none resize-none mb-6"
                             placeholder="Ej: Salario fuera de rango, no tiene inglés..."
                             value={discardReason}
@@ -3635,11 +3624,11 @@ Saludos, Equipo de Selección de Global Talent Connections`
                         </div>
 
                         <div className="flex justify-end gap-3">
-                            <button 
+                            <button
                                 onClick={() => {
                                     setShowDiscardModal(false);
                                     setSendEmailOnDiscard(false);
-                                }} 
+                                }}
                                 className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors"
                             >
                                 Cancelar
@@ -3656,21 +3645,21 @@ Saludos, Equipo de Selección de Global Talent Connections`
             {showApproveModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="bg-slate-900 border border-emerald-900/50 rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
-                        <button 
+                        <button
                             onClick={() => {
                                 setShowApproveModal(false);
                                 setSendEmailOnApprove(false);
-                            }} 
+                            }}
                             className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"
                         >
                             ✕
                         </button>
-                        
+
                         <div className="flex items-center gap-3 mb-4 text-emerald-500">
                             <CheckCircle size={24} />
                             <h3 className="text-xl font-bold text-white">Aprobar Candidato</h3>
                         </div>
-                        
+
                         <p className="text-slate-400 text-sm mb-6">
                             Estás a punto de aprobar a <strong className="text-white">{candidate.nombre}</strong> y moverlo a la etapa de Gestión.
                         </p>
@@ -3703,17 +3692,17 @@ Saludos, Equipo de Selección de Global Talent Connections`
                         </div>
 
                         <div className="flex justify-end gap-3">
-                            <button 
+                            <button
                                 onClick={() => {
                                     setShowApproveModal(false);
                                     setSendEmailOnApprove(false);
-                                }} 
+                                }}
                                 className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors"
                             >
                                 Cancelar
                             </button>
-                            <button 
-                                onClick={confirmApprove} 
+                            <button
+                                onClick={confirmApprove}
                                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg shadow-lg shadow-emerald-900/20 flex items-center gap-2 transition-all"
                             >
                                 <CheckCircle size={16} />
@@ -3728,21 +3717,21 @@ Saludos, Equipo de Selección de Global Talent Connections`
             {showDisqualifiedModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="bg-slate-900 border border-rose-900/50 rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
-                        <button 
+                        <button
                             onClick={() => {
                                 setShowDisqualifiedModal(false);
                                 setSendEmailOnDisqualify(false);
-                            }} 
+                            }}
                             className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"
                         >
                             ✕
                         </button>
-                        
+
                         <div className="flex items-center gap-3 mb-4 text-rose-500">
                             <ThumbsDown size={24} />
                             <h3 className="text-xl font-bold text-white">Marcar como No Calificado</h3>
                         </div>
-                        
+
                         <p className="text-slate-400 text-sm mb-6">
                             Estás a punto de marcar a <strong className="text-white">{candidate.nombre}</strong> como "No Calificado".
                         </p>
@@ -3775,17 +3764,17 @@ Saludos, Equipo de Selección de Global Talent Connections`
                         </div>
 
                         <div className="flex justify-end gap-3">
-                            <button 
+                            <button
                                 onClick={() => {
                                     setShowDisqualifiedModal(false);
                                     setSendEmailOnDisqualify(false);
-                                }} 
+                                }}
                                 className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors"
                             >
                                 Cancelar
                             </button>
-                            <button 
-                                onClick={handleConfirmDisqualified} 
+                            <button
+                                onClick={handleConfirmDisqualified}
                                 className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold rounded-lg shadow-lg shadow-rose-900/20 flex items-center gap-2 transition-all"
                             >
                                 <ThumbsDown size={16} />
@@ -3826,13 +3815,13 @@ Saludos, Equipo de Selección de Global Talent Connections`
                 <div className="flex flex-col md:flex-row gap-4 md:items-center">
                     {/* SWITCH DE PESTAÑAS */}
                     <div className="bg-slate-900 p-1 rounded-lg border border-slate-800 flex self-start">
-                        <button 
+                        <button
                             onClick={() => setActiveSubTab('gestion')}
                             className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeSubTab === 'gestion' ? 'bg-slate-800 text-white shadow-sm border border-slate-700' : 'text-slate-500 hover:text-slate-300'}`}
                         >
                             Gestión
                         </button>
-                        <button 
+                        <button
                             onClick={() => setActiveSubTab('history')}
                             className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${activeSubTab === 'history' ? 'bg-slate-800 text-white shadow-sm border border-slate-700' : 'text-slate-500 hover:text-slate-300'}`}
                         >
@@ -3841,22 +3830,22 @@ Saludos, Equipo de Selección de Global Talent Connections`
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <button onClick={() => setShowDiscardModal(true)} 
-                                className="px-4 py-2 rounded-lg border border-rose-900/50 text-rose-400 hover:bg-rose-900/20 text-sm font-medium transition-colors">
+                        <button onClick={() => setShowDiscardModal(true)}
+                            className="px-4 py-2 rounded-lg border border-rose-900/50 text-rose-400 hover:bg-rose-900/20 text-sm font-medium transition-colors">
                             Descartar
                         </button>
-                        
+
                         {/* LÓGICA DE BOTÓN PRINCIPAL SEGÚN ETAPA */}
                         {candidate.stage === 'stage_1' ? (
-                            <button onClick={handleApprove} 
-                                    className="px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-all shadow-lg active:scale-95">
+                            <button onClick={handleApprove}
+                                className="px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-all shadow-lg active:scale-95">
                                 Aprobar
                             </button>
                         ) : (
-                            <button onClick={handleMoveToReport} 
-                                    disabled={!isStage2Complete}
-                                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all shadow-lg active:scale-95 flex items-center gap-2 ${isStage2Complete ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'}`}>
-                                {isStage2Complete ? <><FileJson size={16}/> Pasar a Informe</> : <><Lock size={16}/> Completar Checklist</>}
+                            <button onClick={handleMoveToReport}
+                                disabled={!isStage2Complete}
+                                className={`px-6 py-2 rounded-lg text-sm font-bold transition-all shadow-lg active:scale-95 flex items-center gap-2 ${isStage2Complete ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'}`}>
+                                {isStage2Complete ? <><FileJson size={16} /> Pasar a Informe</> : <><Lock size={16} /> Completar Checklist</>}
                             </button>
                         )}
                     </div>
@@ -3871,17 +3860,17 @@ Saludos, Equipo de Selección de Global Talent Connections`
                         <Card className="p-6 bg-slate-900 border-slate-800">
                             <div className="flex justify-between items-center mb-4">
                                 <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">IA Match</span>
-                                <div className={`px-3 py-1 rounded-full border ${ (candidate.ia_score || 0) >= 70 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400' }`}>
+                                <div className={`px-3 py-1 rounded-full border ${(candidate.ia_score || 0) >= 70 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
                                     <span className="text-3xl font-bold">{candidate.ia_score || 0}</span>
                                     <span className="text-xs opacity-70">/100</span>
                                 </div>
                             </div>
                             <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full ${ (candidate.ia_score || 0) >= 70 ? 'bg-emerald-500' : 'bg-rose-500' }`} style={{ width: `${candidate.ia_score || 5}%` }}></div>
+                                <div className={`h-full rounded-full ${(candidate.ia_score || 0) >= 70 ? 'bg-emerald-500' : 'bg-rose-500'}`} style={{ width: `${candidate.ia_score || 5}%` }}></div>
                             </div>
                             {flags.length > 0 && (
                                 <div className="mt-6 pt-4 border-t border-slate-800">
-                                    <p className="text-[10px] font-bold text-rose-500 uppercase mb-2 flex items-center gap-1"><AlertTriangle size={12}/> Alertas</p>
+                                    <p className="text-[10px] font-bold text-rose-500 uppercase mb-2 flex items-center gap-1"><AlertTriangle size={12} /> Alertas</p>
                                     <div className="flex flex-wrap gap-2">
                                         {flags.map((flag, i) => <span key={i} className="px-2 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold rounded uppercase">{flag}</span>)}
                                     </div>
@@ -3907,13 +3896,13 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                             <label className="text-[10px] text-purple-400 font-bold uppercase mb-1 block">Link Video:</label>
                                             <input type="text" value={newVideoLink} onChange={(e) => setNewVideoLink(e.target.value)} placeholder="https://..." className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white outline-none focus:border-purple-500" />
                                         </div>
-                                        <button 
-                                            onClick={saveLinks} 
+                                        <button
+                                            onClick={saveLinks}
                                             disabled={isAnalyzingVideo}
                                             className="w-full bg-emerald-600 text-white py-1.5 rounded text-xs font-bold hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                         >
                                             {isAnalyzingVideo ? (
-                                                <Loader2 size={14} className="animate-spin"/>
+                                                <Loader2 size={14} className="animate-spin" />
                                             ) : (
                                                 <>💾 GUARDAR CAMBIOS</>
                                             )}
@@ -3921,7 +3910,7 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                     </div>
                                 )}
                                 <div className="flex items-center gap-4 p-4 rounded-xl border border-slate-800 bg-slate-950 hover:border-blue-500/50 hover:bg-slate-900 transition-all group">
-                                    <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform"><FileText size={20}/></div>
+                                    <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform"><FileText size={20} /></div>
                                     <div className="flex-1">
                                         <h4 className="text-sm font-bold text-white">Curriculum Vitae</h4>
                                         {/* Link al CV o mensaje de no disponible */}
@@ -3932,7 +3921,7 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                         ) : (
                                             <p className="text-xs text-slate-500">Link no disponible</p>
                                         )}
-                                        
+
                                         {/* 🔧 BOTONES DE REPARACIÓN - Solo si hay problemas con el CV */}
                                         {(!candidate.tiene_pdf || !candidate.cv_url || candidate.cv_url.length <= 5 || (!candidate.texto_extraido && candidate.ia_score === 0)) && (
                                             <div className="flex items-center gap-2 mt-1">
@@ -3963,7 +3952,7 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                         className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-1 disabled:opacity-50"
                                                         title="Buscar en Storage"
                                                     >
-                                                        {isReparandoCV ? <Loader2 size={10} className="animate-spin"/> : <Wrench size={10}/>}
+                                                        {isReparandoCV ? <Loader2 size={10} className="animate-spin" /> : <Wrench size={10} />}
                                                         Storage
                                                     </button>
                                                 )}
@@ -3995,7 +3984,7 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                         className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 disabled:opacity-50"
                                                         title="Buscar en WorkDrive (backup)"
                                                     >
-                                                        {isReparandoCV ? <Loader2 size={10} className="animate-spin"/> : <CloudDownload size={10}/>}
+                                                        {isReparandoCV ? <Loader2 size={10} className="animate-spin" /> : <CloudDownload size={10} />}
                                                         WorkDrive
                                                     </button>
                                                 )}
@@ -4005,7 +3994,7 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                 </div>
                                 <div className={`flex items-center gap-4 p-4 rounded-xl border border-slate-800 bg-slate-950 transition-all group ${!candidate.video_url || !candidate.video_url.startsWith('http') ? 'opacity-50' : ''} ${isAnalyzingVideo ? 'border-purple-500/50 bg-purple-500/5' : ''}`}>
                                     <div className="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform">
-                                        {isAnalyzingVideo ? <Loader2 size={20} className="animate-spin"/> : <Video size={20}/>}
+                                        {isAnalyzingVideo ? <Loader2 size={20} className="animate-spin" /> : <Video size={20} />}
                                     </div>
                                     <div className="flex-1">
                                         <h4 className="text-sm font-bold text-white flex items-center gap-2">
@@ -4026,130 +4015,130 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                 {candidate.video_tipo === 'archivo' ? 'Video subido (ver en Zoho)' : 'No disponible'}
                                             </p>
                                         )}
-                                        
+
                                         {/* 🎥 BOTÓN REPARAR VIDEO - Solo si no hay video válido */}
                                         {(!candidate.video_url || !candidate.video_url.startsWith('http')) && (
-    <div className="flex items-center gap-2 mt-1">
-        {/* Botón Solicitar Video por Email */}
-        <button
-            onClick={() => setShowSolicitarVideoModal(true)}
-            className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/30 hover:border-emerald-500/50 transition-all"
-            title="Enviar email solicitando video"
-        >
-            <Mail size={10}/>
-            Solicitar Video
-        </button>
-        
-        {/* Botón WorkDrive (existente) */}
-        <button
-            onClick={async () => {
-                if (isReparandoCV) return;
-                setIsReparandoCV(true);
-                try {
-                    const result = await api.candidates.repararVideoDesdeWorkDrive(candidate.id);
-                    if (result.ok) {
-                        alert(`✅ ${result.mensaje}\nArchivo: ${result.datos.archivo_encontrado}`);
-                        const data = await api.candidates.list();
-                        const lista = data.candidatos || data || [];
-                        const actualizado = lista.find(c => c.id === candidate.id);
-                        if (actualizado) onUpdate(candidate.id, actualizado);
-                    } else {
-                        alert(`❌ ${result.error || result.mensaje}`);
-                    }
-                } catch (error) {
-                    alert("❌ Error al recuperar video de WorkDrive");
-                } finally {
-                    setIsReparandoCV(false);
-                }
-            }}
-            disabled={isReparandoCV}
-            className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 disabled:opacity-50"
-            title="Buscar video en WorkDrive (backup)"
-        >
-            {isReparandoCV ? <Loader2 size={10} className="animate-spin"/> : <CloudDownload size={10}/>}
-            WorkDrive
-        </button>
-    </div>
-)}
+                                            <div className="flex items-center gap-2 mt-1">
+                                                {/* Botón Solicitar Video por Email */}
+                                                <button
+                                                    onClick={() => setShowSolicitarVideoModal(true)}
+                                                    className="text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/30 hover:border-emerald-500/50 transition-all"
+                                                    title="Enviar email solicitando video"
+                                                >
+                                                    <Mail size={10} />
+                                                    Solicitar Video
+                                                </button>
+
+                                                {/* Botón WorkDrive (existente) */}
+                                                <button
+                                                    onClick={async () => {
+                                                        if (isReparandoCV) return;
+                                                        setIsReparandoCV(true);
+                                                        try {
+                                                            const result = await api.candidates.repararVideoDesdeWorkDrive(candidate.id);
+                                                            if (result.ok) {
+                                                                alert(`✅ ${result.mensaje}\nArchivo: ${result.datos.archivo_encontrado}`);
+                                                                const data = await api.candidates.list();
+                                                                const lista = data.candidatos || data || [];
+                                                                const actualizado = lista.find(c => c.id === candidate.id);
+                                                                if (actualizado) onUpdate(candidate.id, actualizado);
+                                                            } else {
+                                                                alert(`❌ ${result.error || result.mensaje}`);
+                                                            }
+                                                        } catch (error) {
+                                                            alert("❌ Error al recuperar video de WorkDrive");
+                                                        } finally {
+                                                            setIsReparandoCV(false);
+                                                        }
+                                                    }}
+                                                    disabled={isReparandoCV}
+                                                    className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 disabled:opacity-50"
+                                                    title="Buscar video en WorkDrive (backup)"
+                                                >
+                                                    {isReparandoCV ? <Loader2 size={10} className="animate-spin" /> : <CloudDownload size={10} />}
+                                                    WorkDrive
+                                                </button>
+                                            </div>
+                                        )}
 
                                     </div>
                                 </div>
                             </div>
                         </Card>
 
-                            {/* ⭐ SISTEMA DE MARCADORES (COMPACTO) */}
-                            <Card className="p-4 bg-slate-900 border-slate-800">
-                                <div className="flex justify-between items-center mb-3">
-                                    <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Marcadores</h3>
-                                    {/* Solo mostrar botón de agregar si está en Stage 1 */}
-                                    {candidate.stage === 'stage_1' && (
-                                        <button
-                                            onClick={() => setShowMarcadorModal(true)}
-                                            className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                                        >
-                                            <span>+</span>
-                                        </button>
-                                    )}
-                                </div>
-
-                                {(!candidate.marcadores || candidate.marcadores.length === 0) ? (
-                                    <div className="text-center py-4 border-2 border-dashed border-slate-800 rounded-lg">
-                                        <p className="text-[10px] text-slate-500">
-                                            {candidate.stage === 'stage_1' ? 'Sin marcadores' : 'N/A'}
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
-                                        {candidate.marcadores.map((marcador, index) => {
-                                            const colores = {
-                                                estrella: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-400', icon: '⭐' },
-                                                redflag: { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400', icon: '🚩' },
-                                                info: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-400', icon: 'ℹ️' },
-                                                warning: { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-400', icon: '⚠️' }
-                                            };
-                                            const color = colores[marcador.tipo] || colores.info;
-
-                                            return (
-                                                <div
-                                                    key={index}
-                                                    className={`p-2 rounded border ${color.bg} ${color.border} group relative cursor-help`}
-                                                    title={`${marcador.razon} | Por: ${marcador.usuario}`}
-                                                >
-                                                    <div className="flex items-start justify-between gap-1">
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-1.5 mb-1">
-                                                                <span className="text-sm">{color.icon}</span>
-                                                                <span className={`text-[10px] font-bold uppercase ${color.text} truncate`}>
-                                                                    {marcador.tipo === 'estrella' ? 'Destacado' :
-                                                                     marcador.tipo === 'redflag' ? 'Red Flag' :
-                                                                     marcador.tipo === 'warning' ? 'Advertencia' : 'Info'}
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-[10px] text-slate-300 line-clamp-2 mb-1">{marcador.razon}</p>
-                                                            <div className="text-[9px] text-slate-500 truncate">
-                                                                {marcador.usuario}
-                                                            </div>
-                                                        </div>
-                                                        {/* Solo permitir eliminar en Stage 1 */}
-                                                        {candidate.stage === 'stage_1' && (
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleEliminarMarcador(index);
-                                                                }}
-                                                                className="text-slate-500 hover:text-red-400 transition-colors text-[10px] opacity-0 group-hover:opacity-100 flex-shrink-0"
-                                                                title="Eliminar marcador"
-                                                            >
-                                                                ✕
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
+                        {/* ⭐ SISTEMA DE MARCADORES (COMPACTO) */}
+                        <Card className="p-4 bg-slate-900 border-slate-800">
+                            <div className="flex justify-between items-center mb-3">
+                                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Marcadores</h3>
+                                {/* Solo mostrar botón de agregar si está en Stage 1 */}
+                                {candidate.stage === 'stage_1' && (
+                                    <button
+                                        onClick={() => setShowMarcadorModal(true)}
+                                        className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                                    >
+                                        <span>+</span>
+                                    </button>
                                 )}
-                            </Card>
+                            </div>
+
+                            {(!candidate.marcadores || candidate.marcadores.length === 0) ? (
+                                <div className="text-center py-4 border-2 border-dashed border-slate-800 rounded-lg">
+                                    <p className="text-[10px] text-slate-500">
+                                        {candidate.stage === 'stage_1' ? 'Sin marcadores' : 'N/A'}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                                    {candidate.marcadores.map((marcador, index) => {
+                                        const colores = {
+                                            estrella: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-400', icon: '⭐' },
+                                            redflag: { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400', icon: '🚩' },
+                                            info: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-400', icon: 'ℹ️' },
+                                            warning: { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-400', icon: '⚠️' }
+                                        };
+                                        const color = colores[marcador.tipo] || colores.info;
+
+                                        return (
+                                            <div
+                                                key={index}
+                                                className={`p-2 rounded border ${color.bg} ${color.border} group relative cursor-help`}
+                                                title={`${marcador.razon} | Por: ${marcador.usuario}`}
+                                            >
+                                                <div className="flex items-start justify-between gap-1">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-1.5 mb-1">
+                                                            <span className="text-sm">{color.icon}</span>
+                                                            <span className={`text-[10px] font-bold uppercase ${color.text} truncate`}>
+                                                                {marcador.tipo === 'estrella' ? 'Destacado' :
+                                                                    marcador.tipo === 'redflag' ? 'Red Flag' :
+                                                                        marcador.tipo === 'warning' ? 'Advertencia' : 'Info'}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[10px] text-slate-300 line-clamp-2 mb-1">{marcador.razon}</p>
+                                                        <div className="text-[9px] text-slate-500 truncate">
+                                                            {marcador.usuario}
+                                                        </div>
+                                                    </div>
+                                                    {/* Solo permitir eliminar en Stage 1 */}
+                                                    {candidate.stage === 'stage_1' && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleEliminarMarcador(index);
+                                                            }}
+                                                            className="text-slate-500 hover:text-red-400 transition-colors text-[10px] opacity-0 group-hover:opacity-100 flex-shrink-0"
+                                                            title="Eliminar marcador"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </Card>
                     </div>
 
                     {/* COLUMNA DERECHA */}
@@ -4226,62 +4215,62 @@ Saludos, Equipo de Selección de Global Talent Connections`
                         {/* 🔥 SECCIÓN DE GESTIÓN (SOLO SI ESTÁ EN ETAPA 2) 🔥 */}
                         {candidate.stage === 'stage_2' && (
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-                                
+
                                 {/* 1. AGENDAR Y TRANSCRIPCIÓN */}
                                 <div className="bg-slate-950 border border-blue-900/30 rounded-xl p-6 shadow-xl">
                                     <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                        <Calendar size={16}/> 1. Gestión de Entrevista
+                                        <Calendar size={16} /> 1. Gestión de Entrevista
                                     </h3>
-                                    
-{/* BLOQUE MEJORADO: GENERAR LINK CON IA + INPUT READONLY + ENVIAR MAIL */}
-<div className="grid grid-cols-1 gap-4 mb-6">
-   <label className="text-[10px] text-slate-500 font-bold uppercase mb-1 block">Link de Entrevista con Bot de IA</label>
-   <div className="flex gap-2 w-full">
-       {/* INPUT READONLY */}
-       <div className="relative flex-1">
-           <Video className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" size={16}/>
-           <input
-               type="text"
-               readOnly
-               placeholder="El link aparecerá aquí después de generarlo..."
-               className={`w-full pl-10 pr-4 py-2.5 bg-slate-900 border rounded-lg text-sm text-white transition-all placeholder-slate-600 ${(localLink || candidate?.meet_link) ? 'border-emerald-500/50 text-emerald-400' : 'border-slate-700'}`}
-               value={localLink || candidate?.meet_link || ""}
-           />
-       </div>
-      
-       {/* BOTÓN: GENERAR LINK CON IA */}
-       <button
-           onClick={generarLink}
-           disabled={loadingAI || !candidate?.email}
-           className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${
-               loadingAI || !candidate?.email
-                   ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed' 
-                   : (localLink || candidate?.meet_link)
-                       ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400'
-                       : 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-lg'
-           }`}
-           title={loadingAI ? "Generando link..." : (localLink || candidate?.meet_link) ? "Link generado exitosamente" : "Generar link de entrevista con bot de IA"}
-       >
-           {loadingAI ? (
-               <><Loader2 size={14} className="animate-spin"/> GENERANDO...</>
-           ) : (localLink || candidate?.meet_link) ? (
-               <><CheckCircle size={14}/> LISTO</>
-           ) : (
-               <><Sparkles size={14}/> GENERAR LINK</>
-           )}
-       </button>
 
-       {/* BOTÓN: ENVIAR MAIL (mantener existente) */}
-       <button
-           onClick={handleOpenMail}
-           disabled={!candidate?.meet_link && !localLink && !meetLink}
-           className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${!candidate?.meet_link && !localLink && !meetLink ? 'bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-lg'}`}
-           title="Abrir correo con invitación"
-       >
-           <Mail size={14}/> ENVIAR MAIL
-       </button>
-   </div>
-</div>
+                                    {/* BLOQUE MEJORADO: GENERAR LINK CON IA + INPUT READONLY + ENVIAR MAIL */}
+                                    <div className="grid grid-cols-1 gap-4 mb-6">
+                                        <label className="text-[10px] text-slate-500 font-bold uppercase mb-1 block">Link de Entrevista con Bot de IA</label>
+                                        <div className="flex gap-2 w-full">
+                                            {/* INPUT READONLY */}
+                                            <div className="relative flex-1">
+                                                <Video className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" size={16} />
+                                                <input
+                                                    type="text"
+
+                                                    placeholder="El link aparecerá aquí después de generarlo..."
+                                                    className={`w-full pl-10 pr-4 py-2.5 bg-slate-900 border rounded-lg text-sm text-white transition-all placeholder-slate-600 ${(localLink || candidate?.meet_link) ? 'border-emerald-500/50 text-emerald-400' : 'border-slate-700'}`}
+                                                    value={localLink || candidate?.meet_link || ""}
+                                                    onChange={(e) => setLocalLink(e.target.value)}
+                                                />
+                                            </div>
+
+                                            {/* BOTÓN: GENERAR LINK CON IA */}
+                                            <button
+                                                onClick={generarLink}
+                                                disabled={loadingAI || !candidate?.email}
+                                                className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${loadingAI || !candidate?.email
+                                                        ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+                                                        : (localLink || candidate?.meet_link)
+                                                            ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400'
+                                                            : 'bg-purple-600 hover:bg-purple-500 text-white border-purple-500 shadow-lg'
+                                                    }`}
+                                                title={loadingAI ? "Generando link..." : (localLink || candidate?.meet_link) ? "Link generado exitosamente" : "Generar link de entrevista con bot de IA"}
+                                            >
+                                                {loadingAI ? (
+                                                    <><Loader2 size={14} className="animate-spin" /> GENERANDO...</>
+                                                ) : (localLink || candidate?.meet_link) ? (
+                                                    <><CheckCircle size={14} /> LISTO</>
+                                                ) : (
+                                                    <><Sparkles size={14} /> GENERAR LINK</>
+                                                )}
+                                            </button>
+
+                                            {/* BOTÓN: ENVIAR MAIL (mantener existente) */}
+                                            <button
+                                                onClick={handleOpenMail}
+                                                disabled={!candidate?.meet_link && !localLink && !meetLink}
+                                                className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${!candidate?.meet_link && !localLink && !meetLink ? 'bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-lg'}`}
+                                                title="Abrir correo con invitación"
+                                            >
+                                                <Mail size={14} /> ENVIAR MAIL
+                                            </button>
+                                        </div>
+                                    </div>
 
                                     {/* === SECCIÓN DE RESULTADO DE IA === */}
                                     {(candidate.entrevista_analisis || (candidate.transcripcion_entrevista && candidate.ia_motivos)) && (
@@ -4291,11 +4280,10 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                 <h3 className="text-indigo-400 font-bold flex items-center gap-2">
                                                     <LucideIcon name="Bot" size={18} /> ANÁLISIS DEL BOT
                                                 </h3>
-                                                <div className={`px-3 py-1 rounded-full text-sm font-bold border ${
-                                                    (candidate.ia_score ?? candidate.entrevista_analisis?.score ?? 0) >= 70 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                                    (candidate.ia_score ?? candidate.entrevista_analisis?.score ?? 0) >= 50 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                                    'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                                                }`}>
+                                                <div className={`px-3 py-1 rounded-full text-sm font-bold border ${(candidate.ia_score ?? candidate.entrevista_analisis?.score ?? 0) >= 70 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                                        (candidate.ia_score ?? candidate.entrevista_analisis?.score ?? 0) >= 50 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                                            'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                                    }`}>
                                                     SCORE: {candidate.ia_score ?? candidate.entrevista_analisis?.score ?? 0}/100
                                                 </div>
                                             </div>
@@ -4310,7 +4298,7 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                 {/* Puntos Fuertes */}
                                                 <div className="bg-emerald-950/20 p-3 rounded-lg border border-emerald-900/30">
                                                     <h4 className="text-emerald-400 text-xs font-bold mb-2 flex items-center gap-1">
-                                                        <CheckCircle size={12}/> PUNTOS FUERTES
+                                                        <CheckCircle size={12} /> PUNTOS FUERTES
                                                     </h4>
                                                     <ul className="text-xs text-slate-400 space-y-1">
                                                         {candidate.entrevista_analisis?.puntos_fuertes?.length > 0 ? candidate.entrevista_analisis.puntos_fuertes.map((punto, i) => (
@@ -4324,7 +4312,7 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                 {/* Puntos Débiles / Alertas */}
                                                 <div className="bg-rose-950/20 p-3 rounded-lg border border-rose-900/30">
                                                     <h4 className="text-rose-400 text-xs font-bold mb-2 flex items-center gap-1">
-                                                        <AlertCircle size={12}/> ÁREAS DE MEJORA
+                                                        <AlertCircle size={12} /> ÁREAS DE MEJORA
                                                     </h4>
                                                     <ul className="text-xs text-slate-400 space-y-1">
                                                         {(candidate.entrevista_analisis?.puntos_debiles?.length > 0 || candidate.entrevista_analisis?.alertas?.length > 0 || candidate.ia_alertas?.length > 0) ? (candidate.entrevista_analisis?.puntos_debiles || candidate.entrevista_analisis?.alertas || candidate.ia_alertas || []).map((punto, i) => (
@@ -4346,256 +4334,250 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                         </div>
                                     )}
 
-                                   {/* BLOQUE MEJORADO: TRANSCRIPCIÓN + IA */}
-                                   <div className="border-t border-slate-800 pt-4 mt-4">
-                                       <div className="flex justify-between items-end mb-2">
-                                           <label className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
-                                               <MessageSquare size={12}/> Transcripción / Notas
-                                           </label>
-                                           
-                                           {/* BOTÓN MÁGICO DE ANÁLISIS - Solo mostrar si NO está analizada */}
-                                           {!candidate.transcripcion_entrevista && (
-                                               <button
-                                                   onClick={handleAnalyzeInterview}
-                                                   disabled={isAnalyzing || !transcript}
-                                                   className="text-[10px] bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded border border-purple-400 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-900/20"
-                                               >
-                                                   {isAnalyzing ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>}
-                                                   {isAnalyzing ? "Analizando..." : "ANALIZAR ENTREVISTA"}
-                                               </button>
-                                           )}
-                                       </div>
-                                       
-                                       {/* Si ya está analizada, mostrar mensaje fijo */}
-                                       {candidate.transcripcion_entrevista ? (
-                                           <div className="w-full h-32 bg-emerald-900/20 border border-emerald-500/50 rounded-lg p-4 flex items-center justify-center">
-                                               <div className="text-center">
-                                                   <div className="text-emerald-400 text-sm font-bold mb-1 flex items-center justify-center gap-2">
-                                                       <CheckCircle size={16}/> TRANSCRIPCIÓN ANALIZADA
-                                                   </div>
-                                                   <p className="text-xs text-emerald-300/70">La transcripción fue procesada y el score fue actualizado.</p>
-                                               </div>
-                                           </div>
-                                       ) : (
-                                           <textarea
-                                               className="w-full h-32 bg-slate-900 border border-slate-800 rounded-lg p-4 text-sm text-slate-300 focus:border-purple-500 outline-none resize-none placeholder-slate-600 leading-relaxed custom-scrollbar"
-                                               placeholder="Pega aquí la transcripción o toma notas. Luego presiona 'Analizar' para actualizar el Score."
-                                               value={transcript}
-                                               onChange={(e) => setTranscript(e.target.value)}
-                                               onBlur={saveTranscript}
-                                           ></textarea>
-                                       )}
-                                   </div>
-                               </div>
+                                    {/* BLOQUE MEJORADO: TRANSCRIPCIÓN + IA */}
+                                    <div className="border-t border-slate-800 pt-4 mt-4">
+                                        <div className="flex justify-between items-end mb-2">
+                                            <label className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
+                                                <MessageSquare size={12} /> Transcripción / Notas
+                                            </label>
+
+                                            {/* BOTÓN MÁGICO DE ANÁLISIS - Solo mostrar si NO está analizada */}
+                                            {!candidate.transcripcion_entrevista && (
+                                                <button
+                                                    onClick={handleAnalyzeInterview}
+                                                    disabled={isAnalyzing || !transcript}
+                                                    className="text-[10px] bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded border border-purple-400 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-900/20"
+                                                >
+                                                    {isAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                                                    {isAnalyzing ? "Analizando..." : "ANALIZAR ENTREVISTA"}
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Si ya está analizada, mostrar mensaje fijo */}
+                                        {candidate.transcripcion_entrevista ? (
+                                            <div className="w-full h-32 bg-emerald-900/20 border border-emerald-500/50 rounded-lg p-4 flex items-center justify-center">
+                                                <div className="text-center">
+                                                    <div className="text-emerald-400 text-sm font-bold mb-1 flex items-center justify-center gap-2">
+                                                        <CheckCircle size={16} /> TRANSCRIPCIÓN ANALIZADA
+                                                    </div>
+                                                    <p className="text-xs text-emerald-300/70">La transcripción fue procesada y el score fue actualizado.</p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <textarea
+                                                className="w-full h-32 bg-slate-900 border border-slate-800 rounded-lg p-4 text-sm text-slate-300 focus:border-purple-500 outline-none resize-none placeholder-slate-600 leading-relaxed custom-scrollbar"
+                                                placeholder="Pega aquí la transcripción o toma notas. Luego presiona 'Analizar' para actualizar el Score."
+                                                value={transcript}
+                                                onChange={(e) => setTranscript(e.target.value)}
+                                                onBlur={saveTranscript}
+                                            ></textarea>
+                                        )}
+                                    </div>
+                                </div>
 
 
-                               {/* 2. CHECKLIST DE AVANCE (VALIDADOR) */}
-                               {/* 2. SEMÁFORO FORMULARIO 2 + DECISIÓN */}
-                               <div className="bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden">
-                                   {/* Decoración lateral según estado */}
-                                   <div className={`absolute top-0 left-0 w-1 h-full transition-colors duration-500 ${
-                                       form2Status === 'received' ? 'bg-emerald-500' :
-                                       form2Status === 'sent' ? 'bg-amber-500' : 'bg-slate-700'
-                                   }`}></div>
+                                {/* 2. CHECKLIST DE AVANCE (VALIDADOR) */}
+                                {/* 2. SEMÁFORO FORMULARIO 2 + DECISIÓN */}
+                                <div className="bg-slate-950 border border-slate-800 rounded-xl p-6 shadow-xl relative overflow-hidden">
+                                    {/* Decoración lateral según estado */}
+                                    <div className={`absolute top-0 left-0 w-1 h-full transition-colors duration-500 ${form2Status === 'received' ? 'bg-emerald-500' :
+                                            form2Status === 'sent' ? 'bg-amber-500' : 'bg-slate-700'
+                                        }`}></div>
 
 
-                                   <h3 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2">
-                                       <FileJson size={16}/> 2. Formulario de Validación
-                                   </h3>
-                                  
-                                   <div className="space-y-8">
-                                       {/* SEMÁFORO DE ESTADOS */}
-                                       <div>
-                                           <label className="text-[10px] text-slate-500 font-bold uppercase mb-3 block">Estado del Envío</label>
-                                           <div className="grid grid-cols-3 gap-2 bg-slate-900 p-1 rounded-lg border border-slate-800">
-                                              
-                                               {/* 1. PENDIENTE (GRIS) - SOLO VISUAL */}
-<div
-   className={`py-2 px-3 rounded-md text-[10px] font-bold uppercase text-center ${
-       form2Status === 'pending'
-       ? 'bg-slate-700 text-white shadow-sm'
-       : 'text-slate-600'
-   }`}
->
-   ⚪ Pendiente
-</div>
+                                    <h3 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                        <FileJson size={16} /> 2. Formulario de Validación
+                                    </h3>
+
+                                    <div className="space-y-8">
+                                        {/* SEMÁFORO DE ESTADOS */}
+                                        <div>
+                                            <label className="text-[10px] text-slate-500 font-bold uppercase mb-3 block">Estado del Envío</label>
+                                            <div className="grid grid-cols-3 gap-2 bg-slate-900 p-1 rounded-lg border border-slate-800">
+
+                                                {/* 1. PENDIENTE (GRIS) - SOLO VISUAL */}
+                                                <div
+                                                    className={`py-2 px-3 rounded-md text-[10px] font-bold uppercase text-center ${form2Status === 'pending'
+                                                            ? 'bg-slate-700 text-white shadow-sm'
+                                                            : 'text-slate-600'
+                                                        }`}
+                                                >
+                                                    ⚪ Pendiente
+                                                </div>
 
 
-                                               {/* 2. ENVIADO (AMARILLO) - CON ACCIÓN DE MAIL */}
-                                               <button
-                                                   onClick={handleSendForm2}
-                                                   className={`py-2 rounded-md text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-2 ${
-                                                       form2Status === 'sent'
-                                                       ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-md'
-                                                       : 'text-slate-500 hover:text-amber-400'
-                                                   }`}
-                                               >
-                                                   {form2Status === 'sent' ? <Mail size={12}/> : <Send size={12}/>}
-                                                   {form2Status === 'sent' ? 'Enviado' : 'Enviar Mail'}
-                                               </button>
+                                                {/* 2. ENVIADO (AMARILLO) - CON ACCIÓN DE MAIL */}
+                                                <button
+                                                    onClick={handleSendForm2}
+                                                    className={`py-2 rounded-md text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-2 ${form2Status === 'sent'
+                                                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-md'
+                                                            : 'text-slate-500 hover:text-amber-400'
+                                                        }`}
+                                                >
+                                                    {form2Status === 'sent' ? <Mail size={12} /> : <Send size={12} />}
+                                                    {form2Status === 'sent' ? 'Enviado' : 'Enviar Mail'}
+                                                </button>
 
 
-                                               {/* 3. RECIBIDO (VERDE) */}
-                                               {/* 3. RECIBIDO (VERDE) - MODO SOLO LECTURA 🔒 */}
-<button
-   disabled={true}
-   className={`py-2 rounded-md text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-2 cursor-default ${
-       form2Status === 'received'
-       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-md'
-       : 'bg-slate-900 border-slate-800 text-slate-600 opacity-50'
-   }`}
->
-   {form2Status === 'received' ? <CheckCircle size={12}/> : <div className="w-3 h-3 rounded-full border border-slate-600"></div>}
-   {form2Status === 'received' ? 'CONFIRMADO' : 'ESPERANDO RESPUESTA...'}
-</button>
-                                           </div>
-                                           {form2Status === 'sent' && <p className="text-[9px] text-amber-500/70 mt-1 pl-1">* Esperando respuesta del candidato.</p>}
-                                           {form2Status === 'received' && <p className="text-[9px] text-emerald-500/70 mt-1 pl-1">* Respuestas cargadas correctamente.</p>}
-                                           
-                                           {/* 🔧 BOTÓN TEMPORAL: Saltar Form2 (solo para carga manual) */}
-                                           {esCargaManual && form2Status !== 'received' && !candidate.skip_form2 && (
-                                               <div className="mt-4 pt-4 border-t border-slate-800">
-                                                   <p className="text-[9px] text-amber-500/70 mb-2">Candidato de carga manual - Opción temporal:</p>
-                                                   <button
-                                                       onClick={() => {
-                                                           if (confirm("¿Marcar este candidato como 'Formulario 2 saltado'? Esto permitirá avanzar al informe sin el Form2. Esta acción es temporal.")) {
-                                                               onUpdate(candidate.id, { 
-                                                                   skip_form2: true,
-                                                                   usuario_accion: currentUser || 'Sistema'
-                                                               });
-                                                               setForm2Status('skipped'); // Actualizar estado local para feedback visual
-                                                           }
-                                                       }}
-                                                       className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-lg border border-amber-400 flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-900/20"
-                                                       title="Marcar como saltado (solo para candidatos de carga manual)"
-                                                   >
-                                                       <XCircle size={14}/> Saltar Formulario 2
-                                                   </button>
-                                               </div>
-                                           )}
-                                           
-                                           {/* Indicador visual si está saltado */}
-                                           {candidate.skip_form2 && (
-                                               <div className="mt-4 pt-4 border-t border-slate-800">
-                                                   <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                                                       <XCircle size={14} className="text-amber-400"/>
-                                                       <div className="flex-1">
-                                                           <p className="text-xs font-bold text-amber-400">Formulario 2 Saltado</p>
-                                                           <p className="text-[9px] text-amber-500/70">Este candidato puede avanzar al informe sin Form2</p>
-                                                       </div>
-                                                   </div>
-                                               </div>
-                                           )}
-                                       </div>
+                                                {/* 3. RECIBIDO (VERDE) */}
+                                                {/* 3. RECIBIDO (VERDE) - MODO SOLO LECTURA 🔒 */}
+                                                <button
+                                                    disabled={true}
+                                                    className={`py-2 rounded-md text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-2 cursor-default ${form2Status === 'received'
+                                                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-md'
+                                                            : 'bg-slate-900 border-slate-800 text-slate-600 opacity-50'
+                                                        }`}
+                                                >
+                                                    {form2Status === 'received' ? <CheckCircle size={12} /> : <div className="w-3 h-3 rounded-full border border-slate-600"></div>}
+                                                    {form2Status === 'received' ? 'CONFIRMADO' : 'ESPERANDO RESPUESTA...'}
+                                                </button>
+                                            </div>
+                                            {form2Status === 'sent' && <p className="text-[9px] text-amber-500/70 mt-1 pl-1">* Esperando respuesta del candidato.</p>}
+                                            {form2Status === 'received' && <p className="text-[9px] text-emerald-500/70 mt-1 pl-1">* Respuestas cargadas correctamente.</p>}
+
+                                            {/* 🔧 BOTÓN TEMPORAL: Saltar Form2 (solo para carga manual) */}
+                                            {esCargaManual && form2Status !== 'received' && !candidate.skip_form2 && (
+                                                <div className="mt-4 pt-4 border-t border-slate-800">
+                                                    <p className="text-[9px] text-amber-500/70 mb-2">Candidato de carga manual - Opción temporal:</p>
+                                                    <button
+                                                        onClick={() => {
+                                                            if (confirm("¿Marcar este candidato como 'Formulario 2 saltado'? Esto permitirá avanzar al informe sin el Form2. Esta acción es temporal.")) {
+                                                                onUpdate(candidate.id, {
+                                                                    skip_form2: true,
+                                                                    usuario_accion: currentUser || 'Sistema'
+                                                                });
+                                                                setForm2Status('skipped'); // Actualizar estado local para feedback visual
+                                                            }
+                                                        }}
+                                                        className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-lg border border-amber-400 flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-900/20"
+                                                        title="Marcar como saltado (solo para candidatos de carga manual)"
+                                                    >
+                                                        <XCircle size={14} /> Saltar Formulario 2
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* Indicador visual si está saltado */}
+                                            {candidate.skip_form2 && (
+                                                <div className="mt-4 pt-4 border-t border-slate-800">
+                                                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                                                        <XCircle size={14} className="text-amber-400" />
+                                                        <div className="flex-1">
+                                                            <p className="text-xs font-bold text-amber-400">Formulario 2 Saltado</p>
+                                                            <p className="text-[9px] text-amber-500/70">Este candidato puede avanzar al informe sin Form2</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
 
 
-                                       {/* DECISIÓN DEL RECLUTADOR (SOLO SE HABILITA SI ESTÁ RECIBIDO Y TRANSCRIPCIÓN ANALIZADA) */}
-                                       <div className={`transition-all duration-500 ${!canMakeDecision ? 'opacity-50 pointer-events-none grayscale' : 'opacity-100'}`}>
-                                           <label className="text-[10px] text-slate-500 font-bold uppercase mb-3 block">
-                                               Decisión Final
-                                               {!canMakeDecision && (
-                                                   <span className="ml-2 text-amber-500 text-[9px] normal-case">
-                                                       {candidate.skip_form2 
-                                                           ? "(Requiere: Transcripción analizada)" 
-                                                           : "(Requiere: Formulario 2 recibido y Transcripción analizada)"}
-                                                   </span>
-                                               )}
-                                           </label>
-                                           <div className="grid grid-cols-2 gap-4">
-                                               <button
-                                                   onClick={() => updateChecklist('result', 'qualified')}
-                                                   disabled={!canMakeDecision}
-                                                   className={`py-3 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                                                       finalResult === 'qualified'
-                                                       ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-900/30 ring-1 ring-emerald-400'
-                                                       : canMakeDecision
-                                                       ? 'bg-slate-900 text-slate-400 border-slate-700 hover:border-emerald-500/50 hover:text-emerald-400'
-                                                       : 'bg-slate-900 text-slate-400 border-slate-700 cursor-not-allowed opacity-50'
-                                                   }`}
-                                               >
-                                                   <ThumbsUp size={16}/> Calificado
-                                               </button>
-                                               <button
-                                                   onClick={() => setShowDisqualifiedModal(true)}
-                                                   disabled={!canMakeDecision}
-                                                   className={`py-3 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                                                       finalResult === 'disqualified'
-                                                       ? 'bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-900/30 ring-1 ring-rose-400'
-                                                       : canMakeDecision
-                                                       ? 'bg-slate-900 text-slate-400 border-slate-700 hover:border-rose-500/50 hover:text-rose-400'
-                                                       : 'bg-slate-900 text-slate-400 border-slate-700 cursor-not-allowed opacity-50'
-                                                   }`}
-                                               >
-                                                   <ThumbsDown size={16}/> No Calificado
-                                               </button>
-                                           </div>
-                                       </div>
-                                   </div>
-                               </div>
-                           </div>
-                       )}
+                                        {/* DECISIÓN DEL RECLUTADOR (SOLO SE HABILITA SI ESTÁ RECIBIDO Y TRANSCRIPCIÓN ANALIZADA) */}
+                                        <div className={`transition-all duration-500 ${!canMakeDecision ? 'opacity-50 pointer-events-none grayscale' : 'opacity-100'}`}>
+                                            <label className="text-[10px] text-slate-500 font-bold uppercase mb-3 block">
+                                                Decisión Final
+                                                {!canMakeDecision && (
+                                                    <span className="ml-2 text-amber-500 text-[9px] normal-case">
+                                                        {candidate.skip_form2
+                                                            ? "(Requiere: Transcripción analizada)"
+                                                            : "(Requiere: Formulario 2 recibido y Transcripción analizada)"}
+                                                    </span>
+                                                )}
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <button
+                                                    onClick={() => updateChecklist('result', 'qualified')}
+                                                    disabled={!canMakeDecision}
+                                                    className={`py-3 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2 ${finalResult === 'qualified'
+                                                            ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-900/30 ring-1 ring-emerald-400'
+                                                            : canMakeDecision
+                                                                ? 'bg-slate-900 text-slate-400 border-slate-700 hover:border-emerald-500/50 hover:text-emerald-400'
+                                                                : 'bg-slate-900 text-slate-400 border-slate-700 cursor-not-allowed opacity-50'
+                                                        }`}
+                                                >
+                                                    <ThumbsUp size={16} /> Calificado
+                                                </button>
+                                                <button
+                                                    onClick={() => setShowDisqualifiedModal(true)}
+                                                    disabled={!canMakeDecision}
+                                                    className={`py-3 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2 ${finalResult === 'disqualified'
+                                                            ? 'bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-900/30 ring-1 ring-rose-400'
+                                                            : canMakeDecision
+                                                                ? 'bg-slate-900 text-slate-400 border-slate-700 hover:border-rose-500/50 hover:text-rose-400'
+                                                                : 'bg-slate-900 text-slate-400 border-slate-700 cursor-not-allowed opacity-50'
+                                                        }`}
+                                                >
+                                                    <ThumbsDown size={16} /> No Calificado
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
 
-                       <Card className="bg-slate-900 border-slate-800 flex flex-col overflow-hidden">
-                           <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="text-sm font-bold text-white">Tus Notas Personales</h3></div>
-                           <textarea className="w-full h-32 bg-slate-900 p-4 text-slate-300 focus:outline-none placeholder-slate-600 resize-none text-sm" placeholder="Escribe aquí..." value={noteInput} onChange={(e) => setNoteInput(e.target.value)} onBlur={() => onUpdate(candidate.id, { notes: noteInput })}></textarea>
-                       </Card>
-                   </div>
-               </div>
-           ) : (
-               <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-3xl mx-auto mt-6">
-                   <Card className="bg-slate-900 border-slate-800 p-8">
-                       <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                           <History size={16}/> Historial de Movimientos
-                       </h3>
-                      
-                       {!candidate.history || candidate.history.length === 0 ? (
-                           <div className="text-center py-10 border-2 border-dashed border-slate-800 rounded-xl">
-                               <p className="text-slate-500 text-sm">No hay movimientos registrados aún.</p>
-                           </div>
-                       ) : (
-                           <div className="relative border-l-2 border-slate-800 ml-3 space-y-8 pl-8 py-2">
-                               {candidate.history.map((h, idx) => (
-                                   <div key={idx} className="relative group">
-                                       <div className="absolute -left-[39px] top-1 w-5 h-5 rounded-full bg-slate-900 border-2 border-blue-500 z-10 group-hover:scale-125 transition-transform shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
-                                       <div className="flex flex-col gap-1">
-                                           <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">
-                                               {h.date ? new Date(h.date).toLocaleString('es-AR') : 'Fecha desconocida'}
-                                           </span>
-                                           <h4 className="text-white font-bold text-sm">{h.event || 'Evento del sistema'}</h4>
-                                           <p className="text-xs text-slate-400 bg-slate-950/50 p-2 rounded border border-slate-800 inline-block mt-1">
-                                               {h.detail || 'Sin detalles adicionales.'}
-                                           </p>
-                                       </div>
-                                   </div>
-                               ))}
-                           </div>
-                       )}
-                   </Card>
-               </div>
-           )}
-           
-           {/* Modal de Reseña del CV */}
-           {showResenaCV && candidate.reseña_cv && (
-               <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowResenaCV(false)}>
-                   <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl animate-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
-                       <div className="flex items-center justify-between mb-4">
-                           <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                               <FileText className="text-blue-500" size={18} /> Reseña del CV
-                           </h3>
-                           <button 
-                               onClick={() => setShowResenaCV(false)} 
-                               className="text-slate-400 hover:text-white transition-colors text-xl leading-none"
-                           >
-                               ✕
-                           </button>
-                       </div>
-                       <div className="bg-slate-950/50 rounded-xl p-4 border border-slate-800">
-                           <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{candidate.reseña_cv}</p>
-                       </div>
-                   </div>
-               </div>
-           )}
+                        <Card className="bg-slate-900 border-slate-800 flex flex-col overflow-hidden">
+                            <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="text-sm font-bold text-white">Tus Notas Personales</h3></div>
+                            <textarea className="w-full h-32 bg-slate-900 p-4 text-slate-300 focus:outline-none placeholder-slate-600 resize-none text-sm" placeholder="Escribe aquí..." value={noteInput} onChange={(e) => setNoteInput(e.target.value)} onBlur={() => onUpdate(candidate.id, { notes: noteInput })}></textarea>
+                        </Card>
+                    </div>
+                </div>
+            ) : (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-3xl mx-auto mt-6">
+                    <Card className="bg-slate-900 border-slate-800 p-8">
+                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                            <History size={16} /> Historial de Movimientos
+                        </h3>
+
+                        {!candidate.history || candidate.history.length === 0 ? (
+                            <div className="text-center py-10 border-2 border-dashed border-slate-800 rounded-xl">
+                                <p className="text-slate-500 text-sm">No hay movimientos registrados aún.</p>
+                            </div>
+                        ) : (
+                            <div className="relative border-l-2 border-slate-800 ml-3 space-y-8 pl-8 py-2">
+                                {candidate.history.map((h, idx) => (
+                                    <div key={idx} className="relative group">
+                                        <div className="absolute -left-[39px] top-1 w-5 h-5 rounded-full bg-slate-900 border-2 border-blue-500 z-10 group-hover:scale-125 transition-transform shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">
+                                                {h.date ? new Date(h.date).toLocaleString('es-AR') : 'Fecha desconocida'}
+                                            </span>
+                                            <h4 className="text-white font-bold text-sm">{h.event || 'Evento del sistema'}</h4>
+                                            <p className="text-xs text-slate-400 bg-slate-950/50 p-2 rounded border border-slate-800 inline-block mt-1">
+                                                {h.detail || 'Sin detalles adicionales.'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </Card>
+                </div>
+            )}
+
+            {/* Modal de Reseña del CV */}
+            {showResenaCV && candidate.reseña_cv && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setShowResenaCV(false)}>
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl animate-in zoom-in duration-200" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <FileText className="text-blue-500" size={18} /> Reseña del CV
+                            </h3>
+                            <button
+                                onClick={() => setShowResenaCV(false)}
+                                className="text-slate-400 hover:text-white transition-colors text-xl leading-none"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="bg-slate-950/50 rounded-xl p-4 border border-slate-800">
+                            <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{candidate.reseña_cv}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal de Agregar Marcador */}
             {showMarcadorModal && (
@@ -4605,14 +4587,14 @@ Saludos, Equipo de Selección de Global Talent Connections`
                             <h3 className="text-lg font-bold text-white flex items-center gap-2">
                                 ⭐ Agregar Marcador
                             </h3>
-                            <button 
-                                onClick={() => setShowMarcadorModal(false)} 
+                            <button
+                                onClick={() => setShowMarcadorModal(false)}
                                 className="text-slate-400 hover:text-white transition-colors text-xl leading-none"
                             >
                                 ✕
                             </button>
                         </div>
-                        
+
                         <div className="space-y-4">
                             <div>
                                 <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Tipo de Marcador</label>
@@ -4626,11 +4608,10 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                         <button
                                             key={tipo.valor}
                                             onClick={() => setMarcadorTipo(tipo.valor)}
-                                            className={`p-3 rounded-lg border text-left transition-all ${
-                                                marcadorTipo === tipo.valor
+                                            className={`p-3 rounded-lg border text-left transition-all ${marcadorTipo === tipo.valor
                                                     ? 'bg-blue-500/20 border-blue-500/50'
                                                     : 'bg-slate-950 border-slate-800 hover:border-slate-700'
-                                            }`}
+                                                }`}
                                         >
                                             <div className="text-sm font-bold text-white mb-1">{tipo.label}</div>
                                             <div className="text-[10px] text-slate-400">{tipo.desc}</div>
@@ -4638,7 +4619,7 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                     ))}
                                 </div>
                             </div>
-                            
+
                             <div>
                                 <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Razón *</label>
                                 <textarea
@@ -4648,7 +4629,7 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                     className="w-full h-24 bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 resize-none"
                                 />
                             </div>
-                            
+
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => setShowMarcadorModal(false)}
@@ -4672,9 +4653,9 @@ Saludos, Equipo de Selección de Global Talent Connections`
             {/* 📧 Modal Solicitar Video */}
             <SolicitarVideoModal />
 
-            
-       </div>
-   );
+
+        </div>
+    );
 }
 
 // --- COMPONENTE LOGIN (PORTERÍA DE ACCESO) ---
@@ -4695,41 +4676,41 @@ const LoginView = ({ onLogin }) => {
         { name: "Victor", role: "Director de Operaciones", password: "Victor84752" },
         { name: "Admin", role: "Superusuario", password: "12345" }
     ];
-    
+
     const handleUserClick = (user) => {
         setSelectedUser(user);
         setPasswordInput('');
         setErrorMessage('');
         setShowPassword(false);
     };
-    
+
     const handlePasswordSubmit = async (e) => {
         e.preventDefault();
-        
+
         if (!selectedUser) return;
-        
+
         // Validar contraseña
         if (passwordInput !== selectedUser.password) {
             setErrorMessage('Contraseña incorrecta. Intentá de nuevo.');
             setPasswordInput('');
             return;
         }
-        
+
         // Contraseña correcta, proceder con login
         setIsAuthenticating(true);
         setErrorMessage('');
-        
+
         try {
             // Intentar autenticación con Firebase si está disponible
             if (window.firebaseAuth && window.firebaseGoogleProvider && window.firebaseSignInWithPopup) {
                 try {
                     const result = await window.firebaseSignInWithPopup(window.firebaseAuth, window.firebaseGoogleProvider);
                     const token = await result.user.getIdToken();
-                    
+
                     // Guardar token en localStorage
                     localStorage.setItem('firebase_token', token);
                     localStorage.setItem('firebase_token_expires', (Date.now() + 3600000).toString()); // 1 hora
-                    
+
                     console.log('✅ Autenticación exitosa con Firebase');
                 } catch (authError) {
                     console.warn('⚠️ Error en autenticación Firebase, continuando sin token:', authError);
@@ -4754,14 +4735,14 @@ const LoginView = ({ onLogin }) => {
             setPasswordInput('');
         }
     };
-    
+
     const handleCloseModal = () => {
         setSelectedUser(null);
         setPasswordInput('');
         setErrorMessage('');
         setShowPassword(false);
     };
-    
+
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-950 relative overflow-hidden">
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none"></div>
@@ -4779,7 +4760,7 @@ const LoginView = ({ onLogin }) => {
                         </div>
                     )}
                     {team.map(user => (
-                        <button 
+                        <button
                             key={user.name}
                             onClick={() => handleUserClick(user)}
                             disabled={isAuthenticating || selectedUser}
@@ -4804,14 +4785,14 @@ const LoginView = ({ onLogin }) => {
             {selectedUser && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl relative animate-in zoom-in duration-200">
-                        <button 
+                        <button
                             onClick={handleCloseModal}
                             className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"
                             disabled={isAuthenticating}
                         >
                             <LucideIcon name="X" size={20} />
                         </button>
-                        
+
                         <div className="mb-6">
                             <div className="flex items-center gap-3 mb-2">
                                 <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-lg">
@@ -4899,7 +4880,7 @@ function App() {
     const [init, setInit] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
     const [showManualModal, setShowManualModal] = useState(false);
-    const [showUserMenu, setShowUserMenu] = useState(false); 
+    const [showUserMenu, setShowUserMenu] = useState(false);
 
     const LOGO_URL = "/GLOBAL.png";
 
@@ -4911,7 +4892,7 @@ function App() {
                 const { user, timestamp } = JSON.parse(sessionData);
                 const now = Date.now();
                 const sessionAge = (now - timestamp) / (1000 * 60); // Edad en minutos
-                
+
                 // Si la sesión tiene menos de 30 minutos, restaurar usuario
                 if (sessionAge < 30) {
                     setCurrentUser(user);
@@ -4926,8 +4907,8 @@ function App() {
         }
     }, []); // Solo se ejecuta al montar el componente
 
-     // 1.6. LEER CANDIDATO DESDE URL (para abrir en nueva pestaña)
-     useEffect(() => {
+    // 1.6. LEER CANDIDATO DESDE URL (para abrir en nueva pestaña)
+    useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const candidatoId = params.get('candidato');
         if (candidatoId) {
@@ -4957,8 +4938,8 @@ function App() {
     };
 
     // 3. EFECTOS
-    useEffect(() => { 
-        if (currentUser) cargarDatos(); 
+    useEffect(() => {
+        if (currentUser) cargarDatos();
     }, [currentUser]);
 
     // Cerrar menú de usuario al hacer clic fuera
@@ -4977,11 +4958,11 @@ function App() {
         return <LoginView onLogin={(name) => setCurrentUser(name)} />;
     }
 
-// 5. LÓGICA DE ACTUALIZACIÓN (CORREGIDA)
-const handleUpdateCandidate = async (id, updates) => {
+    // 5. LÓGICA DE ACTUALIZACIÓN (CORREGIDA)
+    const handleUpdateCandidate = async (id, updates) => {
         // 1. Preparamos la copia base de los cambios
         let finalUpdates = { ...updates };
-        
+
         // 2. Buscamos al candidato ACTUAL para ver su estado hoy
         const currentCandidate = candidates.find(c => c.id === id);
 
@@ -4992,10 +4973,10 @@ const handleUpdateCandidate = async (id, updates) => {
 
         // 3. Lógica de Negocio: Asignaciones automáticas
         if (updates.stage === 'stage_2') {
-            finalUpdates.assignedTo = currentUser; 
+            finalUpdates.assignedTo = currentUser;
             finalUpdates.status_interno = 'interview_pending';
             setActiveTab('stage_2'); // Cambiar la vista cuando se vuelve a Gestión
-            
+
             // Si el candidato venía de informes (tenía informe_final_data), 
             // limpiar el informe para permitir regeneración cuando vuelva a stage_3
             if (currentCandidate && currentCandidate.informe_final_data) {
@@ -5036,7 +5017,7 @@ const handleUpdateCandidate = async (id, updates) => {
         // 6. Actualizamos la BASE DE DATOS (Backend)
         // Ahora finalUpdates lleva el dato 'viewed' correcto y los marcadores preservados
         await api.candidates.update(id, finalUpdates);
-        
+
         // 7. Si se movió a papelera, recargar candidatos para asegurar que aparezca en la vista de papelera
         // Esperamos un poco más para asegurar que el backend haya procesado la actualización con los marcadores
         if (updates.stage === 'trash') {
@@ -5076,26 +5057,26 @@ const handleUpdateCandidate = async (id, updates) => {
                 );
             }
             return (
-                <CandidateDetail 
-                    key={cand.id} 
-                    candidate={cand} 
-                    onBack={handleBackFromDetail} 
-                    onUpdate={handleUpdateCandidate} 
+                <CandidateDetail
+                    key={cand.id}
+                    candidate={cand}
+                    onBack={handleBackFromDetail}
+                    onUpdate={handleUpdateCandidate}
                     loading={loading}
-                    currentUser={currentUser} 
+                    currentUser={currentUser}
                 />
             );
         }
 
         switch (activeTab) {
             case 'dashboard': return <DashboardView candidates={candidates} onNavigate={setActiveTab} />;
-            case 'stage_1':   return <ExploreView candidates={candidates} onSelect={handleSelectCandidate} onUpdate={handleUpdateCandidate} loading={loading} onAddClick={() => setShowManualModal(true)} />;
-            case 'stage_2':   return <ManageView candidates={candidates} onSelect={handleSelectCandidate} currentUser={currentUser} />;
-            case 'stage_3':   return <ReportView candidates={candidates} onUpdate={handleUpdateCandidate} setCurrentReport={setCurrentReport} />;
-            case 'search':    return <SearchView candidates={candidates} onSelect={handleSelectCandidate} />;
-            case 'reports':   return <ReportsView candidates={candidates} setCurrentReport={setCurrentReport} onUpdate={handleUpdateCandidate} />;
-            case 'trash':     return <TrashView candidates={candidates} onUpdate={handleUpdateCandidate} onRefresh={cargarDatos} />;
-            default:          return <DashboardView candidates={candidates} onNavigate={setActiveTab} />;
+            case 'stage_1': return <ExploreView candidates={candidates} onSelect={handleSelectCandidate} onUpdate={handleUpdateCandidate} loading={loading} onAddClick={() => setShowManualModal(true)} />;
+            case 'stage_2': return <ManageView candidates={candidates} onSelect={handleSelectCandidate} currentUser={currentUser} />;
+            case 'stage_3': return <ReportView candidates={candidates} onUpdate={handleUpdateCandidate} setCurrentReport={setCurrentReport} />;
+            case 'search': return <SearchView candidates={candidates} onSelect={handleSelectCandidate} />;
+            case 'reports': return <ReportsView candidates={candidates} setCurrentReport={setCurrentReport} onUpdate={handleUpdateCandidate} />;
+            case 'trash': return <TrashView candidates={candidates} onUpdate={handleUpdateCandidate} onRefresh={cargarDatos} />;
+            default: return <DashboardView candidates={candidates} onNavigate={setActiveTab} />;
         }
     };
 
@@ -5111,8 +5092,8 @@ const handleUpdateCandidate = async (id, updates) => {
         { id: 'trash', label: 'Papelera', icon: Trash2 },
     ];
 
-   // 7. ESTRUCTURA PRINCIPAL (ACTUALIZADA CON MODAL)
-   return (
+    // 7. ESTRUCTURA PRINCIPAL (ACTUALIZADA CON MODAL)
+    return (
         <>
             <div className="flex h-screen bg-slate-950 font-sans text-slate-200 selection:bg-blue-500/30 overflow-hidden">
                 <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 z-20">
@@ -5133,7 +5114,7 @@ const handleUpdateCandidate = async (id, updates) => {
                         })}
                     </nav>
                     <div className="p-4 border-t border-slate-800 relative user-menu-container">
-                        <button 
+                        <button
                             onClick={() => setShowUserMenu(!showUserMenu)}
                             className="flex items-center gap-3 w-full p-2 rounded-xl hover:bg-slate-800 transition-colors group border border-transparent hover:border-slate-700"
                         >
@@ -5141,15 +5122,15 @@ const handleUpdateCandidate = async (id, updates) => {
                             <div className="flex-col flex items-start overflow-hidden flex-1">
                                 <span className="text-xs font-bold text-slate-200 group-hover:text-white">{currentUser}</span>
                                 <span className="text-[10px] text-emerald-400 flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"/> Online
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Online
                                 </span>
                             </div>
-                            <ChevronDown 
-                                size={14} 
+                            <ChevronDown
+                                size={14}
                                 className={`ml-auto text-slate-600 group-hover:text-slate-400 transition-all ${showUserMenu ? 'rotate-180' : ''}`}
                             />
                         </button>
-                        
+
                         {/* Menú desplegable */}
                         {showUserMenu && (
                             <div className="absolute bottom-full left-4 right-4 mb-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 z-50">
@@ -5180,9 +5161,9 @@ const handleUpdateCandidate = async (id, updates) => {
             </div>
 
             {/* MODAL FÍSICO (Controlado por el estado showManualModal) */}
-            <ManualUploadModal 
-                isOpen={showManualModal} 
-                onClose={() => setShowManualModal(false)} 
+            <ManualUploadModal
+                isOpen={showManualModal}
+                onClose={() => setShowManualModal(false)}
                 onUploadSuccess={() => cargarDatos(true)}
                 currentUser={currentUser}
             />
@@ -5190,5 +5171,5 @@ const handleUpdateCandidate = async (id, updates) => {
     );
 }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
