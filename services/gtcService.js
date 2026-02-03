@@ -33,7 +33,7 @@ async function crearEntrevistaEnGTC(candidato) {
     const payload = {
       email: candidato.email,
       candidate_name: candidato.nombre || 'Candidato',
-      job_position_id: process.env.DEFAULT_JOB_POSITION_ID || null
+      job_position_id: candidato.job_position_id || process.env.DEFAULT_JOB_POSITION_ID || null
     };
 
     console.log(`🤖 [GTC Service] Creando entrevista para: ${candidato.email}`);

@@ -6366,7 +6366,8 @@ app.post("/candidatos/:id/preparar-bot", async (req, res) => {
     // 3. Preparar datos para el servicio GTC
     const datosCandidato = {
       email: candidato.email,
-      nombre: candidato.nombre || "Candidato"
+      nombre: candidato.nombre || "Candidato",
+      job_position_id: candidato.job_position_id
     };
 
     console.log(`🤖 [PREPARAR-BOT] Generando link de entrevista para: ${datosCandidato.email}`);
