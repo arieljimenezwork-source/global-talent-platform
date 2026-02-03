@@ -38,9 +38,13 @@ async function crearEntrevistaEnGTC(candidato) {
 
     console.log(`🤖 [GTC Service] Creando entrevista para: ${candidato.email}`);
 
+    const url = `${GTC_URL}/api/interviews/create`;
+    console.log('🔍 [DEBUG] Intentando POST a:', url);
+    console.log('📦 [DEBUG] Payload:', JSON.stringify(payload, null, 2));
+
     // Hacer la petición POST al Index 2
     const response = await axios.post(
-      `${GTC_URL}/api/interviews/create`,
+      url,
       payload,
       {
         headers: {

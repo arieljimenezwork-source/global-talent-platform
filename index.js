@@ -23,10 +23,10 @@ const nodemailer = require("nodemailer");
 require("dotenv").config();
 const fichaGenerator = require("./services/fichaGenerator");
 const { crearEntrevistaEnGTC } = require('./services/gtcService');
-const { 
-  buscarArchivoEnWorkDrive, 
+const {
+  buscarArchivoEnWorkDrive,
   buscarVideoEnWorkDrive,
-  descargarArchivoDeWorkDrive 
+  descargarArchivoDeWorkDrive
 } = require('./zohoWorkDrive');
 
 
@@ -34,21 +34,21 @@ const {
 // 📧 CONFIGURACIÓN DE NODEMAILER (PARA ENVÍO DE EMAILS CON HTML)
 // ========================================================================
 const transporter = nodemailer.createTransport({
-    service: 'gmail', // Usar servicio de Gmail
-    auth: {
-        user: process.env.EMAIL_FROM,
-        pass: process.env.EMAIL_PASS
-    }
+  service: 'gmail', // Usar servicio de Gmail
+  auth: {
+    user: process.env.EMAIL_FROM,
+    pass: process.env.EMAIL_PASS
+  }
 });
 
 // Verificar configuración del transporter (solo al iniciar, no bloquea)
 transporter.verify(function (error, success) {
-    if (error) {
-        console.log("⚠️ Error en configuración de email:", error.message);
-        console.log("   El sistema seguirá funcionando, pero los emails pueden fallar.");
-    } else {
-        console.log("✅ Servidor de email listo para enviar mensajes");
-    }
+  if (error) {
+    console.log("⚠️ Error en configuración de email:", error.message);
+    console.log("   El sistema seguirá funcionando, pero los emails pueden fallar.");
+  } else {
+    console.log("✅ Servidor de email listo para enviar mensajes");
+  }
 });
 const axios = require("axios");
 const vision = require("@google-cloud/vision");
@@ -78,6 +78,119 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
+// --- CEREBRO: Análisis de entrevista RRHH (compartido por endpoint manual y webhook) ---
+async function analizarEntrevistaConGemini(candidatoData, transcript) {
+  const data = candidatoData || {};
+  const form = data.respuestasfiltro || data.respuestas_filtro || {};
+  const prompt = `
+    ACTÚA COMO: Reclutador Senior de Global Talent Connections.
+    OBJETIVO: Recalcular el puntaje del candidato cruzando toda la información previa (CV + Video + Formulario) con la ENTREVISTA recién realizada.
+
+    --- CONTEXTO HISTÓRICO (FUENTES DE VERDAD PREVIAS) ---
+
+    PERFIL SOLICITADO: "${data.puesto || data.job_position || 'General'}"
+
+    ANÁLISIS DEL CV:
+    "${data.reseña_cv || 'Sin análisis de CV disponible'}"
+
+    ANÁLISIS DEL VIDEO DE PRESENTACIÓN:
+    "${data.reseña_video || 'Sin análisis de video disponible'}"
+
+    SCORE INICIAL (basado en CV y formulario): ${data.ia_score || 0}
+    MOTIVOS DEL SCORE INICIAL: "${data.ia_motivos || 'Sin análisis previo'}"
+
+    DATOS DECLARADOS EN FORMULARIO:
+    - Salario aceptado: ${form.salario || 'No especificado'}
+    - Acepta monitoreo: ${form.monitoreo || 'No especificado'}
+    - Disponibilidad: ${form.disponibilidad || 'No especificado'}
+    - Herramientas clave: ${form.herramientas || 'No especificado'}
+
+    --- NUEVA EVIDENCIA (ENTREVISTA EN VIVO) ---
+    TRANSCRIPCIÓN:
+    "${(transcript || '').slice(0, 15000)}"
+
+    --- TAREA DE CONTRASTACIÓN ---
+
+    1. 📋 VALIDACIÓN DE EXPERIENCIA:
+       - ¿El candidato puede PROFUNDIZAR en la experiencia declarada en el CV con ejemplos concretos, o sus respuestas son vagas?
+       - ¿Los logros/herramientas mencionados en CV se sostienen cuando se le pregunta por detalles específicos?
+       - ¿Demuestra conocimiento real de las herramientas del puesto, o solo las "conoce de nombre"?
+
+    2. 🔄 CONSISTENCIA ENTRE FUENTES:
+       - ¿Hay CONTRADICCIONES entre CV, video, formulario y lo dicho en entrevista? (ej: años de experiencia, nivel de inglés, disponibilidad)
+       - ¿El nivel de comunicación del video se mantiene en la entrevista, o era un video sobre-ensayado?
+       - ¿Cambió de posición sobre condiciones laborales (salario, monitoreo, horarios) vs lo declarado en el formulario?
+
+    3. 🎯 AJUSTE DE SCORE:
+       - SUBE (+10 a +20): Si demuestra MÁS conocimiento/experiencia de lo que el CV sugería, con ejemplos sólidos y actitud proactiva.
+       - MANTIENE (±5): Si confirma el nivel del CV sin sorpresas, positivas o negativas.
+       - BAJA (-10 a -30): Si respuestas vagas/inconsistencias revelan que el CV estaba inflado, o detectas banderas rojas nuevas (actitud, nivel técnico inferior, cambios de posición).
+
+    4. 🚩 DETECCIÓN DE BANDERAS ROJAS:
+       - Genera ALERTAS específicas si detectas: nivel de inglés inferior al declarado, inconsistencias sobre experiencia, cambios en disponibilidad/salario, respuestas evasivas sobre logros, actitud problemática, señales de doble empleo no declarado.
+
+    --- CALIBRACIÓN DE TONO (usa estos ejemplos como guía) ---
+
+    VALIDACIÓN POSITIVA (Score sube):
+    - El candidato profundiza con ejemplos concretos que el CV no reflejaba bien
+    - Demuestra dominio técnico real de herramientas clave del puesto
+    - Actitud profesional y preparación evidente
+    → Tono: "La entrevista valida y amplía el perfil. Demuestra [skill específico] con ejemplos detallados de [contexto]. Se eleva el score debido a profundidad técnica superior a lo reflejado en CV."
+
+    CONFIRMACIÓN (Score mantiene):
+    - La entrevista confirma lo analizado en CV y video
+    - Sin inconsistencias relevantes ni sorpresas
+    - Nivel técnico/actitudinal esperado
+    → Tono: "La entrevista es consistente con el análisis previo. Sostiene el nivel declarado en [áreas clave]. Se mantiene el score."
+
+    DETECCIÓN DE INFLADO (Score baja):
+    - Respuestas vagas que no sostienen la experiencia del CV
+    - Inconsistencias entre fuentes (CV vs entrevista)
+    - Nivel técnico/inglés inferior al declarado
+    - Banderas rojas nuevas detectadas
+    → Tono: "La entrevista expone discrepancias con el CV. No pudo dar ejemplos concretos sobre [tema declarado]. [Mencionar inconsistencias específicas]. Se reduce el score."
+
+    --- EJEMPLOS DE OUTPUT POR ÁREA (PATRONES DE REFERENCIA) ---
+
+    [ÁREA TÉCNICA - Automatización/Desarrollo]
+    {
+      "score": 75,
+      "motivos": "La entrevista supera las expectativas del CV. Aunque el CV presentaba descripciones básicas, demostró dominio avanzado de las herramientas clave del puesto (Make, Zapier) con ejemplos detallados de workflows implementados. Validó métricas del logro declarado (reducción 40% en tiempos) con contexto técnico sólido. El análisis previo del video sobre actitud profesional se confirma con preparación evidente. Score elevado +15 puntos por profundidad técnica demostrada.",
+      "alertas": []
+    }
+
+    [ÁREA COMUNICACIÓN/GESTIÓN - RRHH/Marketing]
+    {
+      "score": 58,
+      "motivos": "La entrevista confirma el perfil medio-bajo detectado en CV. Sostiene experiencia en procesos de reclutamiento con ejemplos coherentes pero sin métricas específicas de impacto. Las herramientas mencionadas (ATS básico, LinkedIn Recruiter) se validan con uso intermedio, no avanzado. Mantiene la estabilidad actitudinal del video. No hay inconsistencias graves entre fuentes. Score se mantiene como reflejo de un perfil que cumple mínimos sin destacarse.",
+      "alertas": ["Experiencia limitada en estrategias de employer branding"]
+    }
+
+    [ÁREA ANALÍTICA - Contabilidad/Datos]
+    {
+      "score": 42,
+      "motivos": "La entrevista revela brechas significativas con el CV. Aunque declara experiencia con software contable avanzado (QuickBooks, SAP), no pudo explicar procesos de conciliación bancaria ni elaboración de estados financieros cuando se le solicitó detalle. Las respuestas sobre manejo de cierres contables fueron genéricas sin demostrar conocimiento práctico. Se detecta inconsistencia en nivel de Excel (CV: avanzado, entrevista: intermedio básico). Score reducido -18 puntos por falta de profundidad técnica comprobable.",
+      "alertas": ["Conocimiento superficial de software contable declarado", "Nivel de Excel inferior al declarado"]
+    }
+
+    --- SALIDA JSON ÚNICAMENTE ---
+
+    Devuelve SOLO este JSON sin texto adicional:
+
+    {
+      "score": (0-100, ajustado según entrevista),
+      "motivos": "Párrafo de 4-6 líneas que CONTRASTA las fuentes previas (CV + Video + Formulario) con la entrevista. Menciona: 1) Qué se validó, 2) Qué inconsistencias se detectaron, 3) Por qué el score cambió o se mantuvo, 4) Puntos específicos de la entrevista que fundamentan la decisión. Tono profesional y objetivo.",
+      "alertas": ["Array de strings con banderas rojas específicas. Ejemplos: 'Nivel de inglés B1, no B2 declarado', 'No pudo profundizar en herramienta X del CV', 'Cambió posición sobre disponibilidad', 'Respuestas evasivas sobre logros específicos'"]
+    }
+    `;
+
+  const result = await model.generateContent(prompt);
+  const responseText = result.response.text().replace(/```json/g, "").replace(/```/g, "").trim();
+  const jsonStart = responseText.indexOf('{');
+  const jsonEnd = responseText.lastIndexOf('}');
+  return JSON.parse(responseText.substring(jsonStart, jsonEnd + 1));
+}
+
 // === INICIALIZACIÓN DE APP ===
 const app = express();
 app.use(cors());
@@ -87,12 +200,12 @@ app.use(express.json());
 // ==========================================
 // Poner "CVs_staging" para pruebas limpias.
 // Poner "CVs_aprobados" cuando quieras volver a ver los 73 candidatos reales.
-const MAIN_COLLECTION = "CVs_staging"; 
+const MAIN_COLLECTION = "CVs_staging";
 
 console.log(`🚀 SISTEMA INICIADO EN MODO: ${MAIN_COLLECTION}`);
 
 // 🔥 CRÍTICO: ESTO PERMITE QUE EL FRONTEND VEA EL LOGO.PNG
-app.use(express.static(__dirname)); 
+app.use(express.static(__dirname));
 
 
 const DBG_PREVIEW = 500;
@@ -185,17 +298,17 @@ app.use(
         "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         "img-src": ["'self'", "data:", "https://*"],
         "connect-src": [
-            "'self'", 
-            "http://localhost:3001", 
-            "https://cv-cladificador-eyvb.onrender.com", 
-            "https://cv-cladificador.onrender.com",
-            "https://unpkg.com",
-            "https://generativelanguage.googleapis.com",
-            "https://www.gstatic.com",
-            "https://identitytoolkit.googleapis.com",
-            "https://securetoken.googleapis.com",
-            "https://storage.googleapis.com",
-            "https://*.firebasestorage.app"
+          "'self'",
+          "http://localhost:3001",
+          "https://cv-cladificador-eyvb.onrender.com",
+          "https://cv-cladificador.onrender.com",
+          "https://unpkg.com",
+          "https://generativelanguage.googleapis.com",
+          "https://www.gstatic.com",
+          "https://identitytoolkit.googleapis.com",
+          "https://securetoken.googleapis.com",
+          "https://storage.googleapis.com",
+          "https://*.firebasestorage.app"
         ],
         "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.tailwindcss.com", "https://unpkg.com", "https://www.gstatic.com"],
       },
@@ -295,12 +408,12 @@ async function obtenerCandidatosBloqueados() {
   // 🔧 CORREGIDO: Solo bloquear candidatos en 'trash', NO en 'stage_3' (Informes)
   // stage_3 es la etapa de "Generar Informe", no son contratados, deben aparecer
   const bloqueados = new Set();
-  
+
   try {
     const snap = await firestore.collection(MAIN_COLLECTION)
       .where("stage", "==", "trash")
       .get();
-    
+
     snap.forEach((doc) => {
       bloqueados.add(doc.id.trim().toLowerCase());
     });
@@ -516,14 +629,14 @@ ${textoCV.slice(0, 5000)}
       .replace(/^\s*[\r\n]+/, "")
       .replace(/[\r\n]+```$/, "");
     const json = JSON.parse(raw);
-    
+
     // Validar que sean strings y limpiar
     const nombre = (json.nombre || "").trim();
     const email = (json.email || "").trim().toLowerCase();
-    
+
     // Validación básica de email
     const emailValido = email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/) ? email : "";
-    
+
     return {
       nombre: nombre || "",
       email: emailValido || ""
@@ -534,7 +647,7 @@ ${textoCV.slice(0, 5000)}
     const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi;
     const emailsEncontrados = textoCV.match(emailRegex) || [];
     const emailFallback = emailsEncontrados.length > 0 ? emailsEncontrados[0].toLowerCase() : "";
-    
+
     return {
       nombre: "",
       email: emailFallback
@@ -874,7 +987,7 @@ async function analizarCorreos() {
     for await (const msg of client.fetch(`${lastUID + 1}:*`, { envelope: true, source: true, uid: true })) {
       const uid = msg.uid;
       const subject = msg.envelope.subject || "";
-      
+
       // Filtro rápido
       if (!/^Postulación/i.test(subject) && !/^Video-CV/i.test(subject)) continue;
 
@@ -905,7 +1018,7 @@ async function analizarCorreos() {
 
       // 5. BUSCAR PDF ADJUNTO
       const pdfAttachment = parsed.attachments.find(a => a.contentType === "application/pdf" || a.filename.toLowerCase().endsWith(".pdf"));
-      
+
       if (!pdfAttachment) {
         console.log("⚠️ Sin PDF adjunto.");
         await processedRef.set({ uid, status: "skipped_no_pdf", fecha: admin.firestore.FieldValue.serverTimestamp() });
@@ -916,14 +1029,14 @@ async function analizarCorreos() {
       const videoAttachment = parsed.attachments.find(a => {
         const contentType = (a.contentType || "").toLowerCase();
         const filename = (a.filename || "").toLowerCase();
-        return contentType.startsWith("video/") || 
-               filename.endsWith(".mp4") || 
-               filename.endsWith(".mov") || 
-               filename.endsWith(".avi") || 
-               filename.endsWith(".mkv") ||
-               filename.endsWith(".webm");
+        return contentType.startsWith("video/") ||
+          filename.endsWith(".mp4") ||
+          filename.endsWith(".mov") ||
+          filename.endsWith(".avi") ||
+          filename.endsWith(".mkv") ||
+          filename.endsWith(".webm");
       });
-      
+
       let videoUrl = null;
       if (videoAttachment) {
         console.log(`🎥 Video encontrado: ${videoAttachment.filename} (${(videoAttachment.size / 1024 / 1024).toFixed(2)} MB)`);
@@ -932,20 +1045,20 @@ async function analizarCorreos() {
           const videoExtension = videoAttachment.filename.split('.').pop() || 'mp4';
           const videoFileName = `CVs_staging/videos/${safeId}_video.${videoExtension}`;
           const videoBucketFile = bucket.file(videoFileName);
-          
-          await videoBucketFile.save(videoAttachment.content, { 
-            metadata: { 
-              contentType: videoAttachment.contentType || "video/mp4" 
-            } 
+
+          await videoBucketFile.save(videoAttachment.content, {
+            metadata: {
+              contentType: videoAttachment.contentType || "video/mp4"
+            }
           });
-          
+
           // Generar link firmado (válido por mucho tiempo) - Configurado para abrir inline (no descargar)
-          const [signedVideoUrl] = await videoBucketFile.getSignedUrl({ 
-            action: 'read', 
+          const [signedVideoUrl] = await videoBucketFile.getSignedUrl({
+            action: 'read',
             expires: '01-01-2035',
             responseDisposition: 'inline' // 👈 Esto hace que se abra en el navegador en vez de descargar
           });
-          
+
           videoUrl = signedVideoUrl;
           console.log(`✅ Video subido correctamente: ${videoFileName}`);
         } catch (error) {
@@ -963,47 +1076,47 @@ async function analizarCorreos() {
       // 8. RECUPERAR DATOS DEL WEBHOOK
       const docRef = firestore.collection("CVs_staging").doc(safeId);
       const docSnap = await docRef.get();
-      
+
       let datosZoho = { respuestas_filtro: {} };
       if (docSnap.exists) datosZoho = docSnap.data();
       else {
-          // Fallback por si el mail llega antes que el webhook
-          await docRef.set({ 
-              id: safeId, 
-              email: candidatoEmail, 
-              nombre: "Candidato (Mail)", 
-              origen: "mail_first",
-              historial_movimientos: [
-                  {
-                      date: new Date().toISOString(),
-                      event: 'Ingreso por Zoho',
-                      detail: 'Candidato recibido desde formulario web (email llegó antes que webhook)',
-                      usuario: 'Sistema (Email)'
-                  }
-              ]
-          }, { merge: true });
+        // Fallback por si el mail llega antes que el webhook
+        await docRef.set({
+          id: safeId,
+          email: candidatoEmail,
+          nombre: "Candidato (Mail)",
+          origen: "mail_first",
+          historial_movimientos: [
+            {
+              date: new Date().toISOString(),
+              event: 'Ingreso por Zoho',
+              detail: 'Candidato recibido desde formulario web (email llegó antes que webhook)',
+              usuario: 'Sistema (Email)'
+            }
+          ]
+        }, { merge: true });
       }
 
       // 9. LEER TEXTO DEL PDF (CRÍTICO: Aquí leemos el CV real)
       let pdfText = "";
       try {
-          const pdfData = await pdfParse(pdfAttachment.content);
-          pdfText = pdfData.text.slice(0, 20000); // Leemos hasta 20k caracteres
+        const pdfData = await pdfParse(pdfAttachment.content);
+        pdfText = pdfData.text.slice(0, 20000); // Leemos hasta 20k caracteres
       } catch (e) { console.error("Error leyendo PDF:", e.message); }
 
       // 10. GENERAR RESEÑAS (CV y Video si existe)
       console.log("📝 Generando reseña del CV...");
       const reseñaCV = await generarResenaCV(pdfText, datosZoho.puesto || "General");
-      
+
       // 🎥 NUEVA LÓGICA: Video se procesa en background (NO bloquea)
       const videoUrlParaAnalizar = videoUrl || datosZoho.video_url;
       let videoStatus = "none";
-      
+
       if (videoUrlParaAnalizar) {
         const origenVideo = videoUrl ? "adjunto en email (subido a Storage)" : "link del webhook";
         console.log(`🎥 Video detectado (${origenVideo}). Se procesará en background...`);
         videoStatus = "pending";
-        
+
         // Disparar procesamiento en background (NO bloquea el ciclo IMAP)
         procesarVideoEnBackground(safeId, videoUrlParaAnalizar, datosZoho.puesto || "General")
           .catch(error => {
@@ -1013,35 +1126,35 @@ async function analizarCorreos() {
 
       // 11. IA CALIBRADA (Cruce de Datos: Formulario + CV) - SIN VIDEO por ahora
       console.log("🤖 Calibrando Score (Formulario + CV)...");
-      
+
       // Preparar datos del formulario para el análisis
       const datosFormulario = JSON.stringify(datosZoho.respuestas_filtro || "Vacio");
-      
+
       // Llamar a la función mejorada que acepta reseñas (solo CV por ahora)
       let analisisIA = { score: 50, motivos: "Pendiente", alertas: [] };
       try {
-          analisisIA = await verificaConocimientosMinimos(
-            datosZoho.puesto || "General",
-            datosFormulario, // Respuestas del formulario
-            "", // declaraciones (vacío por ahora)
-            reseñaCV, // Reseña del CV
-            null // Reseña del video (null porque se procesa en background)
-          );
-          
-          // Limitar score cuando NO hay video procesado aún (máximo 75)
-          if (videoStatus === "pending") {
-              analisisIA.score = Math.min(analisisIA.score, 75);
-              if (!Array.isArray(analisisIA.alertas)) {
-                analisisIA.alertas = [];
-              }
-              analisisIA.alertas.push("Video pendiente de análisis");
-          } else {
-              // Si NO hay video, límite de 75
-              analisisIA.score = Math.min(analisisIA.score, 75);
+        analisisIA = await verificaConocimientosMinimos(
+          datosZoho.puesto || "General",
+          datosFormulario, // Respuestas del formulario
+          "", // declaraciones (vacío por ahora)
+          reseñaCV, // Reseña del CV
+          null // Reseña del video (null porque se procesa en background)
+        );
+
+        // Limitar score cuando NO hay video procesado aún (máximo 75)
+        if (videoStatus === "pending") {
+          analisisIA.score = Math.min(analisisIA.score, 75);
+          if (!Array.isArray(analisisIA.alertas)) {
+            analisisIA.alertas = [];
           }
-      } catch (e) { 
-          console.error("Error IA:", e.message);
-          // Si falla el análisis, mantener las reseñas generadas
+          analisisIA.alertas.push("Video pendiente de análisis");
+        } else {
+          // Si NO hay video, límite de 75
+          analisisIA.score = Math.min(analisisIA.score, 75);
+        }
+      } catch (e) {
+        console.error("Error IA:", e.message);
+        // Si falla el análisis, mantener las reseñas generadas
       }
 
       // 12. ACTUALIZAR BASE DE DATOS (Master Update)
@@ -1053,20 +1166,20 @@ async function analizarCorreos() {
         ia_motivos: analisisIA.motivos,
         ia_alertas: analisisIA.alertas || [],
         ia_status: "processed",
-        
+
         // 🔥 ESTO ES LO QUE FALTABA: La etiqueta para el Frontend
-        stage: datosZoho.stage || 'stage_1', 
+        stage: datosZoho.stage || 'stage_1',
         status_interno: datosZoho.status_interno || 'new',
-        
+
         // Reseñas generadas por IA
         reseña_cv: reseñaCV,
         reseña_video: null, // Se actualizará cuando termine el procesamiento del video
         video_status: videoStatus, // "pending", "none", o "completed" (se actualiza después)
         video_error: null, // Se actualizará si hay error en el procesamiento
-        
+
         actualizado_en: admin.firestore.FieldValue.serverTimestamp()
       };
-      
+
       // Si encontramos un video adjunto, actualizamos el video_url
       // Solo si no existe ya un video_url del webhook (el link pegado tiene prioridad)
       if (videoUrl && !datosZoho.video_url) {
@@ -1083,26 +1196,26 @@ async function analizarCorreos() {
         updateData.video_url = datosZoho.video_url;
         updateData.video_tipo = datosZoho.video_tipo || "link";
       }
-      
+
       await docRef.set(updateData, { merge: true }); // 'merge: true' cuida de no borrar el nombre ni el email
 
-    console.log(`✅ [OK] ${safeId} actualizado. Score Final: ${analisisIA.score}`);
-    await processedRef.set({ uid, status: "success", safeId, fecha: admin.firestore.FieldValue.serverTimestamp() });
-  }
-} catch (error) {
-  console.error("❌ Error en analizarCorreos:", error);
-} finally {
-  if (client) {
-    try {
-      await client.logout();
-    } catch (logoutError) {
-      // Si la conexión ya se cerró, ignoramos el error de logout
-      if (logoutError.code !== 'NoConnection' && logoutError.code !== 'ClosedAfterConnectTLS') {
-        console.error("⚠️ Error al cerrar conexión IMAP:", logoutError.message);
+      console.log(`✅ [OK] ${safeId} actualizado. Score Final: ${analisisIA.score}`);
+      await processedRef.set({ uid, status: "success", safeId, fecha: admin.firestore.FieldValue.serverTimestamp() });
+    }
+  } catch (error) {
+    console.error("❌ Error en analizarCorreos:", error);
+  } finally {
+    if (client) {
+      try {
+        await client.logout();
+      } catch (logoutError) {
+        // Si la conexión ya se cerró, ignoramos el error de logout
+        if (logoutError.code !== 'NoConnection' && logoutError.code !== 'ClosedAfterConnectTLS') {
+          console.error("⚠️ Error al cerrar conexión IMAP:", logoutError.message);
+        }
       }
     }
   }
-}
 }
 
 /////////////////// Anlisis de candidatos /////////////////////
@@ -1112,136 +1225,136 @@ async function analizarCorreos() {
 /* ==========================================================================
    🔍 ENDPOINT DE BÚSQUEDA UNIFICADO (Corregido y Optimizado)
    ========================================================================== */
-   /* ==========================================================================
+/* ==========================================================================
 
-   🔍 ENDPOINT DE BÚSQUEDA (MEJORADO: ORDENA MÁS NUEVOS PRIMERO)
+🔍 ENDPOINT DE BÚSQUEDA (MEJORADO: ORDENA MÁS NUEVOS PRIMERO)
 
-   ========================================================================== */
+========================================================================== */
 
-   app.get("/buscar", async (req, res) => {
+app.get("/buscar", async (req, res) => {
 
-    try {
+  try {
 
-      const { q = "", desde = null, hasta = null, limit = 100, startAfter = null } = req.query;
+    const { q = "", desde = null, hasta = null, limit = 100, startAfter = null } = req.query;
 
-      
 
-      console.log(`📡 Solicitud de búsqueda recibida. Query: "${q}", Limit: ${limit}, StartAfter: ${startAfter ? 'Sí' : 'No'}`);
 
-  
+    console.log(`📡 Solicitud de búsqueda recibida. Query: "${q}", Limit: ${limit}, StartAfter: ${startAfter ? 'Sí' : 'No'}`);
 
-      // USAMOS LA VARIABLE MAESTRA
-      let ref = admin.firestore().collection(MAIN_COLLECTION);
 
-      const bloqueados = await obtenerCandidatosBloqueados();
-      const termino = q.toLowerCase().trim();
-      const limitNum = parseInt(limit) || 100;
-      
-      // 🔥 MEJORA: Si hay término de búsqueda, buscar en Firestore directamente
-      // Firestore no soporta búsqueda full-text nativa, pero podemos hacer queries por campos
-      let query = ref.orderBy('creado_en', 'desc');
-      
-      // Si hay un cursor (startAfter), usarlo para paginación
-      if (startAfter) {
-        try {
-          // startAfter es el ID del último documento
-          const lastDoc = await ref.doc(startAfter).get();
-          if (lastDoc.exists) {
-            // Firestore necesita el documento completo para startAfter
-            query = query.startAfter(lastDoc);
-          }
-        } catch (e) {
-          console.warn(`⚠️ Error usando startAfter: ${e.message}`);
+
+    // USAMOS LA VARIABLE MAESTRA
+    let ref = admin.firestore().collection(MAIN_COLLECTION);
+
+    const bloqueados = await obtenerCandidatosBloqueados();
+    const termino = q.toLowerCase().trim();
+    const limitNum = parseInt(limit) || 100;
+
+    // 🔥 MEJORA: Si hay término de búsqueda, buscar en Firestore directamente
+    // Firestore no soporta búsqueda full-text nativa, pero podemos hacer queries por campos
+    let query = ref.orderBy('creado_en', 'desc');
+
+    // Si hay un cursor (startAfter), usarlo para paginación
+    if (startAfter) {
+      try {
+        // startAfter es el ID del último documento
+        const lastDoc = await ref.doc(startAfter).get();
+        if (lastDoc.exists) {
+          // Firestore necesita el documento completo para startAfter
+          query = query.startAfter(lastDoc);
         }
+      } catch (e) {
+        console.warn(`⚠️ Error usando startAfter: ${e.message}`);
       }
-      
-      // Aplicar límite (aumentamos a 100 por defecto, pero permitimos más)
-      query = query.limit(limitNum + 1); // Traemos uno más para saber si hay más resultados
-      
-      const snap = await query.get();
-      
+    }
 
-      if (snap.empty) return res.json({ resultados: [], hasMore: false, lastDoc: null });
+    // Aplicar límite (aumentamos a 100 por defecto, pero permitimos más)
+    query = query.limit(limitNum + 1); // Traemos uno más para saber si hay más resultados
 
-  
+    const snap = await query.get();
 
-// --- INICIO BLOQUE REEMPLAZADO: MAPEO UNIFICADO ---
-let candidatos = snap.docs.map(doc => {
-  const data = doc.data();
-  
-  // 1. Lógica de ordenamiento temporal unificada
-  let timestamp = 0;
-  if (data.fecha_correo) {
-      timestamp = new Date(data.fecha_correo).getTime();
-  } else if (data.creado_en) {
-      // Soporte para Timestamp de Firebase o string ISO
-      timestamp = data.creado_en.toDate ? data.creado_en.toDate().getTime() : new Date(data.creado_en).getTime();
-  } else if (data.fecha) {
-      timestamp = new Date(data.fecha).getTime();
-  }
 
-  // 2. Recuperamos datos visuales y de ESTADO
-  const nombreFinal = data.nombre || data.datos_personales?.nombre_completo || data.applicant_email || "Sin Nombre";
-  const linkFinal = data.cv_url || data.cv_storage_path || null;
+    if (snap.empty) return res.json({ resultados: [], hasMore: false, lastDoc: null });
 
-  return {
-    id: doc.id,
-    nombre: nombreFinal,
-    email: data.email || data.applicant_email || "S/E",
-    puesto: data.puesto || "Sin puesto",
-    cv_url: linkFinal,
-    
-    // Fechas para ordenar y mostrar
-    fecha_orden: timestamp, 
-    fecha: data.fecha || data.creado_en, 
 
-    // 🔥 PERSISTENCIA: Leemos las etiquetas reales de la DB
-    stage: data.stage || 'stage_1',           
-    status_interno: data.status_interno || 'new',
-    assignedTo: data.assignedTo || null,      
-    history: data.historial_movimientos || [], // <--- CRONOLOGÍA
-    origen: data.origen || null, // Origen del candidato (carga_manual, webhook_zoho, etc.)
-    
-    // Datos de IA y notas
-    ia_score: data.ia_score || 0,
-    ia_motivos: data.ia_motivos || data.motivo || "Análisis pendiente...", 
-    ia_alertas: data.ia_alertas || [],
-    video_url: data.video_url || null,
-    video_tipo: data.video_tipo || null, // Tipo de video: "link" | "archivo" | "ninguno"
-    respuestas_filtro: data.respuestas_filtro || {},
-    motivo: data.motivo || "", 
-    notes: data.notes || "",
-    
-    // Datos de gestión de entrevista y formularios
-    meet_link: data.meet_link || null,
-    informe_final_data: data.informe_final_data || null,
-    respuestas_form2: data.respuestas_form2 || null,
-    process_step_2_form: data.process_step_2_form || null,
-    interview_transcript: data.transcripcion_entrevista || data.interview_transcript || null, // Mapeo para compatibilidad
-    transcripcion_entrevista: data.transcripcion_entrevista || null, // Campo original para verificar si está analizada
-    
-    // Reseñas generadas por IA
-    reseña_cv: data.reseña_cv || null,
-    reseña_video: data.reseña_video || null,
-    video_error: data.video_error || null, // Error si el video no se pudo procesar
-    video_link_publico: data.video_link_publico || null, // Si el link es público o no
-    
-    // 🔧 SOLUCIÓN TEMPORAL: Campo para saltar Form2
-    skip_form2: data.skip_form2 || false
-  };
-})
-// --- FIN BLOQUE REEMPLAZADO ---
+
+    // --- INICIO BLOQUE REEMPLAZADO: MAPEO UNIFICADO ---
+    let candidatos = snap.docs.map(doc => {
+      const data = doc.data();
+
+      // 1. Lógica de ordenamiento temporal unificada
+      let timestamp = 0;
+      if (data.fecha_correo) {
+        timestamp = new Date(data.fecha_correo).getTime();
+      } else if (data.creado_en) {
+        // Soporte para Timestamp de Firebase o string ISO
+        timestamp = data.creado_en.toDate ? data.creado_en.toDate().getTime() : new Date(data.creado_en).getTime();
+      } else if (data.fecha) {
+        timestamp = new Date(data.fecha).getTime();
+      }
+
+      // 2. Recuperamos datos visuales y de ESTADO
+      const nombreFinal = data.nombre || data.datos_personales?.nombre_completo || data.applicant_email || "Sin Nombre";
+      const linkFinal = data.cv_url || data.cv_storage_path || null;
+
+      return {
+        id: doc.id,
+        nombre: nombreFinal,
+        email: data.email || data.applicant_email || "S/E",
+        puesto: data.puesto || "Sin puesto",
+        cv_url: linkFinal,
+
+        // Fechas para ordenar y mostrar
+        fecha_orden: timestamp,
+        fecha: data.fecha || data.creado_en,
+
+        // 🔥 PERSISTENCIA: Leemos las etiquetas reales de la DB
+        stage: data.stage || 'stage_1',
+        status_interno: data.status_interno || 'new',
+        assignedTo: data.assignedTo || null,
+        history: data.historial_movimientos || [], // <--- CRONOLOGÍA
+        origen: data.origen || null, // Origen del candidato (carga_manual, webhook_zoho, etc.)
+
+        // Datos de IA y notas
+        ia_score: data.ia_score || 0,
+        ia_motivos: data.ia_motivos || data.motivo || "Análisis pendiente...",
+        ia_alertas: data.ia_alertas || [],
+        video_url: data.video_url || null,
+        video_tipo: data.video_tipo || null, // Tipo de video: "link" | "archivo" | "ninguno"
+        respuestas_filtro: data.respuestas_filtro || {},
+        motivo: data.motivo || "",
+        notes: data.notes || "",
+
+        // Datos de gestión de entrevista y formularios
+        meet_link: data.meet_link || null,
+        informe_final_data: data.informe_final_data || null,
+        respuestas_form2: data.respuestas_form2 || null,
+        process_step_2_form: data.process_step_2_form || null,
+        interview_transcript: data.transcripcion_entrevista || data.interview_transcript || null, // Mapeo para compatibilidad
+        transcripcion_entrevista: data.transcripcion_entrevista || null, // Campo original para verificar si está analizada
+
+        // Reseñas generadas por IA
+        reseña_cv: data.reseña_cv || null,
+        reseña_video: data.reseña_video || null,
+        video_error: data.video_error || null, // Error si el video no se pudo procesar
+        video_link_publico: data.video_link_publico || null, // Si el link es público o no
+
+        // 🔧 SOLUCIÓN TEMPORAL: Campo para saltar Form2
+        skip_form2: data.skip_form2 || false
+      };
+    })
+      // --- FIN BLOQUE REEMPLAZADO ---
 
       .filter(c => {
 
         // 2. Filtrado por bloqueados y texto
 
-                // CORRECCION: Los candidatos en trash NO deben ser bloqueados
+        // CORRECCION: Los candidatos en trash NO deben ser bloqueados
         if (bloqueados.has(c.id.toLowerCase()) && c.stage !== 'trash') return false;
 
         if (!termino) return true; // Si no escribiste nada, devuelve todo
 
-  
+
 
         const matchText = `${c.nombre} ${c.email} ${c.puesto}`.toLowerCase();
 
@@ -1249,47 +1362,47 @@ let candidatos = snap.docs.map(doc => {
 
       });
 
-  
 
-      // 3. ORDENAMIENTO FINAL (El número más grande = fecha más reciente = va primero)
 
-      candidatos.sort((a, b) => b.fecha_orden - a.fecha_orden);
+    // 3. ORDENAMIENTO FINAL (El número más grande = fecha más reciente = va primero)
 
-      // 4. PAGINACIÓN: Detectar si hay más resultados
-      let hasMore = false;
-      let lastDoc = null;
-      
-      if (candidatos.length > limitNum) {
-        hasMore = true;
-        candidatos = candidatos.slice(0, limitNum); // Quitamos el extra
-      }
-      
-      // El último documento para el cursor
-      if (candidatos.length > 0) {
-        const lastCandidate = candidatos[candidatos.length - 1];
-        lastDoc = lastCandidate.id;
-      }
+    candidatos.sort((a, b) => b.fecha_orden - a.fecha_orden);
 
-      console.log(`✅ Enviando ${candidatos.length} candidatos ordenados. HasMore: ${hasMore}`);
+    // 4. PAGINACIÓN: Detectar si hay más resultados
+    let hasMore = false;
+    let lastDoc = null;
 
-      res.json({ 
-        resultados: candidatos,
-        hasMore: hasMore,
-        lastDoc: lastDoc,
-        total: candidatos.length
-      });
-
-  
-
-    } catch (err) {
-
-      console.error("❌ Error en /buscar:", err);
-
-      res.status(500).json({ error: "Error interno del servidor" });
-
+    if (candidatos.length > limitNum) {
+      hasMore = true;
+      candidatos = candidatos.slice(0, limitNum); // Quitamos el extra
     }
 
-  });
+    // El último documento para el cursor
+    if (candidatos.length > 0) {
+      const lastCandidate = candidatos[candidatos.length - 1];
+      lastDoc = lastCandidate.id;
+    }
+
+    console.log(`✅ Enviando ${candidatos.length} candidatos ordenados. HasMore: ${hasMore}`);
+
+    res.json({
+      resultados: candidatos,
+      hasMore: hasMore,
+      lastDoc: lastDoc,
+      total: candidatos.length
+    });
+
+
+
+  } catch (err) {
+
+    console.error("❌ Error en /buscar:", err);
+
+    res.status(500).json({ error: "Error interno del servidor" });
+
+  }
+
+});
 
 // ==========================================================================
 // 🔄 ENDPOINT: ACTUALIZACIÓN DE ESTADO INTERNO (Optimizado)
@@ -1297,58 +1410,58 @@ let candidatos = snap.docs.map(doc => {
 app.post("/candidatos/:id/resumen", async (req, res) => {
   try {
     const { id } = req.params;
-    const { manualData, responsable } = req.body; 
+    const { manualData, responsable } = req.body;
 
     console.log(`🤖 Iniciando proceso de informe para: ${id}`);
 
     // --- CASO 1: MODO MANUAL (Candidatos externos o previos) ---
     if (id === 'manual_freelance' && manualData) {
-        console.log("⚡ Procesando Informe Manual Directo...");
-        
-        const informeManual = await generarDatosParaInforme(
-            manualData.textoCV,
-            manualData.puesto || "Perfil Externo",
-            manualData.notas || "",
-            {}, // form2 vacío para manual
-            "Generación manual directa sin pipeline previo",
-            responsable || "Admin"
-        );
+      console.log("⚡ Procesando Informe Manual Directo...");
 
-        if (!informeManual) {
-            return res.status(500).json({ error: "Error de Gemini en proceso manual" });
-        }
+      const informeManual = await generarDatosParaInforme(
+        manualData.textoCV,
+        manualData.puesto || "Perfil Externo",
+        manualData.notas || "",
+        {}, // form2 vacío para manual
+        "Generación manual directa sin pipeline previo",
+        responsable || "Admin"
+      );
 
-        // Agregar fecha de generación al informe manual
-        informeManual.fecha_generacion = new Date().toISOString();
-        return res.json(informeManual); // Enviamos directo al dashboard sin guardar en DB
+      if (!informeManual) {
+        return res.status(500).json({ error: "Error de Gemini en proceso manual" });
+      }
+
+      // Agregar fecha de generación al informe manual
+      informeManual.fecha_generacion = new Date().toISOString();
+      return res.json(informeManual); // Enviamos directo al dashboard sin guardar en DB
     }
 
     // --- CASO 2: PROCESO IDEAL (Candidatos del Pipeline) ---
     const docRef = firestore.collection(MAIN_COLLECTION).doc(id);
     const doc = await docRef.get();
-    
+
     if (!doc.exists) {
-        return res.status(404).json({ error: "Candidato no encontrado en el pipeline." });
+      return res.status(404).json({ error: "Candidato no encontrado en el pipeline." });
     }
 
     const data = doc.data();
-    
+
     // Si ya existe un informe guardado y no pedimos regenerar, lo devolvemos
     if (data.informe_final_data && (!manualData || !manualData.forceRegenerate)) {
-        console.log("📄 Devolviendo informe ya existente desde Firestore.");
-        // Si el informe existente no tiene fecha_generacion, agregarla usando la fecha de creación del documento
-        const informeExistente = { ...data.informe_final_data };
-        if (!informeExistente.fecha_generacion) {
-            // Intentar usar la fecha de creación del documento o la fecha actual
-            const fechaCreacion = doc.createTime ? doc.createTime.toDate().toISOString() : new Date().toISOString();
-            informeExistente.fecha_generacion = fechaCreacion;
-        }
-        return res.json(informeExistente);
+      console.log("📄 Devolviendo informe ya existente desde Firestore.");
+      // Si el informe existente no tiene fecha_generacion, agregarla usando la fecha de creación del documento
+      const informeExistente = { ...data.informe_final_data };
+      if (!informeExistente.fecha_generacion) {
+        // Intentar usar la fecha de creación del documento o la fecha actual
+        const fechaCreacion = doc.createTime ? doc.createTime.toDate().toISOString() : new Date().toISOString();
+        informeExistente.fecha_generacion = fechaCreacion;
+      }
+      return res.json(informeExistente);
     }
 
     // Si no hay informe, lo generamos usando los datos de Firestore
     const textoCV = manualData?.textoCV || data.texto_extraido || "";
-    
+
     // Recolectar TODOS los datos del pipeline para el informe
     const notasStage1 = data.motivo || data.notes || "";
     const respuestasForm1 = data.respuestas_filtro || {};
@@ -1356,10 +1469,10 @@ app.post("/candidatos/:id/resumen", async (req, res) => {
     const transcripcion = data.transcripcion_entrevista || "";
     const analisisPostEntrevista = data.ia_motivos || "";
     const alertasPostEntrevista = data.ia_alertas || [];
-    
+
     // 🔥 DETECCIÓN: Form 2 marcado como recibido pero sin datos reales (marcado manualmente)
     const form2MarcadoPeroVacio = data.process_step_2_form === 'received' && Object.keys(respuestasForm2).length === 0;
-    
+
     // Combinar toda la información en un texto para la IA
     const notasCompletas = `
 ${notasStage1 ? `NOTAS INICIALES (Stage 1):\n${notasStage1}\n\n` : ''}
@@ -1371,35 +1484,35 @@ ${alertasPostEntrevista.length > 0 ? `ALERTAS DETECTADAS:\n${alertasPostEntrevis
     `.trim();
 
     const informeGenerado = await generarDatosParaInforme(
-        textoCV,
-        data.puesto || data.oferta || "Candidato",
-        notasCompletas, // Usar las notas combinadas de todo el pipeline
-        respuestasForm2, // Form 2 como objeto separado (por si la función lo necesita)
-        analisisPostEntrevista, // Análisis post-entrevista
-        responsable || data.assignedTo || "Admin",
-        form2MarcadoPeroVacio // Flag: true si Form 2 está marcado pero vacío
+      textoCV,
+      data.puesto || data.oferta || "Candidato",
+      notasCompletas, // Usar las notas combinadas de todo el pipeline
+      respuestasForm2, // Form 2 como objeto separado (por si la función lo necesita)
+      analisisPostEntrevista, // Análisis post-entrevista
+      responsable || data.assignedTo || "Admin",
+      form2MarcadoPeroVacio // Flag: true si Form 2 está marcado pero vacío
     );
 
     if (informeGenerado) {
-        // Agregar fecha de generación al informe antes de guardarlo
-        informeGenerado.fecha_generacion = new Date().toISOString();
-        
-        // Guardamos el informe en Firestore para que ya quede entrelazado
-        await docRef.update({ 
-            informe_final_data: informeGenerado,
-            report_generated: true,
-            
-            // HISTORIAL: Informe generado
-            historial_movimientos: admin.firestore.FieldValue.arrayUnion({
-                date: new Date().toISOString(),
-                event: 'Informe Generado',
-                detail: `Informe final generado por: ${responsable || data.assignedTo || "Admin"}`,
-                usuario: responsable || data.assignedTo || "Admin"
-            })
-        });
-        return res.json(informeGenerado);
+      // Agregar fecha de generación al informe antes de guardarlo
+      informeGenerado.fecha_generacion = new Date().toISOString();
+
+      // Guardamos el informe en Firestore para que ya quede entrelazado
+      await docRef.update({
+        informe_final_data: informeGenerado,
+        report_generated: true,
+
+        // HISTORIAL: Informe generado
+        historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+          date: new Date().toISOString(),
+          event: 'Informe Generado',
+          detail: `Informe final generado por: ${responsable || data.assignedTo || "Admin"}`,
+          usuario: responsable || data.assignedTo || "Admin"
+        })
+      });
+      return res.json(informeGenerado);
     } else {
-        return res.status(500).json({ error: "Error al generar el informe con Gemini." });
+      return res.status(500).json({ error: "Error al generar el informe con Gemini." });
     }
 
   } catch (error) {
@@ -1705,7 +1818,7 @@ async function obtenerNombresArchivados() {
 
   try {
     const snap = await firestore.collection(MAIN_COLLECTION).get();
-    
+
     snap.forEach(doc => {
       const data = doc.data();
 
@@ -1718,7 +1831,7 @@ async function obtenerNombresArchivados() {
       if (data.applicant_email) {
         nombres.add(data.applicant_email.trim().toLowerCase());
       }
-      
+
       // También por nombre del archivo CV si existe
       if (data.cv_storage_path) {
         const nombreArchivo = data.cv_storage_path.split('/').pop();
@@ -1871,7 +1984,7 @@ app.post("/ficha_subida", upload.single("cv"), async (req, res) => {
 
 app.post('/ficha_recibida', async (req, res) => {
   console.log('=== [/ficha_recibida] INICIO (Node.js) ===');
-  
+
   try {
     const { textoPegado, nombreCV, conLogo } = req.body || {};
     if (!nombreCV) return res.status(400).json({ error: 'Falta el nombre del CV.' });
@@ -2063,13 +2176,13 @@ async function limpiarBloqueosExpirados() {
 async function obtenerCandidatosMovidos() {
   // Solo candidatos que NO están en stage_1 (ya fueron procesados)
   const movidos = new Set();
-  
+
   try {
     // Obtener candidatos en stage_2, stage_3 o trash
     const snap = await firestore.collection(MAIN_COLLECTION)
       .where("stage", "in", ["stage_2", "stage_3", "trash"])
       .get();
-    
+
     snap.forEach(d => movidos.add(d.id));
   } catch (error) {
     // Si falla la query con "in", hacer queries separadas
@@ -2078,12 +2191,12 @@ async function obtenerCandidatosMovidos() {
         .where("stage", "==", "stage_2")
         .get();
       stage2Snap.forEach(d => movidos.add(d.id));
-      
+
       const stage3Snap = await firestore.collection(MAIN_COLLECTION)
         .where("stage", "==", "stage_3")
         .get();
       stage3Snap.forEach(d => movidos.add(d.id));
-      
+
       const trashSnap = await firestore.collection(MAIN_COLLECTION)
         .where("stage", "==", "trash")
         .get();
@@ -2102,7 +2215,7 @@ app.get("/resumen/:id", async (req, res) => {
     const id = req.params.id;
     // Buscamos en la colección correcta 'CVs_aprobados'
     const snap = await firestore.collection(MAIN_COLLECTION).doc(id).get();
-    
+
     if (!snap.exists) return res.json({ resumen: "Candidato no encontrado" });
     const c = snap.data();
 
@@ -2379,20 +2492,20 @@ Respuesta:
       palabras_clave: (result.palabras_clave || []).map(normStr)
     };
 
-  // ... (aquí termina el cierre de la función parsearBusquedaIA) ...
-} catch (err) {
-  console.error("❌ Error en parsearBusquedaIA:", err);
-  return {
-    area_requerida: "",
-    areas_afines: [],
-    habilidades_tecnicas: [],
-    experiencia_minima_anios: 0,
-    nivel_ingles: "",
-    modalidad: "",
-    ubicacion_preferida: "",
-    palabras_clave: []
-  };
-}
+    // ... (aquí termina el cierre de la función parsearBusquedaIA) ...
+  } catch (err) {
+    console.error("❌ Error en parsearBusquedaIA:", err);
+    return {
+      area_requerida: "",
+      areas_afines: [],
+      habilidades_tecnicas: [],
+      experiencia_minima_anios: 0,
+      nivel_ingles: "",
+      modalidad: "",
+      ubicacion_preferida: "",
+      palabras_clave: []
+    };
+  }
 }
 // ====================================================================
 // 🧠 CEREBRO V3: BLINDADO PARA NOTAS VAGAS O DESESTRUCTURADAS
@@ -2403,9 +2516,9 @@ async function generarDatosParaInforme(textoCV, puesto, notas, form2, analisisPr
 
     // 🔥 DETECCIÓN: ¿Es pipeline? (tiene analisisPrevio o datos de Form 2)
     const esPipeline = analisisPrevio && analisisPrevio !== "Generación manual directa sin pipeline previo";
-    
+
     let seccionFuentes = "";
-    
+
     if (esPipeline) {
       // 🔥 DISTRIBUCIÓN CONDICIONAL: Si Form 2 está marcado pero vacío, redistribuir pesos
       if (form2MarcadoPeroVacio) {
@@ -2551,12 +2664,12 @@ async function generarDatosParaInforme(textoCV, puesto, notas, form2, analisisPr
     const result = await model.generateContent(prompt);
     const response = await result.response;
     let text = response.text().replace(/```json/g, "").replace(/```/g, "").trim();
-    
+
     // Limpieza extra por si Gemini mete texto antes del JSON
     const jsonStart = text.indexOf('{');
     const jsonEnd = text.lastIndexOf('}');
     if (jsonStart !== -1 && jsonEnd !== -1) {
-        text = text.substring(jsonStart, jsonEnd + 1);
+      text = text.substring(jsonStart, jsonEnd + 1);
     }
 
     return JSON.parse(text);
@@ -2574,76 +2687,76 @@ async function generarDatosParaInforme(textoCV, puesto, notas, form2, analisisPr
 // ====================================================================
 app.post("/download-docx", async (req, res) => {
   try {
-      const data = req.body;
-      console.log("📝 Generando Word con plantilla para:", data.nombre);
+    const data = req.body;
+    console.log("📝 Generando Word con plantilla para:", data.nombre);
 
-      // 1. CARGAR LA PLANTILLA
-      // Busca 'plantilla.docx' en la carpeta raíz
-      const content = fs.readFileSync(path.resolve(__dirname, "plantilla.docx"), "binary");
-      const zip = new PizZip(content);
+    // 1. CARGAR LA PLANTILLA
+    // Busca 'plantilla.docx' en la carpeta raíz
+    const content = fs.readFileSync(path.resolve(__dirname, "plantilla.docx"), "binary");
+    const zip = new PizZip(content);
 
-      // 2. INICIALIZAR EL MOTOR
-      const doc = new Docxtemplater(zip, {
-          paragraphLoop: true,
-          linebreaks: true,
-      });
+    // 2. INICIALIZAR EL MOTOR
+    const doc = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+    });
 
-      // 3. PREPARAR DATOS (Mapeo exacto a las etiquetas de tu Word)
-      // La fecha se genera en el momento
-      const fechaHoy = new Date().toLocaleDateString("es-ES", { year: 'numeric', month: 'long', day: 'numeric' });
+    // 3. PREPARAR DATOS (Mapeo exacto a las etiquetas de tu Word)
+    // La fecha se genera en el momento
+    const fechaHoy = new Date().toLocaleDateString("es-ES", { year: 'numeric', month: 'long', day: 'numeric' });
 
-      const payload = {
-          fecha: fechaHoy,
-          nombre: data.nombre || "Candidato",
-          puesto: data.puesto || "-",
-          
-          // Resumen (con fallback por si viene con otro nombre)
-          resumen_ejecutivo: data.resumen_ejecutivo || data.resumen_profesional || "",
-          
-          // Ficha Técnica (Manejo seguro de nulos)
-          ubicacion: data.ficha_tecnica?.ubicacion || "-",
-          experiencia: data.ficha_tecnica?.nivel_experiencia || "-",
-          formacion: data.ficha_tecnica?.formacion_formal || data.ficha_tecnica?.formacion || "-",
-          ingles: data.ficha_tecnica?.nivel_ingles || data.ficha_tecnica?.idiomas || "-",
-          disponibilidad: data.ficha_tecnica?.disponibilidad || "-",
+    const payload = {
+      fecha: fechaHoy,
+      nombre: data.nombre || "Candidato",
+      puesto: data.puesto || "-",
 
-          // Tablas (Arrays para los bucles)
-          // Si no hay datos, enviamos array vacío para que no rompa
-          competencias_tecnicas: Array.isArray(data.competencias_tecnicas) ? data.competencias_tecnicas : [],
-          habilidades_blandas: Array.isArray(data.habilidades_blandas) ? data.habilidades_blandas : [],
-          herramientas: Array.isArray(data.herramientas) ? data.herramientas : [],
+      // Resumen (con fallback por si viene con otro nombre)
+      resumen_ejecutivo: data.resumen_ejecutivo || data.resumen_profesional || "",
 
-          // Secciones Finales
-          plus: data.plus || "Sin información adicional.",
-          formacion_sugerida: data.formacion_sugerida || "Ninguna específica.",
-          conclusion_final: data.recomendacion_final || data.conclusion_final || "",
-          responsable: data.responsable || "Admin"
-      };
+      // Ficha Técnica (Manejo seguro de nulos)
+      ubicacion: data.ficha_tecnica?.ubicacion || "-",
+      experiencia: data.ficha_tecnica?.nivel_experiencia || "-",
+      formacion: data.ficha_tecnica?.formacion_formal || data.ficha_tecnica?.formacion || "-",
+      ingles: data.ficha_tecnica?.nivel_ingles || data.ficha_tecnica?.idiomas || "-",
+      disponibilidad: data.ficha_tecnica?.disponibilidad || "-",
 
-      // 4. RENDERIZAR DOCUMENTO
-      doc.render(payload);
+      // Tablas (Arrays para los bucles)
+      // Si no hay datos, enviamos array vacío para que no rompa
+      competencias_tecnicas: Array.isArray(data.competencias_tecnicas) ? data.competencias_tecnicas : [],
+      habilidades_blandas: Array.isArray(data.habilidades_blandas) ? data.habilidades_blandas : [],
+      herramientas: Array.isArray(data.herramientas) ? data.herramientas : [],
 
-      // 5. GENERAR Y ENVIAR
-      const buf = doc.getZip().generate({
-          type: "nodebuffer",
-          compression: "DEFLATE",
-      });
+      // Secciones Finales
+      plus: data.plus || "Sin información adicional.",
+      formacion_sugerida: data.formacion_sugerida || "Ninguna específica.",
+      conclusion_final: data.recomendacion_final || data.conclusion_final || "",
+      responsable: data.responsable || "Admin"
+    };
 
-      // Limpiamos el nombre del archivo para que no tenga caracteres raros
-      const safeName = (data.nombre || "Candidato").replace(/[^a-zA-Z0-9 ]/g, "").replace(/\s+/g, "_");
-      const filename = `Informe_${safeName}.docx`;
-      
-      res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-      res.send(buf);
+    // 4. RENDERIZAR DOCUMENTO
+    doc.render(payload);
+
+    // 5. GENERAR Y ENVIAR
+    const buf = doc.getZip().generate({
+      type: "nodebuffer",
+      compression: "DEFLATE",
+    });
+
+    // Limpiamos el nombre del archivo para que no tenga caracteres raros
+    const safeName = (data.nombre || "Candidato").replace(/[^a-zA-Z0-9 ]/g, "").replace(/\s+/g, "_");
+    const filename = `Informe_${safeName}.docx`;
+
+    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.send(buf);
 
   } catch (e) {
-      console.error("❌ Error generando Word con plantilla:", e);
-      // Si hay error de etiquetas, mostramos cuál es para ayudar a depurar
-      if (e.properties && e.properties.errors) {
-           e.properties.errors.forEach(err => console.error(`   - ${err.message}`));
-      }
-      res.status(500).json({ error: "Error al generar el documento. Verifica que 'plantilla.docx' exista y las etiquetas coincidan." });
+    console.error("❌ Error generando Word con plantilla:", e);
+    // Si hay error de etiquetas, mostramos cuál es para ayudar a depurar
+    if (e.properties && e.properties.errors) {
+      e.properties.errors.forEach(err => console.error(`   - ${err.message}`));
+    }
+    res.status(500).json({ error: "Error al generar el documento. Verifica que 'plantilla.docx' exista y las etiquetas coincidan." });
   }
 });
 
@@ -2661,9 +2774,9 @@ function extractNameFromBody(body, { knownEmail }) {
 
 // 5. Placeholder para audio (para que no rompa si falta ffmpeg)
 async function extractAudioMono16k(videoPath) {
-    // Si no tenés ffmpeg instalado en Render, esto va a fallar.
-    // Retornamos null para que el código siga sin transcripción.
-    return null; 
+  // Si no tenés ffmpeg instalado en Render, esto va a fallar.
+  // Retornamos null para que el código siga sin transcripción.
+  return null;
 }
 
 // ==========================================
@@ -2678,7 +2791,7 @@ async function verificarLinkVideoPublico(url) {
       maxRedirects: 5,
       validateStatus: (status) => status < 500
     });
-    
+
     return {
       esPublico: response.status === 200,
       esVideo: (response.headers['content-type'] || '').includes('video')
@@ -2695,13 +2808,13 @@ async function verificarLinkVideoPublico(url) {
 async function generarResenaCV(textoCV, puesto) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    
+
     // Obtener fecha actual para contexto temporal
     const ahora = new Date();
     const añoActual = ahora.getFullYear();
     const mesActual = ahora.getMonth() + 1; // getMonth() retorna 0-11
     const fechaActualTexto = `${añoActual}-${String(mesActual).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
-    
+
     const prompt = `
     ACTÚA COMO: Auditor Senior de Talento para Global Talent Connections.
     OBJETIVO: Realizar una "Due Diligence" de CALIDAD y VERACIDAD del CV para el puesto de "${puesto}".
@@ -2789,10 +2902,10 @@ async function generarResenaCV(textoCV, puesto) {
     [PERFIL SÓLIDO - 70+]
     "Perfil con experiencia relevante consolidada en el área. Demuestra progresión clara con permanencia estable en roles similares al puesto objetivo. El CV evidencia orientación a resultados con logros específicos y métricas cuantificables. La especialización es clara y las habilidades técnicas están respaldadas por aplicación práctica demostrable."
     `;
-    
+
     const result = await model.generateContent(prompt);
     const reseña = result.response.text().trim();
-    
+
     return reseña;
   } catch (error) {
     console.error("❌ Error generando reseña del CV:", error.message);
@@ -2813,7 +2926,7 @@ function convertirLinkDriveADescarga(driveUrl) {
   if (driveUrl.includes('/uc?export=download')) {
     return driveUrl;
   }
-  
+
   // Si es un link de visualización (/file/d/), extraer el ID y convertir
   if (driveUrl.includes('/file/d/')) {
     const fileIdMatch = driveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
@@ -2822,7 +2935,7 @@ function convertirLinkDriveADescarga(driveUrl) {
       return `https://drive.google.com/uc?export=download&id=${fileId}`;
     }
   }
-  
+
   // Si es un link compartido (/open?id=), extraer el ID
   if (driveUrl.includes('/open?id=')) {
     const fileIdMatch = driveUrl.match(/\/open\?id=([a-zA-Z0-9_-]+)/);
@@ -2831,7 +2944,7 @@ function convertirLinkDriveADescarga(driveUrl) {
       return `https://drive.google.com/uc?export=download&id=${fileId}`;
     }
   }
-  
+
   // Si no se puede convertir, retornar el original
   return driveUrl;
 }
@@ -2852,16 +2965,16 @@ function comprimirVideoA50MB(inputPath, outputPath) {
       if (err) {
         return reject(new Error(`Error obteniendo metadata del video: ${err.message}`));
       }
-      
+
       const duracionSegundos = metadata.format.duration || 60; // Fallback a 60 segundos
       const tamañoMaximoBytes = 50 * 1024 * 1024; // 50MB en bytes
       const tamañoMaximoBits = tamañoMaximoBytes * 8; // Convertir a bits
-      
+
       // Calcular bitrate objetivo (dejando espacio para audio ~128kbps)
       const bitrateVideoKbps = Math.max(500, Math.floor((tamañoMaximoBits / duracionSegundos - 128000) / 1000));
-      
+
       console.log(`📊 [COMPRESIÓN] Duración: ${duracionSegundos.toFixed(2)}s, Bitrate objetivo: ${bitrateVideoKbps}kbps`);
-      
+
       // Comprimir el video
       ffmpeg(inputPath)
         .videoCodec('libx264')
@@ -2886,7 +2999,7 @@ function comprimirVideoA50MB(inputPath, outputPath) {
           const stats = fs.statSync(outputPath);
           const sizeMB = stats.size / (1024 * 1024);
           console.log(`✅ [COMPRESIÓN] Completado. Tamaño final: ${sizeMB.toFixed(2)}MB`);
-          
+
           resolve({
             success: true,
             sizeMB: sizeMB,
@@ -2927,92 +3040,92 @@ async function procesarArchivoDesdeLink(url, tipo, safeId) {
     const esLoom = url.includes('loom.com');
     const esYouTube = url.includes('youtube.com') || url.includes('youtu.be');
     const esGoogleDrive = url.includes('drive.google.com');
-    
+
     // 🎥 PROCESAMIENTO ESPECIAL PARA GOOGLE DRIVE (solo videos)
     if (esGoogleDrive && tipo === 'video') {
       console.log(`🎥 Procesando video de Google Drive: descargando, comprimiendo y subiendo...`);
-      
+
       try {
         // 1. Convertir link de Drive a formato de descarga
         const downloadUrl = convertirLinkDriveADescarga(url);
         console.log(`📥 Descargando desde: ${downloadUrl.substring(0, 80)}...`);
-        
+
         // 2. Descargar el video (límite alto, lo comprimiremos después)
         const response = await axios.get(downloadUrl, {
           responseType: 'arraybuffer',
           timeout: 300000, // 5 minutos timeout (videos grandes pueden tardar)
           maxContentLength: 500 * 1024 * 1024, // 500MB máximo para descarga (luego comprimimos a 50MB)
           maxRedirects: 10, // Seguir redirects de Google Drive
-          headers: { 
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' 
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
           },
           validateStatus: function (status) {
             return status >= 200 && status < 400; // Aceptar redirects
           }
         });
-        
+
         // 🔥 VALIDAR que realmente descargamos un video, no HTML
         const contentType = response.headers['content-type'] || '';
         const responseStart = Buffer.from(response.data.slice(0, Math.min(1000, response.data.length))).toString('utf-8');
-        const isHTML = contentType.includes('text/html') || 
-                       responseStart.includes('<!DOCTYPE') ||
-                       responseStart.includes('<html') ||
-                       responseStart.includes('Google Drive');
-        
+        const isHTML = contentType.includes('text/html') ||
+          responseStart.includes('<!DOCTYPE') ||
+          responseStart.includes('<html') ||
+          responseStart.includes('Google Drive');
+
         if (isHTML) {
           throw new Error('Google Drive devolvió HTML en lugar del video. El archivo puede ser muy grande o requiere permisos especiales. Verifica que el link sea público y accesible.');
         }
-        
+
         // Validar que el tamaño sea razonable (mínimo 1KB)
         if (response.data.length < 1024) {
           throw new Error(`Video descargado es demasiado pequeño (${response.data.length} bytes). Posible error en la descarga.`);
         }
-        
+
         // 3. Guardar temporalmente el video descargado
         const tempInputPath = path.join(os.tmpdir(), `${safeId}_video_original_${Date.now()}.mp4`);
         const tempOutputPath = path.join(os.tmpdir(), `${safeId}_video_comprimido_${Date.now()}.mp4`);
-        
+
         fs.writeFileSync(tempInputPath, Buffer.from(response.data));
         const sizeOriginalMB = response.data.length / (1024 * 1024);
         console.log(`📊 Video descargado: ${sizeOriginalMB.toFixed(2)}MB`);
-        
+
         // 4. Comprimir el video a máximo 50MB
         let videoBuffer;
         if (sizeOriginalMB > 50) {
           console.log(`🎬 Comprimiendo video de ${sizeOriginalMB.toFixed(2)}MB a máximo 50MB...`);
           await comprimirVideoA50MB(tempInputPath, tempOutputPath);
           videoBuffer = fs.readFileSync(tempOutputPath);
-          
+
           // Limpiar archivos temporales
-          try { fs.unlinkSync(tempInputPath); } catch(e) {}
-          try { fs.unlinkSync(tempOutputPath); } catch(e) {}
+          try { fs.unlinkSync(tempInputPath); } catch (e) { }
+          try { fs.unlinkSync(tempOutputPath); } catch (e) { }
         } else {
           console.log(`✅ Video ya está bajo 50MB, no necesita compresión`);
           videoBuffer = Buffer.from(response.data);
           // Limpiar archivo temporal
-          try { fs.unlinkSync(tempInputPath); } catch(e) {}
+          try { fs.unlinkSync(tempInputPath); } catch (e) { }
         }
-        
+
         // 5. Subir a Firebase Storage
         const fileName = `CVs_staging/videos/${safeId}_video.mp4`;
         const bucketFile = bucket.file(fileName);
-        
-        await bucketFile.save(videoBuffer, { 
-          metadata: { contentType: 'video/mp4' } 
+
+        await bucketFile.save(videoBuffer, {
+          metadata: { contentType: 'video/mp4' }
         });
-        
+
         // 6. Generar link público firmado
         const [publicUrl] = await bucketFile.getSignedUrl({
           action: 'read',
           expires: '01-01-2035',
           responseDisposition: 'inline'
         });
-        
+
         const sizeFinalMB = videoBuffer.length / (1024 * 1024);
         console.log(`✅ Video de Google Drive procesado y comprimido: ${sizeFinalMB.toFixed(2)}MB → ${fileName}`);
-        
+
         return { urlPublica: publicUrl, procesado: true, error: null };
-        
+
       } catch (error) {
         console.error(`❌ Error procesando video de Google Drive:`, error.message);
         // Si falla, retornar el link original como fallback
@@ -3023,17 +3136,17 @@ async function procesarArchivoDesdeLink(url, tipo, safeId) {
         };
       }
     }
-    
+
     // Si es un link público conocido (Loom, YouTube) o Drive pero es CV, guardarlo directamente
     if (esLoom || esYouTube || (esGoogleDrive && tipo === 'cv')) {
       console.log(`✅ Link ${tipo} es público (${esLoom ? 'Loom' : esYouTube ? 'YouTube' : 'Google Drive'}), guardando directamente.`);
       return { urlPublica: url, procesado: false, error: null };
     }
-    
+
     // Si es WorkDrive o link externo desconocido, descargar y subir a Storage
     if (esWorkDrive || (!esLoom && !esYouTube && !esGoogleDrive)) {
       console.log(`📥 Descargando ${tipo} desde ${esWorkDrive ? 'WorkDrive' : 'link externo'}...`);
-      
+
       // Configurar según el tipo de archivo
       let extension, contentType, carpeta;
       if (tipo === 'cv') {
@@ -3045,40 +3158,40 @@ async function procesarArchivoDesdeLink(url, tipo, safeId) {
         contentType = 'video/mp4';
         carpeta = 'videos';
       }
-      
+
       // Descargar el archivo
       const response = await axios.get(url, {
         responseType: 'arraybuffer',
         timeout: tipo === 'video' ? 300000 : 60000, // 5 minutos para videos, 60 seg para CVs
         maxContentLength: tipo === 'cv' ? 10 * 1024 * 1024 : 500 * 1024 * 1024, // 10MB para CV, 500MB para video
         maxRedirects: 10,
-        headers: { 
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' 
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
       });
-      
+
       // Subir a Firebase Storage
       const fileName = `CVs_staging/${carpeta}/${safeId}_${tipo}.${extension}`;
       const bucketFile = bucket.file(fileName);
-      
-      await bucketFile.save(Buffer.from(response.data), { 
-        metadata: { contentType } 
+
+      await bucketFile.save(Buffer.from(response.data), {
+        metadata: { contentType }
       });
-      
+
       // Generar link público firmado (válido hasta 2035)
       const [publicUrl] = await bucketFile.getSignedUrl({
         action: 'read',
         expires: '01-01-2035',
         responseDisposition: tipo === 'cv' ? 'inline' : 'inline' // Abrir en navegador, no descargar
       });
-      
+
       console.log(`✅ ${tipo.toUpperCase()} descargado y subido a Storage: ${fileName}`);
       return { urlPublica: publicUrl, procesado: true, error: null };
     }
-    
+
     // Fallback: retornar el link original si no se procesó
     return { urlPublica: url, procesado: false, error: null };
-    
+
   } catch (error) {
     console.error(`❌ Error procesando ${tipo} desde link:`, error.message);
     return {
@@ -3094,7 +3207,7 @@ async function procesarArchivoDesdeLink(url, tipo, safeId) {
 // ==========================================
 async function verificaConocimientosMinimos(puesto, textoCandidato, declaraciones = "", reseñaCV = null, reseñaVideo = null) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); 
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     // Obtener fecha actual para contexto temporal
     const ahora = new Date();
@@ -3104,11 +3217,11 @@ async function verificaConocimientosMinimos(puesto, textoCandidato, declaracione
 
     // Construir el prompt con las reseñas si están disponibles
     let fuentesInfo = `[DATOS TÉCNICOS Y RESPUESTAS DEL FORMULARIO]:\n${textoCandidato.slice(0, 15000)}`;
-    
+
     if (reseñaCV) {
       fuentesInfo += `\n\n[RESEÑA DEL CV (Análisis Profesional)]:\n${reseñaCV}`;
     }
-    
+
     if (reseñaVideo) {
       fuentesInfo += `\n\n[RESEÑA DEL VIDEO DE PRESENTACIÓN (Análisis Profesional)]:\n${reseñaVideo}`;
     }
@@ -3203,16 +3316,16 @@ async function verificaConocimientosMinimos(puesto, textoCandidato, declaracione
     const result = await model.generateContent(prompt);
     const response = await result.response;
     let text = response.text().replace(/```json/g, "").replace(/```/g, "").trim();
-    
+
     // Limpieza de JSON por si la IA agrega texto extra
     const firstBrace = text.indexOf("{");
     const lastBrace = text.lastIndexOf("}");
     if (firstBrace !== -1 && lastBrace !== -1) {
-        text = text.substring(firstBrace, lastBrace + 1);
+      text = text.substring(firstBrace, lastBrace + 1);
     }
 
     const jsonFinal = JSON.parse(text);
-    
+
     // Aseguramos que 'alertas' siempre sea un array (por seguridad del frontend)
     if (!Array.isArray(jsonFinal.alertas)) jsonFinal.alertas = [];
 
@@ -3230,32 +3343,32 @@ app.post("/webhook/zoho", upload.none(), async (req, res) => {
   try {
     console.log("📨 [Webhook] Datos recibidos de Zoho.");
     await registrarEstadoWebhook("zoho_form1", true); // Registro de ejecución exitosa
-    
+
     // 1. Detección Inteligente del Payload (Por si llega encapsulado)
     let data = req.body;
     if (data.payload) {
-        try { data = JSON.parse(data.payload); } catch(e) {}
+      try { data = JSON.parse(data.payload); } catch (e) { }
     } else if (typeof data === 'string') {
-        try { data = JSON.parse(data); } catch(e) {}
+      try { data = JSON.parse(data); } catch (e) { }
     }
-    
+
     // 🔍 LOG PARA DEBUG: Ver todos los campos relacionados con video
-    const camposVideo = Object.keys(data).filter(k => 
-        k.toLowerCase().includes('video') || 
-        k.toLowerCase().includes('file') ||
-        k.toLowerCase().includes('attachment')
+    const camposVideo = Object.keys(data).filter(k =>
+      k.toLowerCase().includes('video') ||
+      k.toLowerCase().includes('file') ||
+      k.toLowerCase().includes('attachment')
     );
     if (camposVideo.length > 0) {
-        console.log("🎥 Campos relacionados con video encontrados:", camposVideo);
-        camposVideo.forEach(campo => {
-            console.log(`   ${campo}:`, typeof data[campo] === 'object' ? JSON.stringify(data[campo]).substring(0, 100) : data[campo]);
-        });
+      console.log("🎥 Campos relacionados con video encontrados:", camposVideo);
+      camposVideo.forEach(campo => {
+        console.log(`   ${campo}:`, typeof data[campo] === 'object' ? JSON.stringify(data[campo]).substring(0, 100) : data[campo]);
+      });
     }
 
     // 2. SANITIZACIÓN ID
     const emailRaw = (data.Email || "").trim().toLowerCase();
     if (!emailRaw) return res.status(400).send("Falta Email");
-    
+
     // ID ÚNICO
     const safeId = emailRaw.replace(/[^a-z0-9]/g, "_");
 
@@ -3263,14 +3376,14 @@ app.post("/webhook/zoho", upload.none(), async (req, res) => {
     const nowISO = new Date().toISOString();
 
     // 4. OBJETO BASE (CON SEGURIDAD ANTI-CRASH || "")
-    
+
     // 🔥 DETECCIÓN INTELIGENTE DE VIDEO
     // Zoho puede enviar video de dos formas:
     // 1. Link directo (Video_Link): "https://drive.google.com/..."
     // 2. Archivo subido: Puede venir como Video_File, Video_Attachment, Video_URL, etc.
     let videoUrl = "";
     let videoTipo = "ninguno"; // "link" | "archivo" | "ninguno"
-    
+
     // Prioridad 1: Link directo (campo Video_Link)
     if (data.Video_Link && data.Video_Link.trim() && data.Video_Link.startsWith('http')) {
       videoUrl = data.Video_Link.trim();
@@ -3292,30 +3405,30 @@ app.post("/webhook/zoho", upload.none(), async (req, res) => {
         videoTipo = "archivo";
       }
     }
-    
+
     // Log para debugging
     if (videoUrl) {
       console.log(`🎥 Video detectado (${videoTipo}): ${videoUrl.substring(0, 50)}...`);
     }
-    
+
     // 🔥 DETECCIÓN INTELIGENTE DE CV
     // Zoho puede enviar CV de dos formas:
     // 1. Link directo (CV_Link, Curriculum_Link, PDF_Link): "https://workdrive.zoho.eu/..."
     // 2. Archivo subido: Puede venir como CV_File, CV_Attachment, PDF_File, etc.
     let cvUrl = "";
     let cvTipo = "ninguno"; // "link" | "archivo" | "ninguno"
-    
+
     // Buscar en múltiples campos posibles (CV_Link, Curriculum_Link, PDF_Link, CV_File, etc.)
-    const camposCV = Object.keys(data).filter(k => 
-      (k.toLowerCase().includes('cv') || 
-       k.toLowerCase().includes('curriculum') || 
-       k.toLowerCase().includes('pdf')) &&
-      (k.toLowerCase().includes('link') || 
-       k.toLowerCase().includes('file') || 
-       k.toLowerCase().includes('url') ||
-       k.toLowerCase().includes('attachment'))
+    const camposCV = Object.keys(data).filter(k =>
+      (k.toLowerCase().includes('cv') ||
+        k.toLowerCase().includes('curriculum') ||
+        k.toLowerCase().includes('pdf')) &&
+      (k.toLowerCase().includes('link') ||
+        k.toLowerCase().includes('file') ||
+        k.toLowerCase().includes('url') ||
+        k.toLowerCase().includes('attachment'))
     );
-    
+
     if (camposCV.length > 0) {
       console.log(`📄 Campos relacionados con CV encontrados:`, camposCV);
       const cvField = data[camposCV[0]];
@@ -3331,17 +3444,17 @@ app.post("/webhook/zoho", upload.none(), async (req, res) => {
         cvTipo = "archivo";
       }
     }
-    
+
     // Log para debugging
     if (cvUrl) {
       console.log(`📄 CV detectado (${cvTipo}): ${cvUrl.substring(0, 50)}...`);
     }
-    
+
     // ===== PROCESAR ARCHIVOS (Descargar desde WorkDrive si es necesario) =====
     let videoUrlFinal = videoUrl;
     let cvUrlFinal = cvUrl;
     let tienePdf = false;
-    
+
     // Procesar video si existe
     if (videoUrl) {
       console.log(`🎥 Procesando video desde link...`);
@@ -3353,7 +3466,7 @@ app.post("/webhook/zoho", upload.none(), async (req, res) => {
         console.log(`✅ Video procesado y subido a Storage`);
       }
     }
-    
+
     // Procesar CV si existe
     if (cvUrl) {
       console.log(`📄 Procesando CV desde link...`);
@@ -3366,18 +3479,18 @@ app.post("/webhook/zoho", upload.none(), async (req, res) => {
         console.log(`✅ CV procesado y subido a Storage`);
       }
     }
-    
+
     const candidato = {
       id: safeId,
       nombre: `${data.Nombre_Completo || ""} ${data.Apellido || ""}`.trim(),
       email: emailRaw,
       telefono: data.Telefono || "",
       puesto: data.Puesto_Solicitado || "General",
-      
+
       // Video Link (URL pública si se procesó desde WorkDrive, o link original si es Loom/YouTube)
       video_url: videoUrlFinal,
       video_tipo: videoTipo, // Guardamos el tipo para referencia 
-      
+
       respuestas_filtro: {
         // Aquí aplicamos la seguridad para que no explote Firestore si falta algo
         salario: data.Acepta_Salario || "",
@@ -3389,26 +3502,26 @@ app.post("/webhook/zoho", upload.none(), async (req, res) => {
 
       // ESTADO INICIAL
       ia_score: 0,
-      ia_status: tienePdf ? "waiting_analysis" : "waiting_cv", 
+      ia_status: tienePdf ? "waiting_analysis" : "waiting_cv",
       ia_motivos: tienePdf ? "CV recibido, pendiente de análisis." : "Esperando recepción de CV para análisis completo.",
-      
-      cv_url: cvUrlFinal, 
+
+      cv_url: cvUrlFinal,
       tiene_pdf: tienePdf,
-      
+
       // ETIQUETAS DE ESTADO
-      stage: 'stage_1',           
-      status_interno: 'new',      
-      
+      stage: 'stage_1',
+      status_interno: 'new',
+
       creado_en: admin.firestore.FieldValue.serverTimestamp(),
       origen: "webhook_zoho_passive",
 
       // HISTORIAL INICIAL
       historial_movimientos: [
         {
-            date: nowISO,
-            event: 'Ingreso por Zoho',
-            detail: 'Candidato recibido desde formulario web (Zoho Form 1)',
-            usuario: 'Sistema (Zoho)'
+          date: nowISO,
+          event: 'Ingreso por Zoho',
+          detail: 'Candidato recibido desde formulario web (Zoho Form 1)',
+          usuario: 'Sistema (Zoho)'
         }
       ]
     };
@@ -3439,10 +3552,10 @@ async function registrarEstadoWebhook(webhookName, exito, error = null) {
       error: error || null,
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     };
-    
+
     // Guardamos en una colección separada para no mezclar con candidatos
     await firestore.collection("webhook_status").doc(webhookName).set(estadoDoc, { merge: true });
-    
+
     // También guardamos en un historial para tener registro de errores recientes
     if (!exito) {
       await firestore.collection("webhook_status").doc(webhookName)
@@ -3461,48 +3574,48 @@ async function registrarEstadoWebhook(webhookName, exito, error = null) {
 // ==========================================================================
 app.post("/candidatos/analizar-cv", upload.single('cv'), async (req, res) => {
   // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/f002550b-8fd2-4cb5-a05e-1ab2645067d4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.js:3352',message:'Endpoint /candidatos/analizar-cv recibió request',data:{method:req.method,hasFile:!!req.file,headers:Object.keys(req.headers)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  fetch('http://127.0.0.1:7242/ingest/f002550b-8fd2-4cb5-a05e-1ab2645067d4', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'index.js:3352', message: 'Endpoint /candidatos/analizar-cv recibió request', data: { method: req.method, hasFile: !!req.file, headers: Object.keys(req.headers) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
   // #endregion
   try {
     console.log("🔍 Iniciando análisis de CV (solo extracción)...");
-    
+
     // 1. Validaciones Iniciales
     if (!req.file) {
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/f002550b-8fd2-4cb5-a05e-1ab2645067d4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.js:3358',message:'Validación falló: falta archivo',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/f002550b-8fd2-4cb5-a05e-1ab2645067d4', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'index.js:3358', message: 'Validación falló: falta archivo', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }) }).catch(() => { });
       // #endregion
       return res.status(400).json({ error: "Falta el archivo PDF" });
     }
-    
+
     // 2. Leer archivo temporal
     const fs = require('fs');
     const fileBuffer = fs.readFileSync(req.file.path);
-    
+
     // 3. Extraer Texto del PDF
     const pdfData = await pdfParse(fileBuffer);
     const textoCV = pdfData.text.slice(0, 20000);
-    
+
     // 4. Extraer nombre y email con IA
     console.log("🤖 Extrayendo nombre y email del CV con IA...");
     const datosExtraidos = await extraerNombreYEmailDelCV(textoCV);
-    
+
     // Limpieza del archivo temporal local
-    try { fs.unlinkSync(req.file.path); } catch(e) {}
-    
+    try { fs.unlinkSync(req.file.path); } catch (e) { }
+
     console.log(`✅ Análisis completado: ${datosExtraidos.nombre || 'Sin nombre'} - ${datosExtraidos.email || 'Sin email'}`);
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/f002550b-8fd2-4cb5-a05e-1ab2645067d4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.js:3375',message:'Enviando respuesta JSON exitosa',data:{nombre:datosExtraidos.nombre,email:datosExtraidos.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/f002550b-8fd2-4cb5-a05e-1ab2645067d4', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'index.js:3375', message: 'Enviando respuesta JSON exitosa', data: { nombre: datosExtraidos.nombre, email: datosExtraidos.email }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
     // #endregion
-    res.json({ 
-      ok: true, 
+    res.json({
+      ok: true,
       nombre: datosExtraidos.nombre || "",
       email: datosExtraidos.email || ""
     });
-    
+
   } catch (error) {
     console.error("❌ Error en análisis de CV:", error);
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/f002550b-8fd2-4cb5-a05e-1ab2645067d4',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.js:3382',message:'Error capturado en catch',data:{error:error.message,stack:error.stack?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/f002550b-8fd2-4cb5-a05e-1ab2645067d4', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'index.js:3382', message: 'Error capturado en catch', data: { error: error.message, stack: error.stack?.substring(0, 200) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }) }).catch(() => { });
     // #endregion
     res.status(500).json({ error: error.message });
   }
@@ -3515,226 +3628,226 @@ app.post("/candidatos/analizar-cv", upload.single('cv'), async (req, res) => {
 
 app.post("/candidatos/ingreso-manual", upload.single('cv'), async (req, res) => {
   try {
-      console.log("⚡ Iniciando carga manual persistente...");
-      
-      // 1. Validaciones Iniciales
-      if (!req.file) return res.status(400).json({ error: "Falta el archivo PDF" });
-      const { email, nombre, puesto, salario, monitoreo, disponibilidad, herramientas, logro_destacado, competencias_tecnicas, habilidades_blandas } = req.body; // Datos que vienen del formulario manual
-      
-      // Generamos un ID seguro igual que en el correo (Fuente 74)
-      const emailSafe = (email || "manual_no_email").trim().toLowerCase();
-      const safeId = emailSafe.replace(/[^a-z0-9]/g, "_") + "_" + Date.now().toString().slice(-4);
-      
-      console.log(`📂 Procesando ingreso manual para ID: ${safeId}`);
+    console.log("⚡ Iniciando carga manual persistente...");
 
-      // 2. Subir a Google Cloud Storage (Igual que Fuente 75)
-      // Esto permite que el "Analista Profundo" pueda leer el archivo después.
-      const destFileName = `CVs_staging/files/${safeId}_CV.pdf`;
-      const bucketFile = bucket.file(destFileName);
-      
-      // Leemos el archivo desde la ruta temporal de Multer
-      const fs = require('fs');
-      const fileBuffer = fs.readFileSync(req.file.path);
-      
-      await bucketFile.save(fileBuffer, { metadata: { contentType: "application/pdf" } });
-      
-      // Generamos URL firmada para el dashboard
-      const [publicCvUrl] = await bucketFile.getSignedUrl({ action: 'read', expires: '01-01-2035' });
+    // 1. Validaciones Iniciales
+    if (!req.file) return res.status(400).json({ error: "Falta el archivo PDF" });
+    const { email, nombre, puesto, salario, monitoreo, disponibilidad, herramientas, logro_destacado, competencias_tecnicas, habilidades_blandas } = req.body; // Datos que vienen del formulario manual
 
-      // 3. Extraer Texto para la IA (Igual que Fuente 76)
-      const pdfData = await pdfParse(fileBuffer);
-      const textoCV = pdfData.text.slice(0, 20000); // Límite de caracteres
+    // Generamos un ID seguro igual que en el correo (Fuente 74)
+    const emailSafe = (email || "manual_no_email").trim().toLowerCase();
+    const safeId = emailSafe.replace(/[^a-z0-9]/g, "_") + "_" + Date.now().toString().slice(-4);
 
-      // 3.5. NO generar reseña ni análisis automático - se hará manualmente cuando el reclutador presione "Analizar"
-      // Para carga manual, solo extraemos nombre y email automáticamente
+    console.log(`📂 Procesando ingreso manual para ID: ${safeId}`);
 
-      // 3.6. Si nombre o email no vienen del formulario, extraerlos con IA
-      let nombreFinal = nombre;
-      let emailFinal = email;
-      
-      if (!nombre || !email) {
-        console.log("🤖 Extrayendo nombre y email del CV con IA...");
-        const datosExtraidos = await extraerNombreYEmailDelCV(textoCV);
-        
-        // Solo usar datos de IA si no vinieron del formulario
-        if (!nombreFinal && datosExtraidos.nombre) {
-          nombreFinal = datosExtraidos.nombre;
-        }
-        if (!emailFinal && datosExtraidos.email) {
-          emailFinal = datosExtraidos.email;
-        }
+    // 2. Subir a Google Cloud Storage (Igual que Fuente 75)
+    // Esto permite que el "Analista Profundo" pueda leer el archivo después.
+    const destFileName = `CVs_staging/files/${safeId}_CV.pdf`;
+    const bucketFile = bucket.file(destFileName);
+
+    // Leemos el archivo desde la ruta temporal de Multer
+    const fs = require('fs');
+    const fileBuffer = fs.readFileSync(req.file.path);
+
+    await bucketFile.save(fileBuffer, { metadata: { contentType: "application/pdf" } });
+
+    // Generamos URL firmada para el dashboard
+    const [publicCvUrl] = await bucketFile.getSignedUrl({ action: 'read', expires: '01-01-2035' });
+
+    // 3. Extraer Texto para la IA (Igual que Fuente 76)
+    const pdfData = await pdfParse(fileBuffer);
+    const textoCV = pdfData.text.slice(0, 20000); // Límite de caracteres
+
+    // 3.5. NO generar reseña ni análisis automático - se hará manualmente cuando el reclutador presione "Analizar"
+    // Para carga manual, solo extraemos nombre y email automáticamente
+
+    // 3.6. Si nombre o email no vienen del formulario, extraerlos con IA
+    let nombreFinal = nombre;
+    let emailFinal = email;
+
+    if (!nombre || !email) {
+      console.log("🤖 Extrayendo nombre y email del CV con IA...");
+      const datosExtraidos = await extraerNombreYEmailDelCV(textoCV);
+
+      // Solo usar datos de IA si no vinieron del formulario
+      if (!nombreFinal && datosExtraidos.nombre) {
+        nombreFinal = datosExtraidos.nombre;
       }
-      
-      // Actualizar emailSafe con el email final (ya sea del formulario o de IA)
-      const emailSafeFinal = (emailFinal || "manual_no_email").trim().toLowerCase();
-      // Si el email cambió, regenerar el safeId
-      const safeIdFinal = emailSafeFinal.replace(/[^a-z0-9]/g, "_") + "_" + Date.now().toString().slice(-4);
-
-      // 4. Procesar datos clave y skills
-      let respuestasFiltro = {};
-      if (salario || monitoreo || disponibilidad || herramientas || logro_destacado) {
-          respuestasFiltro = {
-              salario: salario || "",
-              monitoreo: monitoreo || "",
-              disponibilidad: disponibilidad || "",
-              herramientas: herramientas || "",
-              logro_destacado: logro_destacado || ""
-          };
+      if (!emailFinal && datosExtraidos.email) {
+        emailFinal = datosExtraidos.email;
       }
+    }
 
-      let competenciasTecnicasArray = [];
-      if (competencias_tecnicas) {
-          try {
-              competenciasTecnicasArray = JSON.parse(competencias_tecnicas);
-          } catch(e) {
-              console.warn("Error parseando competencias_tecnicas:", e);
-          }
-      }
+    // Actualizar emailSafe con el email final (ya sea del formulario o de IA)
+    const emailSafeFinal = (emailFinal || "manual_no_email").trim().toLowerCase();
+    // Si el email cambió, regenerar el safeId
+    const safeIdFinal = emailSafeFinal.replace(/[^a-z0-9]/g, "_") + "_" + Date.now().toString().slice(-4);
 
-      let habilidadesBlandasArray = [];
-      if (habilidades_blandas) {
-          try {
-              habilidadesBlandasArray = JSON.parse(habilidades_blandas);
-          } catch(e) {
-              console.warn("Error parseando habilidades_blandas:", e);
-          }
-      }
-
-      // 5. Guardar en Firestore (La Verdad Única - Fuente 80)
-      const nombreUsuario = req.body.usuario_accion || req.body.responsable || "Admin";
-      
-      const nuevoCandidato = {
-          id: safeIdFinal,
-          nombre: nombreFinal || "Candidato Manual",
-          email: emailSafeFinal,
-          puesto: puesto || "Sin especificar",
-          
-          // Datos del Archivo
-          cv_url: publicCvUrl,
-          cv_storage_path: destFileName,
-          tiene_pdf: true,
-          texto_extraido: textoCV, // Guardamos texto para no gastar OCR después
-          
-          // Datos clave y skills
-          respuestas_filtro: respuestasFiltro,
-          competencias_tecnicas: competenciasTecnicasArray,
-          habilidades_blandas: habilidadesBlandasArray,
-          
-          // Datos de IA (Pendiente de análisis automático)
-          ia_score: null,
-          ia_motivos: null,
-          ia_alertas: [],
-          ia_status: "analyzing",
-          
-          // Reseñas generadas por IA (pendiente)
-          reseña_cv: null,
-          
-          // Metadatos
-          origen: "carga_manual",
-          creado_en: admin.firestore.FieldValue.serverTimestamp(),
-          actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
-          
-          // ETIQUETAS DE ESTADO
-          stage: 'stage_1',
-          status_interno: 'new',
-          
-          // HISTORIAL INICIAL
-          historial_movimientos: [
-            {
-                date: new Date().toISOString(),
-                event: 'Ingreso Manual',
-                detail: `CV cargado manualmente por: ${nombreUsuario}. Análisis automático iniciado.`,
-                usuario: nombreUsuario
-            }
-          ]
+    // 4. Procesar datos clave y skills
+    let respuestasFiltro = {};
+    if (salario || monitoreo || disponibilidad || herramientas || logro_destacado) {
+      respuestasFiltro = {
+        salario: salario || "",
+        monitoreo: monitoreo || "",
+        disponibilidad: disponibilidad || "",
+        herramientas: herramientas || "",
+        logro_destacado: logro_destacado || ""
       };
+    }
 
-      // Escribimos en la colección maestra (MAIN_COLLECTION definida en Fuente 29)
-      await firestore.collection("CVs_staging").doc(safeIdFinal).set(nuevoCandidato);
-
-      // 6. Ejecutar análisis automático
-      console.log(`🤖 Iniciando análisis automático para candidato manual: ${safeIdFinal}`);
+    let competenciasTecnicasArray = [];
+    if (competencias_tecnicas) {
       try {
-          // 6.1. Generar reseña del CV
-          console.log(`📝 Generando reseña del CV...`);
-          const reseñaCV = await generarResenaCV(textoCV, puesto || "Perfil Externo");
-          
-          // 6.2. Construir texto del candidato con datos clave y skills para el análisis
-          let textoCandidato = "";
-          if (Object.keys(respuestasFiltro).length > 0) {
-              textoCandidato += "DATOS CLAVE:\n";
-              if (respuestasFiltro.salario) textoCandidato += `- Salario: ${respuestasFiltro.salario}\n`;
-              if (respuestasFiltro.monitoreo) textoCandidato += `- Monitoreo: ${respuestasFiltro.monitoreo}\n`;
-              if (respuestasFiltro.disponibilidad) textoCandidato += `- Disponibilidad: ${respuestasFiltro.disponibilidad}\n`;
-              if (respuestasFiltro.herramientas) textoCandidato += `- Herramientas: ${respuestasFiltro.herramientas}\n`;
-              if (respuestasFiltro.logro_destacado) textoCandidato += `- Logro Destacado: ${respuestasFiltro.logro_destacado}\n`;
-          }
-          if (competenciasTecnicasArray.length > 0) {
-              textoCandidato += "\nCOMPETENCIAS TÉCNICAS:\n";
-              competenciasTecnicasArray.forEach(comp => {
-                  if (comp.competencia && comp.nivel) {
-                      textoCandidato += `- ${comp.competencia}: ${comp.nivel}\n`;
-                  }
-              });
-          }
-          if (habilidadesBlandasArray.length > 0) {
-              textoCandidato += "\nHABILIDADES BLANDAS:\n";
-              habilidadesBlandasArray.forEach(hab => {
-                  if (hab.habilidad && hab.nivel) {
-                      textoCandidato += `- ${hab.habilidad}: ${hab.nivel}\n`;
-                  }
-              });
-          }
-          
-          // Si no hay datos clave, usar el texto del CV como base
-          if (!textoCandidato.trim()) {
-              textoCandidato = textoCV.slice(0, 15000);
-          }
+        competenciasTecnicasArray = JSON.parse(competencias_tecnicas);
+      } catch (e) {
+        console.warn("Error parseando competencias_tecnicas:", e);
+      }
+    }
 
-          // 6.3. Generar score, motivos y alertas usando verificaConocimientosMinimos
-          console.log(`🤖 Generando score y análisis...`);
-          const analisisIA = await verificaConocimientosMinimos(
-              puesto || "Perfil Externo",
-              textoCandidato,
-              "", // declaraciones vacías para carga manual
-              reseñaCV, // reseña del CV
-              null // sin video para carga manual
-          );
+    let habilidadesBlandasArray = [];
+    if (habilidades_blandas) {
+      try {
+        habilidadesBlandasArray = JSON.parse(habilidades_blandas);
+      } catch (e) {
+        console.warn("Error parseando habilidades_blandas:", e);
+      }
+    }
 
-          // 6.4. Actualizar candidato con el análisis completo
-          await firestore.collection("CVs_staging").doc(safeIdFinal).update({
-              ia_score: analisisIA.score || null,
-              ia_motivos: analisisIA.motivos || null,
-              ia_alertas: analisisIA.alertas || [],
-              ia_status: "analyzed",
-              reseña_cv: reseñaCV || null,
-              actualizado_en: admin.firestore.FieldValue.serverTimestamp()
-          });
+    // 5. Guardar en Firestore (La Verdad Única - Fuente 80)
+    const nombreUsuario = req.body.usuario_accion || req.body.responsable || "Admin";
 
-          console.log(`✅ Análisis automático completado para: ${safeIdFinal} - Score: ${analisisIA.score}`);
-      } catch (error) {
-          console.error(`❌ Error ejecutando análisis automático para ${safeIdFinal}:`, error);
-          await firestore.collection("CVs_staging").doc(safeIdFinal).update({
-              ia_status: "error_analysis",
-              ia_motivos: `Error en análisis automático: ${error.message}`
-          });
+    const nuevoCandidato = {
+      id: safeIdFinal,
+      nombre: nombreFinal || "Candidato Manual",
+      email: emailSafeFinal,
+      puesto: puesto || "Sin especificar",
+
+      // Datos del Archivo
+      cv_url: publicCvUrl,
+      cv_storage_path: destFileName,
+      tiene_pdf: true,
+      texto_extraido: textoCV, // Guardamos texto para no gastar OCR después
+
+      // Datos clave y skills
+      respuestas_filtro: respuestasFiltro,
+      competencias_tecnicas: competenciasTecnicasArray,
+      habilidades_blandas: habilidadesBlandasArray,
+
+      // Datos de IA (Pendiente de análisis automático)
+      ia_score: null,
+      ia_motivos: null,
+      ia_alertas: [],
+      ia_status: "analyzing",
+
+      // Reseñas generadas por IA (pendiente)
+      reseña_cv: null,
+
+      // Metadatos
+      origen: "carga_manual",
+      creado_en: admin.firestore.FieldValue.serverTimestamp(),
+      actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
+
+      // ETIQUETAS DE ESTADO
+      stage: 'stage_1',
+      status_interno: 'new',
+
+      // HISTORIAL INICIAL
+      historial_movimientos: [
+        {
+          date: new Date().toISOString(),
+          event: 'Ingreso Manual',
+          detail: `CV cargado manualmente por: ${nombreUsuario}. Análisis automático iniciado.`,
+          usuario: nombreUsuario
+        }
+      ]
+    };
+
+    // Escribimos en la colección maestra (MAIN_COLLECTION definida en Fuente 29)
+    await firestore.collection("CVs_staging").doc(safeIdFinal).set(nuevoCandidato);
+
+    // 6. Ejecutar análisis automático
+    console.log(`🤖 Iniciando análisis automático para candidato manual: ${safeIdFinal}`);
+    try {
+      // 6.1. Generar reseña del CV
+      console.log(`📝 Generando reseña del CV...`);
+      const reseñaCV = await generarResenaCV(textoCV, puesto || "Perfil Externo");
+
+      // 6.2. Construir texto del candidato con datos clave y skills para el análisis
+      let textoCandidato = "";
+      if (Object.keys(respuestasFiltro).length > 0) {
+        textoCandidato += "DATOS CLAVE:\n";
+        if (respuestasFiltro.salario) textoCandidato += `- Salario: ${respuestasFiltro.salario}\n`;
+        if (respuestasFiltro.monitoreo) textoCandidato += `- Monitoreo: ${respuestasFiltro.monitoreo}\n`;
+        if (respuestasFiltro.disponibilidad) textoCandidato += `- Disponibilidad: ${respuestasFiltro.disponibilidad}\n`;
+        if (respuestasFiltro.herramientas) textoCandidato += `- Herramientas: ${respuestasFiltro.herramientas}\n`;
+        if (respuestasFiltro.logro_destacado) textoCandidato += `- Logro Destacado: ${respuestasFiltro.logro_destacado}\n`;
+      }
+      if (competenciasTecnicasArray.length > 0) {
+        textoCandidato += "\nCOMPETENCIAS TÉCNICAS:\n";
+        competenciasTecnicasArray.forEach(comp => {
+          if (comp.competencia && comp.nivel) {
+            textoCandidato += `- ${comp.competencia}: ${comp.nivel}\n`;
+          }
+        });
+      }
+      if (habilidadesBlandasArray.length > 0) {
+        textoCandidato += "\nHABILIDADES BLANDAS:\n";
+        habilidadesBlandasArray.forEach(hab => {
+          if (hab.habilidad && hab.nivel) {
+            textoCandidato += `- ${hab.habilidad}: ${hab.nivel}\n`;
+          }
+        });
       }
 
-      // Limpieza del archivo temporal local
-      try { fs.unlinkSync(req.file.path); } catch(e) {}
+      // Si no hay datos clave, usar el texto del CV como base
+      if (!textoCandidato.trim()) {
+        textoCandidato = textoCV.slice(0, 15000);
+      }
 
-      console.log(`✅ Candidato manual guardado y analizado: ${safeIdFinal} - Origen: ${nuevoCandidato.origen}`);
-      res.json({ 
-        ok: true, 
-        id: safeIdFinal, 
-        score: null,
-        nombre: nombreFinal || "Candidato Manual",
-        email: emailSafeFinal
+      // 6.3. Generar score, motivos y alertas usando verificaConocimientosMinimos
+      console.log(`🤖 Generando score y análisis...`);
+      const analisisIA = await verificaConocimientosMinimos(
+        puesto || "Perfil Externo",
+        textoCandidato,
+        "", // declaraciones vacías para carga manual
+        reseñaCV, // reseña del CV
+        null // sin video para carga manual
+      );
+
+      // 6.4. Actualizar candidato con el análisis completo
+      await firestore.collection("CVs_staging").doc(safeIdFinal).update({
+        ia_score: analisisIA.score || null,
+        ia_motivos: analisisIA.motivos || null,
+        ia_alertas: analisisIA.alertas || [],
+        ia_status: "analyzed",
+        reseña_cv: reseñaCV || null,
+        actualizado_en: admin.firestore.FieldValue.serverTimestamp()
       });
 
+      console.log(`✅ Análisis automático completado para: ${safeIdFinal} - Score: ${analisisIA.score}`);
+    } catch (error) {
+      console.error(`❌ Error ejecutando análisis automático para ${safeIdFinal}:`, error);
+      await firestore.collection("CVs_staging").doc(safeIdFinal).update({
+        ia_status: "error_analysis",
+        ia_motivos: `Error en análisis automático: ${error.message}`
+      });
+    }
+
+    // Limpieza del archivo temporal local
+    try { fs.unlinkSync(req.file.path); } catch (e) { }
+
+    console.log(`✅ Candidato manual guardado y analizado: ${safeIdFinal} - Origen: ${nuevoCandidato.origen}`);
+    res.json({
+      ok: true,
+      id: safeIdFinal,
+      score: null,
+      nombre: nombreFinal || "Candidato Manual",
+      email: emailSafeFinal
+    });
+
   } catch (error) {
-      console.error("❌ Error en carga manual:", error);
-      res.status(500).json({ error: error.message });
+    console.error("❌ Error en carga manual:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -3746,14 +3859,14 @@ app.get("/webhooks/status", async (req, res) => {
     const ahora = new Date();
     const hace24Horas = new Date(ahora.getTime() - 24 * 60 * 60 * 1000);
     const hace48Horas = new Date(ahora.getTime() - 48 * 60 * 60 * 1000);
-    
+
     const webhooks = ["zoho_form1", "zoho_form2"];
     const estados = {};
-    
+
     for (const webhookName of webhooks) {
       const docRef = firestore.collection("webhook_status").doc(webhookName);
       const doc = await docRef.get();
-      
+
       if (!doc.exists) {
         // Si nunca se ejecutó, está rojo
         estados[webhookName] = {
@@ -3763,21 +3876,21 @@ app.get("/webhooks/status", async (req, res) => {
         };
         continue;
       }
-      
+
       const data = doc.data();
       const ultimaEjecucion = data.ultima_ejecucion ? new Date(data.ultima_ejecucion) : null;
-      
+
       // Contar errores recientes (últimas 24 horas)
       const erroresRef = docRef.collection("errores_recientes");
       const erroresSnap = await erroresRef
         .where("fecha", ">=", hace24Horas.toISOString())
         .get();
       const cantidadErrores = erroresSnap.size;
-      
+
       // LÓGICA: Verde o Rojo
       let status = "verde";
       let razon = "Funcionando correctamente";
-      
+
       if (!ultimaEjecucion) {
         status = "rojo";
         razon = "Sin registro de ejecución";
@@ -3794,7 +3907,7 @@ app.get("/webhooks/status", async (req, res) => {
         status = "amarillo"; // Opcional: estado intermedio
         razon = `Última ejecución hace ${Math.round((ahora - ultimaEjecucion) / (1000 * 60 * 60))} horas`;
       }
-      
+
       estados[webhookName] = {
         status: status,
         razon: razon,
@@ -3802,7 +3915,7 @@ app.get("/webhooks/status", async (req, res) => {
         cantidad_errores_24h: cantidadErrores
       };
     }
-    
+
     res.json(estados);
   } catch (error) {
     console.error("Error obteniendo estado de webhooks:", error);
@@ -3828,11 +3941,11 @@ app.get("/test/candidato-completo", (req, res) => {
 app.post("/test/candidato-completo", async (req, res) => {
   try {
     console.log("🧪 Creando candidato de prueba completo...");
-    
+
     // Generar ID único para el candidato de prueba
     const testId = `test_candidato_${Date.now()}`;
     const nowISO = new Date().toISOString();
-    
+
     // Texto de CV de ejemplo (simulado)
     const textoCVEjemplo = `
     PERFIL PROFESIONAL
@@ -3854,7 +3967,7 @@ app.post("/test/candidato-completo", async (req, res) => {
     EDUCACIÓN
     - Ingeniería en Sistemas, Universidad Nacional (2015-2019)
     `;
-    
+
     // Transcripción de entrevista de ejemplo
     const transcripcionEjemplo = `
     ENTREVISTADOR: Hola, gracias por venir. Cuéntame sobre tu experiencia con React.
@@ -3878,7 +3991,7 @@ app.post("/test/candidato-completo", async (req, res) => {
     CANDIDATO: Tengo nivel B2, puedo comunicarme bien en inglés técnico y participar en reuniones 
     con equipos internacionales.
     `;
-    
+
     // Respuestas Form 1 (simuladas)
     const respuestasForm1 = {
       salario: "Sí, acepta el rango salarial",
@@ -3887,7 +4000,7 @@ app.post("/test/candidato-completo", async (req, res) => {
       herramientas: "React, Node.js, MongoDB, PostgreSQL, TypeScript",
       logro_destacado: "Lideré el desarrollo de una plataforma que aumentó las ventas en 40%"
     };
-    
+
     // Respuestas Form 2 (simuladas)
     const respuestasForm2 = {
       experiencia_react: "5 años",
@@ -3896,13 +4009,13 @@ app.post("/test/candidato-completo", async (req, res) => {
       nivel_ingles: "B2 - Intermedio-Avanzado",
       disponibilidad_horaria: "Tiempo completo, horario flexible"
     };
-    
+
     // Análisis inicial de IA (simulado)
     const analisisInicial = await verificaConocimientosMinimos(
       "Desarrollador Full Stack",
       textoCVEjemplo
     );
-    
+
     // Crear candidato completo en stage_1
     const candidatoCompleto = {
       id: testId,
@@ -3910,12 +4023,12 @@ app.post("/test/candidato-completo", async (req, res) => {
       email: `test_${Date.now()}@example.com`,
       puesto: "Desarrollador Full Stack",
       telefono: "+54 11 1234-5678",
-      
+
       // CV y texto
       texto_extraido: textoCVEjemplo,
       cv_url: "", // Sin CV real para prueba
       tiene_pdf: false,
-      
+
       // Respuestas de formularios
       respuestas_filtro: respuestasForm1,
       respuestas_form2: {
@@ -3923,28 +4036,28 @@ app.post("/test/candidato-completo", async (req, res) => {
         fecha_recepcion: nowISO
       },
       process_step_2_form: "received",
-      
+
       // Datos de IA
       ia_score: Math.min(analisisInicial.score || 75, 80), // Máximo 80 en stage_1
       ia_motivos: analisisInicial.motivos || "Candidato con experiencia sólida en tecnologías requeridas",
       ia_alertas: analisisInicial.alertas || [],
       ia_status: "processed",
-      
+
       // Estado inicial
       stage: 'stage_1',
       status_interno: 'new',
       assignedTo: null,
-      
+
       // Datos de entrevista (para cuando pase a stage_2)
       meet_link: "https://meet.google.com/test-abc-defg-hij",
       transcripcion_entrevista: transcripcionEjemplo, // Guardamos con este nombre (se mapea a interview_transcript en /buscar)
       interview_transcript: transcripcionEjemplo, // También guardamos con el nombre que espera el frontend
-      
+
       // Metadatos
       origen: "test_completo",
       creado_en: admin.firestore.FieldValue.serverTimestamp(),
       actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
-      
+
       // Historial inicial
       historial_movimientos: [
         {
@@ -3955,12 +4068,12 @@ app.post("/test/candidato-completo", async (req, res) => {
         }
       ]
     };
-    
+
     // Guardar en Firestore
     await firestore.collection("CVs_staging").doc(testId).set(candidatoCompleto);
-    
+
     console.log(`✅ Candidato de prueba creado: ${testId}`);
-    
+
     res.json({
       ok: true,
       id: testId,
@@ -3981,7 +4094,7 @@ app.post("/test/candidato-completo", async (req, res) => {
         "5. Mueve a 'Informe' (stage_3) y genera el informe final"
       ]
     });
-    
+
   } catch (error) {
     console.error("❌ Error creando candidato de prueba:", error);
     res.status(500).json({ error: error.message });
@@ -3997,17 +4110,17 @@ app.post("/candidatos/:id/reparar-cv", async (req, res) => {
   try {
     const { id } = req.params;
     console.log(`🔧 [REPARAR] Iniciando reparación para candidato: ${id}`);
-    
+
     // 1. Obtener datos del candidato
     const docRef = firestore.collection("CVs_staging").doc(id);
     const docSnap = await docRef.get();
-    
+
     if (!docSnap.exists) {
       return res.status(404).json({ error: "Candidato no encontrado" });
     }
-    
+
     const datosActuales = docSnap.data();
-    
+
     // 2. Verificar si realmente necesita reparación
     if (datosActuales.cv_url && datosActuales.cv_url.length > 5 && datosActuales.tiene_pdf) {
       return res.json({
@@ -4017,44 +4130,44 @@ app.post("/candidatos/:id/reparar-cv", async (req, res) => {
         tiene_pdf: datosActuales.tiene_pdf
       });
     }
-    
+
     // 3. Buscar el PDF en Storage (ruta esperada)
     const rutaEsperada = `CVs_staging/files/${id}_CV.pdf`;
     const bucketFile = bucket.file(rutaEsperada);
-    
+
     let publicCvUrl = null;
     let tienePdfEnStorage = false;
-    
+
     try {
       // Verificar si el archivo existe
       const [exists] = await bucketFile.exists();
-      
+
       if (exists) {
         console.log(`✅ [REPARAR] PDF encontrado en Storage: ${rutaEsperada}`);
-        
+
         // Generar signed URL
         const [signedUrl] = await bucketFile.getSignedUrl({
           action: 'read',
           expires: '01-01-2035'
         });
-        
+
         publicCvUrl = signedUrl;
         tienePdfEnStorage = true;
         console.log(`✅ [REPARAR] Signed URL generado correctamente`);
       } else {
         console.log(`⚠️ [REPARAR] PDF no encontrado en ruta esperada: ${rutaEsperada}`);
-        
+
         // Intentar buscar en otras rutas posibles
         const rutasAlternativas = [
           `CVs_staging/files/${id}.pdf`,
           `CVs_staging/${id}_CV.pdf`,
           `CVs_staging/files/${datosActuales.email?.replace(/[^a-z0-9]/g, "_")}_CV.pdf`
         ];
-        
+
         for (const rutaAlt of rutasAlternativas) {
           const fileAlt = bucket.file(rutaAlt);
           const [existsAlt] = await fileAlt.exists();
-          
+
           if (existsAlt) {
             console.log(`✅ [REPARAR] PDF encontrado en ruta alternativa: ${rutaAlt}`);
             const [signedUrlAlt] = await fileAlt.getSignedUrl({
@@ -4070,12 +4183,12 @@ app.post("/candidatos/:id/reparar-cv", async (req, res) => {
     } catch (error) {
       console.error(`❌ [REPARAR] Error buscando PDF en Storage:`, error.message);
     }
-    
+
     // 4. Preparar actualización
     const updateData = {
       actualizado_en: admin.firestore.FieldValue.serverTimestamp()
     };
-    
+
     if (tienePdfEnStorage && publicCvUrl) {
       updateData.cv_url = publicCvUrl;
       updateData.tiene_pdf = true;
@@ -4088,7 +4201,7 @@ app.post("/candidatos/:id/reparar-cv", async (req, res) => {
         ruta_buscada: rutaEsperada,
         tiene_reseña_cv: !!datosActuales.reseña_cv
       };
-      
+
       return res.status(404).json({
         ok: false,
         error: "PDF no encontrado en Storage",
@@ -4096,15 +4209,15 @@ app.post("/candidatos/:id/reparar-cv", async (req, res) => {
         rutas_buscadas: [rutaEsperada, `CVs_staging/files/${id}.pdf`, `CVs_staging/${id}_CV.pdf`]
       });
     }
-    
+
     // 5. Si hay reseña_cv pero el score está en 0, recalcular
     if (datosActuales.reseña_cv && (!datosActuales.ia_score || datosActuales.ia_score === 0)) {
       console.log(`🤖 [REPARAR] Recalculando score con reseña existente...`);
-      
+
       try {
         const respuestasFiltro = datosActuales.respuestas_filtro || {};
         const datosFormulario = JSON.stringify(respuestasFiltro);
-        
+
         const analisisIA = await verificaConocimientosMinimos(
           datosActuales.puesto || "General",
           datosFormulario,
@@ -4112,60 +4225,60 @@ app.post("/candidatos/:id/reparar-cv", async (req, res) => {
           datosActuales.reseña_cv, // Reseña del CV existente
           datosActuales.reseña_video || null // Reseña del video si existe
         );
-        
+
         // Limitar score según origen y si hay video procesado
         const origen = datosActuales.origen || "";
         const tieneVideoProcesado = datosActuales.reseña_video ? true : false;
-        
+
         if (origen === "webhook_zoho_passive" || origen.includes("zoho") || origen.includes("mail")) {
-            // Ingreso por formulario
-            if (tieneVideoProcesado) {
-                analisisIA.score = Math.min(analisisIA.score, 80);
-            } else {
-                analisisIA.score = Math.min(analisisIA.score, 75);
-            }
+          // Ingreso por formulario
+          if (tieneVideoProcesado) {
+            analisisIA.score = Math.min(analisisIA.score, 80);
+          } else {
+            analisisIA.score = Math.min(analisisIA.score, 75);
+          }
         } else if (origen === "carga_manual") {
-            // Ingreso manual
-            if (tieneVideoProcesado) {
-                analisisIA.score = Math.min(analisisIA.score, 75);
-            } else {
-                analisisIA.score = Math.min(analisisIA.score, 70);
-            }
+          // Ingreso manual
+          if (tieneVideoProcesado) {
+            analisisIA.score = Math.min(analisisIA.score, 75);
+          } else {
+            analisisIA.score = Math.min(analisisIA.score, 70);
+          }
         }
-        
+
         updateData.ia_score = analisisIA.score;
         updateData.ia_motivos = analisisIA.motivos;
         updateData.ia_alertas = analisisIA.alertas || [];
         updateData.ia_status = "processed";
-        
+
         console.log(`✅ [REPARAR] Score recalculado: ${analisisIA.score}`);
       } catch (error) {
         console.error(`❌ [REPARAR] Error recalculando score:`, error.message);
         // No fallamos si el score no se puede recalcular, solo actualizamos el CV
       }
     }
-    
+
     // 6. Agregar evento al historial
     const eventoReparacion = {
       date: new Date().toISOString(),
       event: 'CV Reparado',
-      detail: tienePdfEnStorage 
-        ? 'CV encontrado en Storage y enlazado correctamente' 
+      detail: tienePdfEnStorage
+        ? 'CV encontrado en Storage y enlazado correctamente'
         : 'Intento de reparación (CV no encontrado)',
       usuario: 'Sistema (Reparación Automática)'
     };
-    
+
     updateData.historial_movimientos = admin.firestore.FieldValue.arrayUnion(eventoReparacion);
-    
+
     // 7. Actualizar en Firestore
     await docRef.set(updateData, { merge: true });
-    
+
     console.log(`✅ [REPARAR] Reparación completada para ${id}`);
-    
+
     res.json({
       ok: true,
-      mensaje: tienePdfEnStorage 
-        ? "CV encontrado y enlazado correctamente" 
+      mensaje: tienePdfEnStorage
+        ? "CV encontrado y enlazado correctamente"
         : "Reparación completada (CV no encontrado en Storage)",
       datos: {
         cv_url: publicCvUrl || datosActuales.cv_url || "",
@@ -4175,7 +4288,7 @@ app.post("/candidatos/:id/reparar-cv", async (req, res) => {
         score_recalculado: !!updateData.ia_score
       }
     });
-    
+
   } catch (error) {
     console.error("❌ [REPARAR] Error en reparación:", error);
     res.status(500).json({
@@ -4194,34 +4307,34 @@ app.post("/candidatos/:id/reparar-desde-workdrive", async (req, res) => {
   try {
     const { id } = req.params;
     const responsable = req.body.responsable || "Sistema";
-    
+
     console.log(`🔧 [REPARAR-WD] Iniciando reparación desde WorkDrive para: ${id}`);
-    
+
     // 1. Obtener datos del candidato
     const docRef = firestore.collection("CVs_staging").doc(id);
     const docSnap = await docRef.get();
-    
+
     if (!docSnap.exists) {
       return res.status(404).json({ error: "Candidato no encontrado" });
     }
-    
+
     const candidato = docSnap.data();
     const email = candidato.email || "";
     const nombre = candidato.nombre || "";
-    
+
     console.log(`📋 [REPARAR-WD] Buscando CV para: ${nombre} (${email})`);
-    
+
     // 2. Construir términos de búsqueda
     // Intentamos varias estrategias para encontrar el archivo
     const terminosBusqueda = [];
-    
+
     // Por email (más preciso)
     if (email) {
       const emailSafe = email.replace(/[^a-zA-Z0-9]/g, '_');
       terminosBusqueda.push(emailSafe);
       terminosBusqueda.push(email.split('@')[0]); // Solo la parte antes del @
     }
-    
+
     // Por nombre
     if (nombre) {
       const nombreSafe = nombre.replace(/[^a-zA-Z0-9\s]/g, '').trim();
@@ -4232,27 +4345,27 @@ app.post("/candidatos/:id/reparar-desde-workdrive", async (req, res) => {
         terminosBusqueda.push(primerNombre);
       }
     }
-    
+
     // Por ID del documento
     terminosBusqueda.push(id);
-    
+
     // 3. Buscar en WorkDrive
     let archivoEncontrado = null;
-    
+
     for (const termino of terminosBusqueda) {
       if (!termino) continue;
-      
+
       console.log(`🔍 [REPARAR-WD] Buscando con término: "${termino}"`);
-      
+
       try {
         const resultados = await buscarArchivoEnWorkDrive(termino);
-        
+
         // Filtrar solo PDFs
-        const pdfs = resultados.filter(f => 
+        const pdfs = resultados.filter(f =>
           f.attributes?.name?.toLowerCase().endsWith('.pdf') ||
           f.attributes?.extension === 'pdf'
         );
-        
+
         if (pdfs.length > 0) {
           // Tomar el más reciente o el que mejor coincida
           archivoEncontrado = pdfs[0];
@@ -4263,7 +4376,7 @@ app.post("/candidatos/:id/reparar-desde-workdrive", async (req, res) => {
         console.warn(`⚠️ [REPARAR-WD] Error buscando "${termino}":`, searchError.message);
       }
     }
-    
+
     if (!archivoEncontrado) {
       return res.status(404).json({
         ok: false,
@@ -4272,41 +4385,41 @@ app.post("/candidatos/:id/reparar-desde-workdrive", async (req, res) => {
         terminos_buscados: terminosBusqueda.filter(t => t)
       });
     }
-    
+
     // 4. Descargar el archivo de WorkDrive
     console.log(`📥 [REPARAR-WD] Descargando: ${archivoEncontrado.id}`);
     const pdfBuffer = await descargarArchivoDeWorkDrive(archivoEncontrado.id);
-    
+
     // 5. Subir a Firebase Storage
     const fileName = `CVs_staging/files/${id}_CV.pdf`;
     const bucketFile = bucket.file(fileName);
-    
+
     await bucketFile.save(pdfBuffer, {
       metadata: { contentType: 'application/pdf' }
     });
-    
+
     // Generar URL firmada
     const [signedUrl] = await bucketFile.getSignedUrl({
       action: 'read',
       expires: '01-01-2035'
     });
-    
+
     console.log(`✅ [REPARAR-WD] PDF subido a Storage: ${fileName}`);
-    
+
     // 6. Extraer texto del PDF
     const pdfData = await pdfParse(pdfBuffer);
     const textoCV = pdfData.text.slice(0, 20000);
-    
+
     console.log(`📝 [REPARAR-WD] Texto extraído: ${textoCV.length} caracteres`);
-    
+
     // 7. Generar reseña del CV con IA
     const reseñaCV = await generarResenaCV(textoCV, candidato.puesto || "General");
     console.log(`🤖 [REPARAR-WD] Reseña generada`);
-    
+
     // 8. Calcular score
     const respuestasFiltro = candidato.respuestas_filtro || {};
     const datosFormulario = JSON.stringify(respuestasFiltro);
-    
+
     const analisisIA = await verificaConocimientosMinimos(
       candidato.puesto || "General",
       datosFormulario,
@@ -4314,17 +4427,17 @@ app.post("/candidatos/:id/reparar-desde-workdrive", async (req, res) => {
       reseñaCV,
       candidato.reseña_video || null
     );
-    
+
     // Aplicar límites según origen
     const origen = candidato.origen || "";
     const tieneVideo = !!candidato.reseña_video;
-    
+
     if (origen.includes("zoho") || origen.includes("webhook")) {
       analisisIA.score = Math.min(analisisIA.score, tieneVideo ? 80 : 75);
     } else {
       analisisIA.score = Math.min(analisisIA.score, tieneVideo ? 75 : 70);
     }
-    
+
     // 9. Actualizar Firestore
     const updateData = {
       cv_url: signedUrl,
@@ -4336,7 +4449,7 @@ app.post("/candidatos/:id/reparar-desde-workdrive", async (req, res) => {
       ia_alertas: analisisIA.alertas || [],
       ia_status: "processed",
       actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
-      
+
       // Registro de la reparación
       reparacion_workdrive: {
         fecha: new Date().toISOString(),
@@ -4344,7 +4457,7 @@ app.post("/candidatos/:id/reparar-desde-workdrive", async (req, res) => {
         archivo_id: archivoEncontrado.id,
         responsable: responsable
       },
-      
+
       // Historial
       historial_movimientos: admin.firestore.FieldValue.arrayUnion({
         date: new Date().toISOString(),
@@ -4353,11 +4466,11 @@ app.post("/candidatos/:id/reparar-desde-workdrive", async (req, res) => {
         usuario: responsable
       })
     };
-    
+
     await docRef.update(updateData);
-    
+
     console.log(`✅ [REPARAR-WD] Reparación completada. Score: ${analisisIA.score}`);
-    
+
     res.json({
       ok: true,
       mensaje: "CV recuperado y reprocesado exitosamente desde WorkDrive",
@@ -4371,7 +4484,7 @@ app.post("/candidatos/:id/reparar-desde-workdrive", async (req, res) => {
         alertas: analisisIA.alertas || []
       }
     });
-    
+
   } catch (error) {
     console.error("❌ [REPARAR-WD] Error:", error);
     res.status(500).json({
@@ -4388,25 +4501,25 @@ app.post("/candidatos/:id/reparar-video-workdrive", async (req, res) => {
   try {
     const { id } = req.params;
     const responsable = req.body.responsable || "Sistema";
-    
+
     console.log(`🎥 [REPARAR-VIDEO-WD] Iniciando para: ${id}`);
-    
+
     // 1. Obtener datos del candidato
     const docRef = firestore.collection("CVs_staging").doc(id);
     const docSnap = await docRef.get();
-    
+
     if (!docSnap.exists) {
       return res.status(404).json({ error: "Candidato no encontrado" });
     }
-    
+
     const candidato = docSnap.data();
     const email = candidato.email || "";
-    
+
     console.log(`📋 [REPARAR-VIDEO-WD] Buscando video para: ${candidato.nombre} (${email})`);
-    
+
     // 2. Buscar video en WorkDrive
     const videos = await buscarVideoEnWorkDrive(email);
-    
+
     if (!videos || videos.length === 0) {
       return res.status(404).json({
         ok: false,
@@ -4414,69 +4527,69 @@ app.post("/candidatos/:id/reparar-video-workdrive", async (req, res) => {
         mensaje: "No se encontró ningún video en la carpeta del candidato."
       });
     }
-    
+
     // Tomar el primer video encontrado
     const videoEncontrado = videos[0];
     const nombreArchivo = videoEncontrado.attributes?.name || 'video.mp4';
     console.log(`✅ [REPARAR-VIDEO-WD] Video encontrado: ${nombreArchivo}`);
-    
+
     // 3. Descargar el video de WorkDrive
     console.log(`📥 [REPARAR-VIDEO-WD] Descargando video...`);
     const videoBuffer = await descargarArchivoDeWorkDrive(videoEncontrado.id);
     const sizeMB = videoBuffer.length / (1024 * 1024);
     console.log(`📊 [REPARAR-VIDEO-WD] Tamaño: ${sizeMB.toFixed(2)} MB`);
-    
+
     // 4. Comprimir si es mayor a 50MB
     let bufferFinal = videoBuffer;
     const extension = nombreArchivo.split('.').pop() || 'mp4';
-    
+
     if (sizeMB > 50) {
       console.log(`🎬 [REPARAR-VIDEO-WD] Comprimiendo video (${sizeMB.toFixed(2)} MB > 50 MB)...`);
-      
+
       const tempInputPath = path.join(os.tmpdir(), `${id}_video_original_${Date.now()}.${extension}`);
       const tempOutputPath = path.join(os.tmpdir(), `${id}_video_comprimido_${Date.now()}.mp4`);
-      
+
       // Guardar temporalmente
       fs.writeFileSync(tempInputPath, videoBuffer);
-      
+
       // Comprimir
       await comprimirVideoA50MB(tempInputPath, tempOutputPath);
-      
+
       // Leer el comprimido
       bufferFinal = fs.readFileSync(tempOutputPath);
-      
+
       // Limpiar archivos temporales
-      try { fs.unlinkSync(tempInputPath); } catch(e) {}
-      try { fs.unlinkSync(tempOutputPath); } catch(e) {}
-      
+      try { fs.unlinkSync(tempInputPath); } catch (e) { }
+      try { fs.unlinkSync(tempOutputPath); } catch (e) { }
+
       const newSizeMB = bufferFinal.length / (1024 * 1024);
       console.log(`✅ [REPARAR-VIDEO-WD] Video comprimido: ${sizeMB.toFixed(2)} MB → ${newSizeMB.toFixed(2)} MB`);
     }
-    
+
     // 5. Subir a Firebase Storage
     const fileName = `CVs_staging/videos/${id}_video.mp4`;
     const bucketFile = bucket.file(fileName);
-    
+
     await bucketFile.save(bufferFinal, {
       metadata: { contentType: 'video/mp4' }
     });
-    
+
     // Generar URL firmada
     const [signedUrl] = await bucketFile.getSignedUrl({
       action: 'read',
       expires: '01-01-2035'
     });
-    
+
     console.log(`✅ [REPARAR-VIDEO-WD] Video subido a Storage: ${fileName}`);
-    
+
     // 6. Analizar video con IA (usando la función existente)
     console.log(`🤖 [REPARAR-VIDEO-WD] Analizando video con IA...`);
-    
+
     const resultadoVideo = await generarResenaVideo(signedUrl, candidato.puesto || "General");
-    
+
     let reseñaVideo = null;
     let videoError = null;
-    
+
     if (resultadoVideo.reseña) {
       reseñaVideo = resultadoVideo.reseña;
       console.log(`✅ [REPARAR-VIDEO-WD] Reseña generada correctamente`);
@@ -4484,19 +4597,19 @@ app.post("/candidatos/:id/reparar-video-workdrive", async (req, res) => {
       videoError = resultadoVideo.error;
       console.log(`⚠️ [REPARAR-VIDEO-WD] Error generando reseña: ${videoError}`);
     }
-    
+
     // 7. Recalcular score si hay reseña del video
     let nuevoScore = candidato.ia_score || 0;
     let nuevoMotivos = candidato.ia_motivos || "";
     let nuevasAlertas = candidato.ia_alertas || [];
-    
+
     if (reseñaVideo) {
       console.log(`🤖 [REPARAR-VIDEO-WD] Recalculando score con video...`);
-      
+
       const reseñaCV = candidato.reseña_cv || null;
       const respuestasFiltro = candidato.respuestas_filtro || {};
       const datosFormulario = JSON.stringify(respuestasFiltro);
-      
+
       try {
         const analisisIA = await verificaConocimientosMinimos(
           candidato.puesto || "General",
@@ -4505,7 +4618,7 @@ app.post("/candidatos/:id/reparar-video-workdrive", async (req, res) => {
           reseñaCV,
           reseñaVideo
         );
-        
+
         // Aplicar límite según origen
         const origen = candidato.origen || "";
         if (origen === "webhook_zoho_passive" || origen.includes("zoho") || origen.includes("mail")) {
@@ -4513,18 +4626,18 @@ app.post("/candidatos/:id/reparar-video-workdrive", async (req, res) => {
         } else if (origen === "carga_manual") {
           analisisIA.score = Math.min(analisisIA.score, 75);
         }
-        
+
         nuevoScore = analisisIA.score;
         nuevoMotivos = analisisIA.motivos;
         nuevasAlertas = analisisIA.alertas || [];
-        
+
         console.log(`✅ [REPARAR-VIDEO-WD] Score recalculado: ${candidato.ia_score || 0} → ${nuevoScore}`);
-        
+
       } catch (e) {
         console.error(`❌ [REPARAR-VIDEO-WD] Error recalculando score:`, e.message);
       }
     }
-    
+
     // 8. Actualizar Firestore
     const updateData = {
       video_url: signedUrl,
@@ -4535,7 +4648,7 @@ app.post("/candidatos/:id/reparar-video-workdrive", async (req, res) => {
       ia_motivos: nuevoMotivos,
       ia_alertas: nuevasAlertas,
       actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
-      
+
       // Registro de la reparación
       reparacion_video_workdrive: {
         fecha: new Date().toISOString(),
@@ -4544,7 +4657,7 @@ app.post("/candidatos/:id/reparar-video-workdrive", async (req, res) => {
         responsable: responsable,
         comprimido: sizeMB > 50
       },
-      
+
       // Historial
       historial_movimientos: admin.firestore.FieldValue.arrayUnion({
         date: new Date().toISOString(),
@@ -4553,11 +4666,11 @@ app.post("/candidatos/:id/reparar-video-workdrive", async (req, res) => {
         usuario: responsable
       })
     };
-    
+
     await docRef.update(updateData);
-    
+
     console.log(`✅ [REPARAR-VIDEO-WD] Reparación completada`);
-    
+
     res.json({
       ok: true,
       mensaje: "Video recuperado, analizado y score recalculado exitosamente",
@@ -4571,7 +4684,7 @@ app.post("/candidatos/:id/reparar-video-workdrive", async (req, res) => {
         tiene_reseña: !!reseñaVideo
       }
     });
-    
+
   } catch (error) {
     console.error("❌ [REPARAR-VIDEO-WD] Error:", error);
     res.status(500).json({
@@ -4731,7 +4844,7 @@ app.post("/confirmar-video/:token", async (req, res) => {
       video_token: null, // Invalidar token (un solo uso)
       video_upload_pending: null,
       actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
-      
+
       historial_movimientos: admin.firestore.FieldValue.arrayUnion({
         date: new Date().toISOString(),
         event: 'Video Recibido',
@@ -4762,7 +4875,7 @@ app.post("/confirmar-video/:token", async (req, res) => {
 // ==========================================
 // 📦 2. FRONTEND (Sirve la página web)
 // ==========================================
-app.use(express.static(path.join(__dirname, "cliente_lite"))); 
+app.use(express.static(path.join(__dirname, "cliente_lite")));
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "cliente_lite", "dashboard.html"));
@@ -4773,55 +4886,55 @@ app.get("*", (req, res) => {
 
 // Usamos nombres únicos para evitar conflictos con variables de arriba
 const uploadManual = multer({ storage: multer.memoryStorage() });
-const pdfParser = require('pdf-parse'); 
+const pdfParser = require('pdf-parse');
 
 app.post("/manual-upload", uploadManual.single('cv'), async (req, res) => {
-    try {
-        console.log("⚡ Recibida petición de carga manual con archivo...");
-        
-        const { notas, puesto, responsable } = req.body;
-        let textoCV = "";
+  try {
+    console.log("⚡ Recibida petición de carga manual con archivo...");
 
-        // Validación: ¿Llegó el archivo?
-        if (!req.file) {
-            return res.status(400).json({ error: "Error: No llegó ningún archivo al servidor." });
-        }
+    const { notas, puesto, responsable } = req.body;
+    let textoCV = "";
 
-        console.log(`📂 Procesando archivo: ${req.file.originalname} (${req.file.mimetype})`);
-
-        // 1. Extracción de texto según formato
-        if (req.file.mimetype === "application/pdf") {
-            const data = await pdfParser(req.file.buffer);
-            textoCV = data.text;
-        } else {
-            // Asumimos texto plano o intentamos leerlo como tal
-            textoCV = req.file.buffer.toString('utf-8');
-        }
-
-        // Validación de contenido extraído
-        if (!textoCV || textoCV.length < 50) {
-            throw new Error("El archivo parece vacío o es una imagen escaneada sin texto seleccionable.");
-        }
-
-        // 2. Llamada a Gemini (Tu función de IA existente)
-        const informe = await generarDatosParaInforme(
-            textoCV, 
-            puesto || "Perfil Analizado Manualmente", 
-            notas || "Sin notas adicionales",
-            {}, // Sin form2
-            "Análisis directo de archivo adjunto", 
-            responsable || "Admin"
-        );
-
-        if (!informe) throw new Error("Gemini no devolvió resultados válidos.");
-
-        // 3. Respuesta exitosa
-        res.json(informe);
-
-    } catch (e) {
-        console.error("❌ Error en manual-upload:", e.message);
-        res.status(500).json({ error: e.message });
+    // Validación: ¿Llegó el archivo?
+    if (!req.file) {
+      return res.status(400).json({ error: "Error: No llegó ningún archivo al servidor." });
     }
+
+    console.log(`📂 Procesando archivo: ${req.file.originalname} (${req.file.mimetype})`);
+
+    // 1. Extracción de texto según formato
+    if (req.file.mimetype === "application/pdf") {
+      const data = await pdfParser(req.file.buffer);
+      textoCV = data.text;
+    } else {
+      // Asumimos texto plano o intentamos leerlo como tal
+      textoCV = req.file.buffer.toString('utf-8');
+    }
+
+    // Validación de contenido extraído
+    if (!textoCV || textoCV.length < 50) {
+      throw new Error("El archivo parece vacío o es una imagen escaneada sin texto seleccionable.");
+    }
+
+    // 2. Llamada a Gemini (Tu función de IA existente)
+    const informe = await generarDatosParaInforme(
+      textoCV,
+      puesto || "Perfil Analizado Manualmente",
+      notas || "Sin notas adicionales",
+      {}, // Sin form2
+      "Análisis directo de archivo adjunto",
+      responsable || "Admin"
+    );
+
+    if (!informe) throw new Error("Gemini no devolvió resultados válidos.");
+
+    // 3. Respuesta exitosa
+    res.json(informe);
+
+  } catch (e) {
+    console.error("❌ Error en manual-upload:", e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ==========================================
@@ -4835,7 +4948,7 @@ async function storageProbe() {
     const [exists] = await bucket.exists();
     if (exists) return true;
     console.log("⚠️ El bucket no existe o no es accesible.");
-    return false; 
+    return false;
   } catch (e) {
     console.error("❌ Error verificando Storage:", e.message);
     return false;
@@ -4857,21 +4970,21 @@ async function generarResenaVideo(videoUrl, puesto) {
   const logPrefix = '🎥 [VIDEO]';
   let tempFilePath = null;
   let compressedFilePath = null;
-  
+
   try {
     console.log(`${logPrefix} ═══════════════════════════════════════════`);
     console.log(`${logPrefix} Iniciando procesamiento de video`);
     console.log(`${logPrefix} URL original: ${videoUrl.substring(0, 100)}...`);
     console.log(`${logPrefix} Puesto: ${puesto}`);
-    
+
     // ═══════════════════════════════════════════
     // PASO 1: VALIDAR QUE EL LINK ES PÚBLICO
     // ═══════════════════════════════════════════
     console.log(`${logPrefix} ─────────────────────────────────────────`);
     console.log(`${logPrefix} PASO 1: Validando acceso público...`);
-    
+
     const verificacion = await verificarLinkVideoPublico(videoUrl);
-    
+
     if (!verificacion.esPublico) {
       console.error(`${logPrefix} ❌ Link no público o no accesible`);
       return {
@@ -4880,14 +4993,14 @@ async function generarResenaVideo(videoUrl, puesto) {
         linkPublico: false
       };
     }
-    
+
     console.log(`${logPrefix} ✅ Link es público y accesible`);
-    
+
     // Validar que sea un video (excepto para Drive y YouTube que validaremos después)
-    if (!verificacion.esVideo && 
-        !videoUrl.includes('drive.google.com') && 
-        !videoUrl.includes('youtube.com') && 
-        !videoUrl.includes('youtu.be')) {
+    if (!verificacion.esVideo &&
+      !videoUrl.includes('drive.google.com') &&
+      !videoUrl.includes('youtube.com') &&
+      !videoUrl.includes('youtu.be')) {
       console.error(`${logPrefix} ❌ El link no parece ser un video`);
       return {
         reseña: null,
@@ -4895,74 +5008,74 @@ async function generarResenaVideo(videoUrl, puesto) {
         linkPublico: true
       };
     }
-    
+
     // ═══════════════════════════════════════════
     // PASO 2: IDENTIFICAR TIPO DE URL
     // ═══════════════════════════════════════════
     console.log(`${logPrefix} ─────────────────────────────────────────`);
     console.log(`${logPrefix} PASO 2: Identificando tipo de URL...`);
-    
+
     const esFirebaseStorage = videoUrl.includes('firebasestorage.app');
     const esGCS = videoUrl.includes('storage.googleapis.com') || videoUrl.includes('storage.cloud.google.com');
     const esDrive = videoUrl.includes('drive.google.com');
     const esYouTube = videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be');
-    
+
     let tipoURL = 'desconocido';
     if (esFirebaseStorage) tipoURL = 'Firebase Storage';
     else if (esGCS) tipoURL = 'Google Cloud Storage';
     else if (esDrive) tipoURL = 'Google Drive';
     else if (esYouTube) tipoURL = 'YouTube';
-    
+
     console.log(`${logPrefix} 🔍 Tipo detectado: ${tipoURL}`);
-    
-    
+
+
     // ═══════════════════════════════════════════
     // PASO 3: PROCESAR SEGÚN EL TIPO
     // ═══════════════════════════════════════════
     console.log(`${logPrefix} ─────────────────────────────────────────`);
     console.log(`${logPrefix} PASO 3: Procesando según tipo...`);
-    
+
     let gcsUri = null;
-    
+
     // CASO 1: Firebase Storage → Convertir a gs:// directamente
     if (esFirebaseStorage) {
       console.log(`${logPrefix} 📍 Firebase Storage detectado`);
       console.log(`${logPrefix} 🔍 URL: ${videoUrl}`);
-      
+
       // FALLBACK: Descargar directamente en lugar de parsear
       console.log(`${logPrefix} 📥 Descargando desde Firebase Storage...`);
-      
+
       const videoResponse = await axios.get(videoUrl, {
         responseType: 'arraybuffer',
         timeout: 300000,
         maxContentLength: 500 * 1024 * 1024,
         maxRedirects: 10,
-        headers: { 
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' 
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
       });
-      
+
       // Validar que es un video
       const contentType = videoResponse.headers['content-type'] || '';
       if (!contentType.includes('video')) {
         throw new Error(`No es un video. Content-Type: ${contentType}`);
       }
-      
+
       const sizeMB = videoResponse.data.length / (1024 * 1024);
       console.log(`${logPrefix} 📊 Descargado: ${sizeMB.toFixed(2)} MB`);
-      
+
       // Guardar temporalmente
       tempFilePath = path.join(os.tmpdir(), `video_firebase_${crypto.randomUUID()}.mp4`);
       fs.writeFileSync(tempFilePath, Buffer.from(videoResponse.data));
-      
+
       // Comprimir si es necesario
       let videoFileToUpload = tempFilePath;
       let finalSizeMB = sizeMB;
-      
+
       if (sizeMB > 50) {
         console.log(`${logPrefix} 🗜️ Comprimiendo...`);
         compressedFilePath = path.join(os.tmpdir(), `video_compressed_${crypto.randomUUID()}.mp4`);
-        
+
         try {
           const compressionResult = await comprimirVideoA50MB(tempFilePath, compressedFilePath);
           if (compressionResult.success) {
@@ -4974,17 +5087,17 @@ async function generarResenaVideo(videoUrl, puesto) {
           console.warn(`${logPrefix} ⚠️ No se pudo comprimir, usando original`);
         }
       }
-      
+
       // Subir a nuestro bucket
       console.log(`${logPrefix} ☁️ Subiendo a GCS...`);
       const videoFileName = `CVs_staging/videos/${crypto.randomUUID()}_video.mp4`;
       const videoBucketFile = bucket.file(videoFileName);
-      
+
       const videoBuffer = fs.readFileSync(videoFileToUpload);
       await videoBucketFile.save(videoBuffer, {
         metadata: { contentType: "video/mp4" }
       });
-      
+
       // 🔥 FIX: Usar el bucket correcto para Gemini
       // 🔥 FIX: Hardcodear el bucket correcto temporalmente
       const realBucketName = 'gtcia-16ad9.appspot.com'; // Cambiar .firebasestorage.app por .appspot.com
@@ -4994,7 +5107,7 @@ async function generarResenaVideo(videoUrl, puesto) {
       console.log(`${logPrefix} 🔍 DEBUG - URI completo: ${gcsUri}`);
       console.log(`${logPrefix} ✅ Subido: ${gcsUri}`);
     }
-    
+
     // CASO 2: GCS Signed URL → Convertir a gs://
     else if (esGCS) {
       console.log(`${logPrefix} 📍 GCS Signed URL detectado, convirtiendo a gs://...`);
@@ -5014,18 +5127,18 @@ async function generarResenaVideo(videoUrl, puesto) {
         throw new Error(`URL de GCS inválida: ${parseError.message}`);
       }
     }
-    
+
     // CASO 3 y 4: Drive o YouTube → Descargar, validar, subir a GCS
     else if (esDrive || esYouTube) {
       console.log(`${logPrefix} 📥 ${tipoURL} detectado, iniciando descarga y procesamiento...`);
-      
+
       // Convertir URL de Drive si es necesario
       let downloadUrl = videoUrl;
       if (esDrive) {
         downloadUrl = convertirLinkDriveADescarga(videoUrl);
         console.log(`${logPrefix} 🔄 URL de descarga: ${downloadUrl.substring(0, 80)}...`);
       }
-      
+
       // Descargar el video
       console.log(`${logPrefix} ⏬ Descargando video...`);
       const videoResponse = await axios.get(downloadUrl, {
@@ -5033,56 +5146,56 @@ async function generarResenaVideo(videoUrl, puesto) {
         timeout: 300000, // 5 minutos
         maxContentLength: 500 * 1024 * 1024, // 500MB máximo
         maxRedirects: 10,
-        headers: { 
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' 
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         },
         validateStatus: function (status) {
           return status >= 200 && status < 400;
         }
       });
-      
+
       // Validar que es un video, no HTML
       const contentType = videoResponse.headers['content-type'] || '';
       const dataStart = Buffer.from(videoResponse.data.slice(0, Math.min(1000, videoResponse.data.length))).toString('utf-8');
-      const isHTML = contentType.includes('text/html') || 
-                     dataStart.includes('<!DOCTYPE') ||
-                     dataStart.includes('<html') ||
-                     dataStart.includes('Google Drive');
-      
+      const isHTML = contentType.includes('text/html') ||
+        dataStart.includes('<!DOCTYPE') ||
+        dataStart.includes('<html') ||
+        dataStart.includes('Google Drive');
+
       if (isHTML) {
         console.error(`${logPrefix} ❌ La respuesta es HTML, no un video`);
         throw new Error(
-          esDrive 
+          esDrive
             ? 'Google Drive devolvió HTML en lugar del video. El archivo puede ser muy grande o requiere permisos especiales. Verifica que el link sea público y accesible.'
             : 'La URL devolvió HTML en lugar del video.'
         );
       }
-      
+
       // Validar tamaño mínimo
       const sizeMB = videoResponse.data.length / (1024 * 1024);
       console.log(`${logPrefix} 📊 Tamaño descargado: ${sizeMB.toFixed(2)} MB`);
-      
+
       if (videoResponse.data.length < 1024) {
         console.error(`${logPrefix} ❌ Archivo demasiado pequeño`);
         throw new Error(`Video descargado es demasiado pequeño (${videoResponse.data.length} bytes). Posible error en la descarga.`);
       }
-      
+
       // Guardar temporalmente
       tempFilePath = path.join(os.tmpdir(), `video_original_${crypto.randomUUID()}.mp4`);
       fs.writeFileSync(tempFilePath, Buffer.from(videoResponse.data));
       console.log(`${logPrefix} 💾 Guardado temporalmente en: ${tempFilePath}`);
-      
+
       // Comprimir si es necesario (>50MB)
       let videoFileToUpload = tempFilePath;
       let finalSizeMB = sizeMB;
-      
+
       if (sizeMB > 50) {
         console.log(`${logPrefix} 🗜️ Video >50MB, comprimiendo...`);
         compressedFilePath = path.join(os.tmpdir(), `video_compressed_${crypto.randomUUID()}.mp4`);
-        
+
         try {
           const compressionResult = await comprimirVideoA50MB(tempFilePath, compressedFilePath);
-          
+
           if (compressionResult.success) {
             console.log(`${logPrefix} ✅ Compresión exitosa: ${compressionResult.sizeMB.toFixed(2)} MB`);
             videoFileToUpload = compressedFilePath;
@@ -5095,15 +5208,15 @@ async function generarResenaVideo(videoUrl, puesto) {
           console.warn(`${logPrefix} ⚠️ Usando video original sin comprimir`);
         }
       }
-      
+
       // Subir a nuestro bucket de GCS
       console.log(`${logPrefix} ☁️ Subiendo a GCS (${finalSizeMB.toFixed(2)} MB)...`);
       const videoFileName = `CVs_staging/videos/${crypto.randomUUID()}_video.mp4`;
       const videoBucketFile = bucket.file(videoFileName);
-      
+
       const videoBuffer = fs.readFileSync(videoFileToUpload);
       await videoBucketFile.save(videoBuffer, {
-        metadata: { 
+        metadata: {
           contentType: "video/mp4",
           metadata: {
             originalSize: sizeMB.toFixed(2) + 'MB',
@@ -5113,75 +5226,75 @@ async function generarResenaVideo(videoUrl, puesto) {
           }
         }
       });
-      
+
       gcsUri = `gs://${bucket.name}/${videoFileName}`;
       console.log(`${logPrefix} ✅ Subido exitosamente a: ${gcsUri}`);
     }
-    
+
     // CASO DESCONOCIDO: Error
     else {
       throw new Error(`Tipo de URL no soportado: ${videoUrl}`);
     }
-    
+
     // ═══════════════════════════════════════════
     // PASO 4: VALIDAR QUE TENEMOS UN GCS URI
     // ═══════════════════════════════════════════
     console.log(`${logPrefix} ─────────────────────────────────────────`);
     console.log(`${logPrefix} PASO 4: Analizando con Gemini...`);
-    
+
     // Verificar que tenemos un archivo local o en GCS
     let archivoParaGemini = tempFilePath || compressedFilePath;
-    
+
     if (!archivoParaGemini || !fs.existsSync(archivoParaGemini)) {
       throw new Error('No hay archivo de video disponible para analizar');
     }
-    
+
     console.log(`${logPrefix} 📁 Archivo a analizar: ${archivoParaGemini}`);
-    
+
     // Obtener tamaño del archivo
     const stats = fs.statSync(archivoParaGemini);
     const fileSizeMB = stats.size / (1024 * 1024);
     console.log(`${logPrefix} 📊 Tamaño del archivo: ${fileSizeMB.toFixed(2)} MB`);
-    
+
     // ═══════════════════════════════════════════════════════════════
     // OPCIÓN A: USAR FILE API DE GEMINI (Recomendado para archivos grandes)
     // ═══════════════════════════════════════════════════════════════
-    
+
     const { GoogleAIFileManager } = require("@google/generative-ai/server");
     const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY);
-    
+
     console.log(`${logPrefix} 📤 Subiendo video al File API de Gemini...`);
-    
+
     // Subir el archivo al File API de Gemini
     const uploadResult = await fileManager.uploadFile(archivoParaGemini, {
       mimeType: "video/mp4",
       displayName: `Video candidato - ${puesto}`,
     });
-    
+
     console.log(`${logPrefix} ✅ Video subido al File API de Gemini`);
     console.log(`${logPrefix} 📝 File URI: ${uploadResult.file.uri}`);
     console.log(`${logPrefix} 📝 File Name: ${uploadResult.file.name}`);
     console.log(`${logPrefix} 📊 Tamaño: ${(uploadResult.file.sizeBytes / 1024 / 1024).toFixed(2)} MB`);
-    
+
     // Esperar a que el archivo esté procesado
     console.log(`${logPrefix} ⏳ Esperando procesamiento del archivo...`);
-    
+
     let file = await fileManager.getFile(uploadResult.file.name);
     while (file.state === "PROCESSING") {
       console.log(`${logPrefix} ⏳ Archivo aún procesándose... (${file.state})`);
       await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar 2 segundos
       file = await fileManager.getFile(uploadResult.file.name);
     }
-    
+
     if (file.state === "FAILED") {
       throw new Error("El procesamiento del archivo en Gemini falló");
     }
-    
+
     console.log(`${logPrefix} ✅ Archivo procesado y listo: ${file.state}`);
-    
+
     // Ahora analizar el video con Gemini
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" }); // Usando modelo más reciente
-    
+
     const prompt = `
     ACTÚA COMO: Headhunter Senior para Global Talent Connections.
     OBJETIVO: Detectar TALENTO y ACTITUD PROFESIONAL, no calidad cinematográfica.
@@ -5212,26 +5325,26 @@ async function generarResenaVideo(videoUrl, puesto) {
     Ejemplo de Tono Esperado (Caso Alejandra):
     "Candidata con excelente dicción y presencia profesional, demostrando sólida preparación y estructura en su discurso (consecuente con su perfil de locutora). Mantiene contacto visual firme y transmite seguridad. Aunque el entorno presenta desafíos técnicos (contraluz y eco leve) que deberían optimizarse para un rol remoto final, su actitud y claridad comunicativa son de nivel Senior y superan estas limitaciones de hardware."
     `;
-    
+
     const parts = [
       { text: prompt },
-      { 
+      {
         fileData: {
           mimeType: uploadResult.file.mimeType,
           fileUri: uploadResult.file.uri
         }
       }
     ];
-    
+
     console.log(`${logPrefix} 🤖 Enviando a Gemini para análisis...`);
-    
+
     try {
       const result = await model.generateContent(parts);
       const reseña = result.response.text().trim();
-      
+
       console.log(`${logPrefix} ✅ Análisis completado`);
       console.log(`${logPrefix} 📝 Reseña generada (${reseña.length} caracteres)`);
-      
+
       // Eliminar el archivo del File API de Gemini para ahorrar espacio
       try {
         await fileManager.deleteFile(uploadResult.file.name);
@@ -5239,9 +5352,9 @@ async function generarResenaVideo(videoUrl, puesto) {
       } catch (deleteError) {
         console.warn(`${logPrefix} ⚠️ No se pudo eliminar archivo de Gemini: ${deleteError.message}`);
       }
-      
+
       console.log(`${logPrefix} ═══════════════════════════════════════════`);
-      
+
       // Limpiar archivos temporales locales
       if (tempFilePath && fs.existsSync(tempFilePath)) {
         fs.unlinkSync(tempFilePath);
@@ -5251,33 +5364,33 @@ async function generarResenaVideo(videoUrl, puesto) {
         fs.unlinkSync(compressedFilePath);
         console.log(`${logPrefix} 🧹 Archivo comprimido eliminado: ${compressedFilePath}`);
       }
-      
+
       return {
         reseña: reseña,
         error: null,
         linkPublico: true
       };
-      
+
     } catch (geminiError) {
       console.error(`${logPrefix} ❌ Error de Gemini: ${geminiError.message}`);
-      
+
       // Intentar eliminar el archivo de Gemini en caso de error
       try {
         await fileManager.deleteFile(uploadResult.file.name);
       } catch (e) {
         // Ignorar errores al eliminar
       }
-      
+
       throw geminiError;
     }
-    
+
   } catch (error) {
     console.error(`${logPrefix} ═══════════════════════════════════════════`);
     console.error(`${logPrefix} ❌ ERROR EN PROCESAMIENTO DE VIDEO`);
     console.error(`${logPrefix} Mensaje: ${error.message}`);
     console.error(`${logPrefix} Stack: ${error.stack}`);
     console.error(`${logPrefix} ═══════════════════════════════════════════`);
-    
+
     // Limpiar archivos temporales en caso de error
     try {
       if (tempFilePath && fs.existsSync(tempFilePath)) {
@@ -5291,10 +5404,10 @@ async function generarResenaVideo(videoUrl, puesto) {
     } catch (cleanupError) {
       console.error(`${logPrefix} ⚠️ Error limpiando archivos temporales: ${cleanupError.message}`);
     }
-    
+
     // Clasificar tipo de error
     const errorMsg = error.message.toLowerCase();
-    
+
     if (errorMsg.includes('403') || errorMsg.includes('permission') || errorMsg.includes('access')) {
       return {
         reseña: null,
@@ -5302,7 +5415,7 @@ async function generarResenaVideo(videoUrl, puesto) {
         linkPublico: false
       };
     }
-    
+
     if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
       return {
         reseña: null,
@@ -5310,7 +5423,7 @@ async function generarResenaVideo(videoUrl, puesto) {
         linkPublico: null
       };
     }
-    
+
     if (errorMsg.includes('html') || errorMsg.includes('google drive')) {
       return {
         reseña: null,
@@ -5318,7 +5431,7 @@ async function generarResenaVideo(videoUrl, puesto) {
         linkPublico: false
       };
     }
-    
+
     return {
       reseña: null,
       error: `Error al procesar video: ${error.message}`,
@@ -5341,27 +5454,27 @@ async function generarResenaVideo(videoUrl, puesto) {
  */
 async function procesarVideoEnBackground(candidatoId, videoUrl, puesto) {
   const logPrefix = '🎥 [BACKGROUND]';
-  
+
   try {
     console.log(`${logPrefix} ═══════════════════════════════════════════`);
     console.log(`${logPrefix} Iniciando procesamiento de video en background`);
     console.log(`${logPrefix} Candidato ID: ${candidatoId}`);
     console.log(`${logPrefix} Video URL: ${videoUrl.substring(0, 100)}...`);
     console.log(`${logPrefix} Puesto: ${puesto}`);
-    
+
     // Actualizar estado a "processing" para indicar que está en proceso
     const docRef = firestore.collection(MAIN_COLLECTION).doc(candidatoId);
     await docRef.set({
       video_status: "processing",
       actualizado_en: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
-    
+
     // Procesar el video (esto puede tomar varios minutos)
     const resultadoVideo = await generarResenaVideo(videoUrl, puesto);
-    
+
     if (resultadoVideo.reseña) {
       console.log(`${logPrefix} ✅ Reseña del video generada correctamente`);
-      
+
       // Actualizar candidato con la reseña del video y regenerar score
       await actualizarCandidatoConVideo(
         candidatoId,
@@ -5369,11 +5482,11 @@ async function procesarVideoEnBackground(candidatoId, videoUrl, puesto) {
         resultadoVideo.linkPublico,
         null // sin error
       );
-      
+
       console.log(`${logPrefix} ✅ Candidato ${candidatoId} actualizado con video procesado`);
     } else {
       console.error(`${logPrefix} ❌ Error procesando video: ${resultadoVideo.error}`);
-      
+
       // Actualizar candidato con el error
       await actualizarCandidatoConVideo(
         candidatoId,
@@ -5381,13 +5494,13 @@ async function procesarVideoEnBackground(candidatoId, videoUrl, puesto) {
         resultadoVideo.linkPublico,
         resultadoVideo.error
       );
-      
+
       console.log(`${logPrefix} ⚠️ Candidato ${candidatoId} actualizado con error de video`);
     }
-    
+
   } catch (error) {
     console.error(`${logPrefix} ❌ Error crítico en procesamiento de video:`, error);
-    
+
     // Actualizar estado a "error" en caso de fallo crítico
     try {
       const docRef = firestore.collection(MAIN_COLLECTION).doc(candidatoId);
@@ -5412,20 +5525,20 @@ async function procesarVideoEnBackground(candidatoId, videoUrl, puesto) {
  */
 async function actualizarCandidatoConVideo(candidatoId, reseñaVideo, videoLinkPublico, videoError) {
   const logPrefix = '🔄 [ACTUALIZAR]';
-  
+
   try {
     console.log(`${logPrefix} Actualizando candidato ${candidatoId} con resultado del video...`);
-    
+
     const docRef = firestore.collection(MAIN_COLLECTION).doc(candidatoId);
     const docSnap = await docRef.get();
-    
+
     if (!docSnap.exists) {
       console.error(`${logPrefix} ❌ Candidato ${candidatoId} no encontrado`);
       return;
     }
-    
+
     const datosActuales = docSnap.data();
-    
+
     // Preparar datos para actualización
     const updateData = {
       reseña_video: reseñaVideo || null,
@@ -5434,16 +5547,16 @@ async function actualizarCandidatoConVideo(candidatoId, reseñaVideo, videoLinkP
       video_status: reseñaVideo ? "completed" : "error",
       actualizado_en: admin.firestore.FieldValue.serverTimestamp()
     };
-    
+
     // Si tenemos reseña del video, regenerar el score con CV + Video
     if (reseñaVideo) {
       console.log(`${logPrefix} Regenerando score con CV + Video...`);
-      
+
       const reseñaCV = datosActuales.reseña_cv || null;
       const respuestasFiltro = datosActuales.respuestas_filtro || {};
       const datosFormulario = JSON.stringify(respuestasFiltro);
       const puesto = datosActuales.puesto || "General";
-      
+
       try {
         const analisisIA = await verificaConocimientosMinimos(
           puesto,
@@ -5452,14 +5565,14 @@ async function actualizarCandidatoConVideo(candidatoId, reseñaVideo, videoLinkP
           reseñaCV,
           reseñaVideo // Ahora sí tenemos la reseña del video
         );
-        
+
         // Si el video se procesó correctamente, límite de 80
         analisisIA.score = Math.min(analisisIA.score, 80);
-        
+
         // Actualizar score y motivos
         updateData.ia_score = analisisIA.score;
         updateData.ia_motivos = analisisIA.motivos;
-        
+
         // Actualizar alertas (remover la alerta de "Video pendiente" si existe)
         if (Array.isArray(analisisIA.alertas)) {
           updateData.ia_alertas = analisisIA.alertas.filter(
@@ -5468,7 +5581,7 @@ async function actualizarCandidatoConVideo(candidatoId, reseñaVideo, videoLinkP
         } else {
           updateData.ia_alertas = [];
         }
-        
+
         console.log(`${logPrefix} ✅ Score regenerado: ${analisisIA.score}`);
       } catch (scoreError) {
         console.error(`${logPrefix} ❌ Error regenerando score:`, scoreError.message);
@@ -5486,12 +5599,12 @@ async function actualizarCandidatoConVideo(candidatoId, reseñaVideo, videoLinkP
         ];
       }
     }
-    
+
     // Actualizar en Firestore
     await docRef.set(updateData, { merge: true });
-    
+
     console.log(`${logPrefix} ✅ Candidato ${candidatoId} actualizado correctamente`);
-    
+
   } catch (error) {
     console.error(`${logPrefix} ❌ Error actualizando candidato:`, error);
     throw error; // Re-lanzar para que se maneje en procesarVideoEnBackground
@@ -5510,33 +5623,33 @@ function convertirLinkDriveADescarga(driveUrl) {
   if (driveUrl.includes('/uc?export=download') || driveUrl.includes('/uc?id=')) {
     return driveUrl;
   }
-  
+
   // Extraer el ID del archivo
   let fileId = null;
-  
+
   // Patrón 1: /file/d/FILE_ID
   const match1 = driveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
   if (match1) {
     fileId = match1[1];
   }
-  
+
   // Patrón 2: /open?id=FILE_ID
   const match2 = driveUrl.match(/\/open\?id=([a-zA-Z0-9_-]+)/);
   if (match2) {
     fileId = match2[1];
   }
-  
+
   // Patrón 3: ?id=FILE_ID
   const match3 = driveUrl.match(/\?id=([a-zA-Z0-9_-]+)/);
   if (match3) {
     fileId = match3[1];
   }
-  
+
   if (fileId) {
     // Usar el formato que maneja mejor los archivos grandes con confirm=t
     return `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
   }
-  
+
   // Si no se pudo extraer el ID, retornar el original
   console.warn(`⚠️ [VIDEO] No se pudo extraer ID de Drive desde: ${driveUrl}`);
   return driveUrl;
@@ -5552,22 +5665,22 @@ function comprimirVideoA50MB(inputPath, outputPath) {
     if (typeof ffmpeg !== 'function') {
       return reject(new Error('ffmpeg no está disponible. Instala el paquete fluent-ffmpeg y ffmpeg en el sistema.'));
     }
-    
+
     // Obtener metadata del video
     ffmpeg.ffprobe(inputPath, (err, metadata) => {
       if (err) {
         return reject(new Error(`Error obteniendo metadata del video: ${err.message}`));
       }
-      
+
       const duracionSegundos = metadata.format.duration || 60;
       const tamañoMaximoBytes = 50 * 1024 * 1024; // 50MB
       const tamañoMaximoBits = tamañoMaximoBytes * 8;
-      
+
       // Calcular bitrate objetivo (dejando espacio para audio ~128kbps)
       const bitrateVideoKbps = Math.max(500, Math.floor((tamañoMaximoBits / duracionSegundos - 128000) / 1000));
-      
+
       console.log(`📊 [COMPRESIÓN] Duración: ${duracionSegundos.toFixed(2)}s, Bitrate: ${bitrateVideoKbps}kbps`);
-      
+
       // Comprimir
       ffmpeg(inputPath)
         .videoCodec('libx264')
@@ -5591,7 +5704,7 @@ function comprimirVideoA50MB(inputPath, outputPath) {
           const stats = fs.statSync(outputPath);
           const sizeMB = stats.size / (1024 * 1024);
           console.log(`✅ [COMPRESIÓN] Completado: ${sizeMB.toFixed(2)}MB`);
-          
+
           resolve({
             success: true,
             sizeMB: sizeMB,
@@ -5643,7 +5756,7 @@ app.post("/candidatos/:id/solicitar-video", async (req, res) => {
 
     // 5. Preparar y enviar email
     const imagenPieUrl = 'https://raw.githubusercontent.com/nelsonmdq1996-sys/global-talent-platform/320cd201d6f93d77553f7bacb97bedfcd7cb0324/pie_email.png';
-    
+
     const htmlCompleto = `
       <!DOCTYPE html>
       <html>
@@ -5678,7 +5791,7 @@ app.post("/candidatos/:id/solicitar-video", async (req, res) => {
       video_solicitado_fecha: admin.firestore.FieldValue.serverTimestamp(),
       video_solicitado_por: solicitado_por || 'Admin',
       actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
-      
+
       // Agregar al historial
       historial_movimientos: admin.firestore.FieldValue.arrayUnion({
         date: new Date().toISOString(),
@@ -5688,8 +5801,8 @@ app.post("/candidatos/:id/solicitar-video", async (req, res) => {
       })
     });
 
-    res.json({ 
-      ok: true, 
+    res.json({
+      ok: true,
       mensaje: "Email enviado exitosamente",
       link_generado: linkVideo
     });
@@ -5714,7 +5827,7 @@ app.post("/enviar-email", async (req, res) => {
 
     // URL de la imagen del pie de página
     const imagenPieUrl = 'https://raw.githubusercontent.com/nelsonmdq1996-sys/global-talent-platform/320cd201d6f93d77553f7bacb97bedfcd7cb0324/pie_email.png';
-    
+
     // Agregar la imagen al final del HTML
     const htmlCompleto = `
       <!DOCTYPE html>
@@ -5742,21 +5855,21 @@ app.post("/enviar-email", async (req, res) => {
 
     // Enviar el email
     const info = await transporter.sendMail(mailOptions);
-    
+
     console.log(`✅ Email enviado exitosamente a ${to} (tipo: ${tipo || 'general'})`);
     console.log(`   Message ID: ${info.messageId}`);
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       messageId: info.messageId,
       message: "Email enviado exitosamente"
     });
 
   } catch (error) {
     console.error("❌ Error enviando email:", error);
-    res.status(500).json({ 
-      error: "Error al enviar el email", 
-      details: error.message 
+    res.status(500).json({
+      error: "Error al enviar el email",
+      details: error.message
     });
   }
 });
@@ -5765,36 +5878,36 @@ app.post("/enviar-email", async (req, res) => {
 // ==========================================
 async function moverArchivoStorage(rutaOrigen, rutaDestino) {
   try {
-      const archivoOrigen = bucket.file(rutaOrigen);
-      const archivoDestino = bucket.file(rutaDestino);
-      
-      // Verificar que el archivo origen existe
-      const [existe] = await archivoOrigen.exists();
-      if (!existe) {
-          console.log(`⚠️ [STORAGE] Archivo no existe en origen: ${rutaOrigen}`);
-          return { success: false, error: 'Archivo no encontrado' };
-      }
-      
-      // Copiar a destino
-      await archivoOrigen.copy(archivoDestino);
-      console.log(`📦 [STORAGE] Archivo copiado: ${rutaOrigen} → ${rutaDestino}`);
-      
-      // Eliminar original
-      await archivoOrigen.delete();
-      console.log(`🗑️ [STORAGE] Archivo original eliminado: ${rutaOrigen}`);
-      
-      // Generar nueva URL firmada
-      const [nuevaUrl] = await archivoDestino.getSignedUrl({ 
-          action: 'read', 
-          expires: '01-01-2035' 
-      });
-      
-      console.log(`✅ [STORAGE] Archivo movido exitosamente a: ${rutaDestino}`);
-      return { success: true, nuevaUrl, rutaFinal: rutaDestino };
-      
+    const archivoOrigen = bucket.file(rutaOrigen);
+    const archivoDestino = bucket.file(rutaDestino);
+
+    // Verificar que el archivo origen existe
+    const [existe] = await archivoOrigen.exists();
+    if (!existe) {
+      console.log(`⚠️ [STORAGE] Archivo no existe en origen: ${rutaOrigen}`);
+      return { success: false, error: 'Archivo no encontrado' };
+    }
+
+    // Copiar a destino
+    await archivoOrigen.copy(archivoDestino);
+    console.log(`📦 [STORAGE] Archivo copiado: ${rutaOrigen} → ${rutaDestino}`);
+
+    // Eliminar original
+    await archivoOrigen.delete();
+    console.log(`🗑️ [STORAGE] Archivo original eliminado: ${rutaOrigen}`);
+
+    // Generar nueva URL firmada
+    const [nuevaUrl] = await archivoDestino.getSignedUrl({
+      action: 'read',
+      expires: '01-01-2035'
+    });
+
+    console.log(`✅ [STORAGE] Archivo movido exitosamente a: ${rutaDestino}`);
+    return { success: true, nuevaUrl, rutaFinal: rutaDestino };
+
   } catch (error) {
-      console.error(`❌ [STORAGE] Error moviendo archivo:`, error.message);
-      return { success: false, error: error.message };
+    console.error(`❌ [STORAGE] Error moviendo archivo:`, error.message);
+    return { success: false, error: error.message };
   }
 }
 // ==========================================
@@ -5814,7 +5927,7 @@ app.patch("/candidatos/:id", async (req, res) => {
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
-        return res.status(404).send("Candidato no encontrado en CVs_staging");
+      return res.status(404).send("Candidato no encontrado en CVs_staging");
     }
 
     // Preparar el objeto final de actualización
@@ -5826,342 +5939,342 @@ app.patch("/candidatos/:id", async (req, res) => {
     // 🕵️‍♂️ DETECTIVE DE HISTORIAL: Trackear todos los eventos importantes
     const nombreAccion = updates.usuario_accion || updates.assignedTo || 'Sistema';
     let nuevoEvento = null;
-    
+
     // 1. TRACKING DE STATUS_INTERNO (eventos específicos)
     if (updates.status_interno === 'viewed') {
-        nuevoEvento = {
-            date: new Date().toISOString(),
-            event: 'Visto',
-            detail: `Visto por: ${nombreAccion}`,
-            usuario: nombreAccion
-        };
-    } 
+      nuevoEvento = {
+        date: new Date().toISOString(),
+        event: 'Visto',
+        detail: `Visto por: ${nombreAccion}`,
+        usuario: nombreAccion
+      };
+    }
     else if (updates.status_interno === 'interview_scheduled') {
-        nuevoEvento = {
-            date: new Date().toISOString(),
-            event: 'Link de Entrevista Enviada',
-            detail: `Invitación de Meet/Zoom enviada por: ${nombreAccion}`,
-            usuario: nombreAccion
-        };
+      nuevoEvento = {
+        date: new Date().toISOString(),
+        event: 'Link de Entrevista Enviada',
+        detail: `Invitación de Meet/Zoom enviada por: ${nombreAccion}`,
+        usuario: nombreAccion
+      };
     }
     else if (updates.status_interno === 'pending_form2') {
-        nuevoEvento = {
-            date: new Date().toISOString(),
-            event: 'Link de Formulario Enviado',
-            detail: `Evaluación técnica (Form 2) enviada por: ${nombreAccion}`,
-            usuario: nombreAccion
-        };
+      nuevoEvento = {
+        date: new Date().toISOString(),
+        event: 'Link de Formulario Enviado',
+        detail: `Evaluación técnica (Form 2) enviada por: ${nombreAccion}`,
+        usuario: nombreAccion
+      };
     }
     // 1.5. TRACKING DE PROCESS_STEP_2_FORM (nuevo sistema)
     else if (updates.process_step_2_form === 'sent' && docSnap.data().process_step_2_form !== 'sent') {
-        nuevoEvento = {
-            date: new Date().toISOString(),
-            event: 'Link de Formulario Enviado',
-            detail: `Evaluación técnica (Form 2) enviada por: ${nombreAccion}`,
-            usuario: nombreAccion
-        };
+      nuevoEvento = {
+        date: new Date().toISOString(),
+        event: 'Link de Formulario Enviado',
+        detail: `Evaluación técnica (Form 2) enviada por: ${nombreAccion}`,
+        usuario: nombreAccion
+      };
     }
     // 2. TRACKING DE CAMBIOS DE STAGE
     else if (updates.stage === 'stage_2') {
-        nuevoEvento = {
-            date: new Date().toISOString(),
-            event: 'Aprobado a Gestión',
-            detail: `Aprobado por: ${nombreAccion}`,
-            usuario: nombreAccion
-        };
-    } 
+      nuevoEvento = {
+        date: new Date().toISOString(),
+        event: 'Aprobado a Gestión',
+        detail: `Aprobado por: ${nombreAccion}`,
+        usuario: nombreAccion
+      };
+    }
     else if (updates.stage === 'trash') {
       nuevoEvento = {
-          date: new Date().toISOString(),
-          event: 'Movido a Papelera',
-          detail: updates.motivo || 'Descartado manualmente',
-          usuario: nombreAccion
+        date: new Date().toISOString(),
+        event: 'Movido a Papelera',
+        detail: updates.motivo || 'Descartado manualmente',
+        usuario: nombreAccion
       };
-      
+
       // 🗑️ MOVER ARCHIVOS A CV_garbage
       const datosActuales = docSnap.data();
-      
+
       // Mover CV si existe en Storage
       if (datosActuales.cv_storage_path) {
-          const rutaOriginalCV = datosActuales.cv_storage_path;
-          const nombreArchivoCV = rutaOriginalCV.split('/').pop();
-          const rutaGarbageCV = `CV_garbage/files/${nombreArchivoCV}`;
-          
-          console.log(`🗑️ [TRASH] Moviendo CV: ${rutaOriginalCV} → ${rutaGarbageCV}`);
-          const resultadoCV = await moverArchivoStorage(rutaOriginalCV, rutaGarbageCV);
-          
-          if (resultadoCV.success) {
-              finalUpdate.cv_storage_path = rutaGarbageCV;
-              finalUpdate.cv_storage_path_original = rutaOriginalCV; // Guardar para poder restaurar
-              finalUpdate.cv_url = resultadoCV.nuevaUrl;
-              console.log(`✅ [TRASH] CV movido a papelera`);
-          }
+        const rutaOriginalCV = datosActuales.cv_storage_path;
+        const nombreArchivoCV = rutaOriginalCV.split('/').pop();
+        const rutaGarbageCV = `CV_garbage/files/${nombreArchivoCV}`;
+
+        console.log(`🗑️ [TRASH] Moviendo CV: ${rutaOriginalCV} → ${rutaGarbageCV}`);
+        const resultadoCV = await moverArchivoStorage(rutaOriginalCV, rutaGarbageCV);
+
+        if (resultadoCV.success) {
+          finalUpdate.cv_storage_path = rutaGarbageCV;
+          finalUpdate.cv_storage_path_original = rutaOriginalCV; // Guardar para poder restaurar
+          finalUpdate.cv_url = resultadoCV.nuevaUrl;
+          console.log(`✅ [TRASH] CV movido a papelera`);
+        }
       }
-      
+
       // Mover Video si existe en Storage
       const posiblesRutasVideo = [
-          `CVs_staging/videos/${id}_video.mp4`,
-          `CVs_staging/videos/${id}_video.webm`,
-          `CVs_staging/videos/${id}_video.mov`
+        `CVs_staging/videos/${id}_video.mp4`,
+        `CVs_staging/videos/${id}_video.webm`,
+        `CVs_staging/videos/${id}_video.mov`
       ];
-      
+
       for (const rutaVideo of posiblesRutasVideo) {
-          try {
-              const [existeVideo] = await bucket.file(rutaVideo).exists();
-              if (existeVideo) {
-                  const nombreArchivoVideo = rutaVideo.split('/').pop();
-                  const rutaGarbageVideo = `CV_garbage/videos/${nombreArchivoVideo}`;
-                  
-                  console.log(`🗑️ [TRASH] Moviendo Video: ${rutaVideo} → ${rutaGarbageVideo}`);
-                  const resultadoVideo = await moverArchivoStorage(rutaVideo, rutaGarbageVideo);
-                  
-                  if (resultadoVideo.success) {
-                      finalUpdate.video_storage_path = rutaGarbageVideo;
-                      finalUpdate.video_storage_path_original = rutaVideo;
-                      finalUpdate.video_url = resultadoVideo.nuevaUrl;
-                      console.log(`✅ [TRASH] Video movido a papelera`);
-                  }
-                  break; // Solo puede haber un video, salir del loop
-              }
-          } catch (e) {
-              console.log(`⚠️ [TRASH] No se encontró video en: ${rutaVideo}`);
+        try {
+          const [existeVideo] = await bucket.file(rutaVideo).exists();
+          if (existeVideo) {
+            const nombreArchivoVideo = rutaVideo.split('/').pop();
+            const rutaGarbageVideo = `CV_garbage/videos/${nombreArchivoVideo}`;
+
+            console.log(`🗑️ [TRASH] Moviendo Video: ${rutaVideo} → ${rutaGarbageVideo}`);
+            const resultadoVideo = await moverArchivoStorage(rutaVideo, rutaGarbageVideo);
+
+            if (resultadoVideo.success) {
+              finalUpdate.video_storage_path = rutaGarbageVideo;
+              finalUpdate.video_storage_path_original = rutaVideo;
+              finalUpdate.video_url = resultadoVideo.nuevaUrl;
+              console.log(`✅ [TRASH] Video movido a papelera`);
+            }
+            break; // Solo puede haber un video, salir del loop
           }
+        } catch (e) {
+          console.log(`⚠️ [TRASH] No se encontró video en: ${rutaVideo}`);
+        }
       }
-  }
-  else if (updates.stage === 'stage_1' && docSnap.data().stage === 'trash') {
-    // Solo trackear "Restaurado" si venía de papelera
-    nuevoEvento = {
+    }
+    else if (updates.stage === 'stage_1' && docSnap.data().stage === 'trash') {
+      // Solo trackear "Restaurado" si venía de papelera
+      nuevoEvento = {
         date: new Date().toISOString(),
         event: 'Restaurado',
         detail: 'Recuperado de Papelera a Exploración',
         usuario: nombreAccion
-    };
-    
-    // 🔄 RESTAURAR ARCHIVOS DESDE CV_garbage
-    const datosActuales = docSnap.data();
-    
-    // Restaurar CV si tiene ruta original guardada
-    if (datosActuales.cv_storage_path_original) {
+      };
+
+      // 🔄 RESTAURAR ARCHIVOS DESDE CV_garbage
+      const datosActuales = docSnap.data();
+
+      // Restaurar CV si tiene ruta original guardada
+      if (datosActuales.cv_storage_path_original) {
         const rutaGarbageCV = datosActuales.cv_storage_path;
         const rutaOriginalCV = datosActuales.cv_storage_path_original;
-        
+
         console.log(`🔄 [RESTORE] Restaurando CV: ${rutaGarbageCV} → ${rutaOriginalCV}`);
         const resultadoCV = await moverArchivoStorage(rutaGarbageCV, rutaOriginalCV);
-        
+
         if (resultadoCV.success) {
-            finalUpdate.cv_storage_path = rutaOriginalCV;
-            finalUpdate.cv_url = resultadoCV.nuevaUrl;
-            // Limpiar el campo de ruta original
-            finalUpdate.cv_storage_path_original = admin.firestore.FieldValue.delete();
-            console.log(`✅ [RESTORE] CV restaurado a ubicación original`);
+          finalUpdate.cv_storage_path = rutaOriginalCV;
+          finalUpdate.cv_url = resultadoCV.nuevaUrl;
+          // Limpiar el campo de ruta original
+          finalUpdate.cv_storage_path_original = admin.firestore.FieldValue.delete();
+          console.log(`✅ [RESTORE] CV restaurado a ubicación original`);
         }
-    }
-    
-    // Restaurar Video si tiene ruta original guardada
-    if (datosActuales.video_storage_path_original) {
+      }
+
+      // Restaurar Video si tiene ruta original guardada
+      if (datosActuales.video_storage_path_original) {
         const rutaGarbageVideo = datosActuales.video_storage_path;
         const rutaOriginalVideo = datosActuales.video_storage_path_original;
-        
+
         console.log(`🔄 [RESTORE] Restaurando Video: ${rutaGarbageVideo} → ${rutaOriginalVideo}`);
         const resultadoVideo = await moverArchivoStorage(rutaGarbageVideo, rutaOriginalVideo);
-        
+
         if (resultadoVideo.success) {
-            finalUpdate.video_storage_path = rutaOriginalVideo;
-            finalUpdate.video_url = resultadoVideo.nuevaUrl;
-            // Limpiar el campo de ruta original
-            finalUpdate.video_storage_path_original = admin.firestore.FieldValue.delete();
-            console.log(`✅ [RESTORE] Video restaurado a ubicación original`);
+          finalUpdate.video_storage_path = rutaOriginalVideo;
+          finalUpdate.video_url = resultadoVideo.nuevaUrl;
+          // Limpiar el campo de ruta original
+          finalUpdate.video_storage_path_original = admin.firestore.FieldValue.delete();
+          console.log(`✅ [RESTORE] Video restaurado a ubicación original`);
         }
+      }
     }
-}
 
     else if (updates.stage === 'stage_3') {
-        nuevoEvento = {
-            date: new Date().toISOString(),
-            event: 'Aprobado Informe',
-            detail: 'Candidato aprobado para informe final',
-            usuario: nombreAccion
-        };
+      nuevoEvento = {
+        date: new Date().toISOString(),
+        event: 'Aprobado Informe',
+        detail: 'Candidato aprobado para informe final',
+        usuario: nombreAccion
+      };
     }
     // 3. TRACKING DE ASIGNACIÓN (solo si cambia assignedTo sin cambiar stage)
     else if (updates.assignedTo && !updates.stage) {
-        nuevoEvento = {
-            date: new Date().toISOString(),
-            event: 'Asignado a Responsable',
-            detail: `Asignado a: ${updates.assignedTo}`,
-            usuario: nombreAccion
-        };
+      nuevoEvento = {
+        date: new Date().toISOString(),
+        event: 'Asignado a Responsable',
+        detail: `Asignado a: ${updates.assignedTo}`,
+        usuario: nombreAccion
+      };
     }
     // 4. TRACKING DE ENVÍO DE MAIL CON LINK DE MEET
     else if (updates.mail_meet_enviado === true) {
-        nuevoEvento = {
-            date: new Date().toISOString(),
-            event: 'Link de Entrevista Enviado',
-            detail: `Link de Meet/Zoom enviado a ${docSnap.data().email || 'candidato'}`,
-            usuario: nombreAccion
-        };
-        // No guardamos el flag mail_meet_enviado, solo lo usamos para detectar el evento
-        delete finalUpdate.mail_meet_enviado;
+      nuevoEvento = {
+        date: new Date().toISOString(),
+        event: 'Link de Entrevista Enviado',
+        detail: `Link de Meet/Zoom enviado a ${docSnap.data().email || 'candidato'}`,
+        usuario: nombreAccion
+      };
+      // No guardamos el flag mail_meet_enviado, solo lo usamos para detectar el evento
+      delete finalUpdate.mail_meet_enviado;
     }
 
     // Si hay evento para agregar, lo guardamos
     if (nuevoEvento) {
-        finalUpdate.historial_movimientos = admin.firestore.FieldValue.arrayUnion(nuevoEvento);
+      finalUpdate.historial_movimientos = admin.firestore.FieldValue.arrayUnion(nuevoEvento);
     }
 
     // 🎥 DETECCIÓN Y ANÁLISIS AUTOMÁTICO DE VIDEO (Opción B)
     const datosActuales = docSnap.data();
     const videoUrlAnterior = datosActuales.video_url || null;
     const videoUrlNuevo = updates.video_url || null;
-    
+
     // Si se está agregando o reemplazando un video
     if (videoUrlNuevo && videoUrlNuevo !== videoUrlAnterior) {
-        console.log(`🎥 [DEBUG] Video detectado en PATCH para candidato ${id}`);
-        console.log(`🎥 [DEBUG] Video anterior: ${videoUrlAnterior || 'ninguno'}`);
-        console.log(`🎥 [DEBUG] Video nuevo: ${videoUrlNuevo.substring(0, 50)}...`);
-        console.log(`🎥 [DEBUG] Score ANTES de analizar video: ${datosActuales.ia_score || 'N/A'}`);
-        
-        try {
-            // 🎥 PROCESAR VIDEO DE GOOGLE DRIVE (descargar y comprimir si es necesario)
-            let videoUrlParaAnalizar = videoUrlNuevo;
-            const esGoogleDrive = videoUrlNuevo.includes('drive.google.com');
-            
-            if (esGoogleDrive) {
-                console.log(`🎥 [DEBUG] Video de Google Drive detectado, procesando (descargar y comprimir)...`);
-                try {
-                    const resultadoProcesamiento = await procesarArchivoDesdeLink(videoUrlNuevo, 'video', id);
-                    
-                    if (resultadoProcesamiento.procesado && resultadoProcesamiento.urlPublica) {
-                        // Si se procesó correctamente, usar la URL procesada (comprimida)
-                        videoUrlParaAnalizar = resultadoProcesamiento.urlPublica;
-                        // Actualizar el video_url con la URL procesada
-                        finalUpdate.video_url = resultadoProcesamiento.urlPublica;
-                        finalUpdate.video_tipo = "archivo_procesado"; // Marcar como procesado
-                        console.log(`✅ [DEBUG] Video de Google Drive procesado y comprimido. Nueva URL: ${videoUrlParaAnalizar.substring(0, 80)}...`);
-                    } else if (resultadoProcesamiento.error) {
-                        console.warn(`⚠️ [DEBUG] Error procesando video de Drive: ${resultadoProcesamiento.error}`);
-                        console.log(`⚠️ [DEBUG] Continuando con URL original para análisis...`);
-                        // Continuar con la URL original si falla el procesamiento
-                    }
-                } catch (errorProcesamiento) {
-                    console.error(`❌ [DEBUG] Error en procesamiento de Drive:`, errorProcesamiento.message);
-                    console.log(`⚠️ [DEBUG] Continuando con URL original para análisis...`);
-                    // Continuar con la URL original si falla
-                }
+      console.log(`🎥 [DEBUG] Video detectado en PATCH para candidato ${id}`);
+      console.log(`🎥 [DEBUG] Video anterior: ${videoUrlAnterior || 'ninguno'}`);
+      console.log(`🎥 [DEBUG] Video nuevo: ${videoUrlNuevo.substring(0, 50)}...`);
+      console.log(`🎥 [DEBUG] Score ANTES de analizar video: ${datosActuales.ia_score || 'N/A'}`);
+
+      try {
+        // 🎥 PROCESAR VIDEO DE GOOGLE DRIVE (descargar y comprimir si es necesario)
+        let videoUrlParaAnalizar = videoUrlNuevo;
+        const esGoogleDrive = videoUrlNuevo.includes('drive.google.com');
+
+        if (esGoogleDrive) {
+          console.log(`🎥 [DEBUG] Video de Google Drive detectado, procesando (descargar y comprimir)...`);
+          try {
+            const resultadoProcesamiento = await procesarArchivoDesdeLink(videoUrlNuevo, 'video', id);
+
+            if (resultadoProcesamiento.procesado && resultadoProcesamiento.urlPublica) {
+              // Si se procesó correctamente, usar la URL procesada (comprimida)
+              videoUrlParaAnalizar = resultadoProcesamiento.urlPublica;
+              // Actualizar el video_url con la URL procesada
+              finalUpdate.video_url = resultadoProcesamiento.urlPublica;
+              finalUpdate.video_tipo = "archivo_procesado"; // Marcar como procesado
+              console.log(`✅ [DEBUG] Video de Google Drive procesado y comprimido. Nueva URL: ${videoUrlParaAnalizar.substring(0, 80)}...`);
+            } else if (resultadoProcesamiento.error) {
+              console.warn(`⚠️ [DEBUG] Error procesando video de Drive: ${resultadoProcesamiento.error}`);
+              console.log(`⚠️ [DEBUG] Continuando con URL original para análisis...`);
+              // Continuar con la URL original si falla el procesamiento
             }
-            
-            // 1. Generar reseña del video (usando URL procesada si es Drive, o original si no)
-            console.log(`🎥 [DEBUG] Iniciando generación de reseña del video...`);
-            const resultadoVideo = await generarResenaVideo(videoUrlParaAnalizar, datosActuales.puesto || "General");
-            
-            let reseñaVideo = null;
-            let videoError = null;
-            let videoLinkPublico = null;
-            
-            if (resultadoVideo.reseña) {
-                reseñaVideo = resultadoVideo.reseña;
-                videoLinkPublico = resultadoVideo.linkPublico;
-                console.log("✅ [DEBUG] Reseña del video generada correctamente");
-                console.log(`✅ [DEBUG] Reseña (primeros 100 chars): ${reseñaVideo.substring(0, 100)}...`);
-            } else {
-                videoError = resultadoVideo.error;
-                videoLinkPublico = resultadoVideo.linkPublico;
-                console.log(`⚠️ [DEBUG] Error en video: ${videoError}`);
-            }
-            
-            // 2. Re-analizar score con el video incluido
-            if (reseñaVideo) {
-                // Obtener datos existentes para el re-análisis
-                const reseñaCV = datosActuales.reseña_cv || null;
-                const respuestasFiltro = datosActuales.respuestas_filtro || {};
-                const datosFormulario = JSON.stringify(respuestasFiltro);
-                
-                console.log(`🤖 [DEBUG] Iniciando re-análisis IA con CV + Video...`);
-                console.log(`🤖 [DEBUG] Tiene reseña CV: ${!!reseñaCV}`);
-                console.log(`🤖 [DEBUG] Tiene reseña Video: ${!!reseñaVideo}`);
-                
-                // Re-analizar con CV + Video
-                const scoreAnterior = datosActuales.ia_score || 50;
-                let analisisIA = { score: scoreAnterior, motivos: datosActuales.ia_motivos || "Pendiente", alertas: datosActuales.ia_alertas || [] };
-                
-                try {
-                    analisisIA = await verificaConocimientosMinimos(
-                        datosActuales.puesto || "General",
-                        datosFormulario,
-                        "", // declaraciones vacío
-                        reseñaCV,
-                        reseñaVideo
-                    );
-                    
-                    console.log(`🤖 [DEBUG] Score DESPUÉS de IA (sin límite): ${analisisIA.score}`);
-                    
-                    // Mantener límite según origen
-                    const origen = datosActuales.origen || "";
-                    if (origen === "webhook_zoho_passive" || origen.includes("zoho") || origen.includes("mail")) {
-                        // Si vino por Zoho, mantener límite de 80
-                        analisisIA.score = Math.min(analisisIA.score, 80);
-                        console.log(`🤖 [DEBUG] Origen: Zoho → Límite aplicado: 80`);
-                    } else if (origen === "carga_manual") {
-                        // Si es carga manual CON video agregado, límite de 75 (sin video es 70)
-                        analisisIA.score = Math.min(analisisIA.score, 75);
-                        console.log(`🤖 [DEBUG] Origen: Carga Manual → Límite aplicado: 75`);
-                    }
-                    
-                    console.log(`🤖 [DEBUG] Score FINAL (con límite): ${analisisIA.score}`);
-                    console.log(`📊 [DEBUG] Cambio de score: ${scoreAnterior} → ${analisisIA.score} (diferencia: ${analisisIA.score - scoreAnterior})`);
-                    
-                    // Agregar alerta si hay error con el video
-                    if (videoError) {
-                        if (!Array.isArray(analisisIA.alertas)) {
-                            analisisIA.alertas = [];
-                        }
-                        analisisIA.alertas.push(`Video no procesado: ${videoError}`);
-                    }
-                    
-                    // Actualizar score y motivos
-                    finalUpdate.ia_score = analisisIA.score;
-                    finalUpdate.ia_motivos = analisisIA.motivos;
-                    finalUpdate.ia_alertas = analisisIA.alertas || [];
-                    
-                } catch (e) {
-                    console.error("❌ [DEBUG] Error en re-análisis IA con video:", e.message);
-                    console.error("❌ [DEBUG] Stack:", e.stack);
-                }
-            } else {
-                console.log(`⚠️ [DEBUG] No se pudo generar reseña del video, no se re-analiza el score`);
-            }
-            
-            // 3. Guardar datos del video
-            finalUpdate.reseña_video = reseñaVideo || null;
-            finalUpdate.video_error = videoError || null;
-            finalUpdate.video_link_publico = videoLinkPublico;
-            // Si no se procesó antes (no es Drive o falló), usar el tipo del update o "link" por defecto
-            if (!finalUpdate.video_tipo) {
-                finalUpdate.video_tipo = updates.video_tipo || "link"; // Por defecto "link" si se agrega manualmente
-            }
-            
-            // 4. Agregar evento a cronología
-            const eventoVideo = {
-                date: new Date().toISOString(),
-                event: videoUrlAnterior ? 'Video Reemplazado' : 'Video Agregado',
-                detail: videoUrlAnterior 
-                    ? `Video reemplazado y analizado por: ${nombreAccion}` 
-                    : `Video agregado y analizado por: ${nombreAccion}`,
-                usuario: nombreAccion
-            };
-            
-            if (!finalUpdate.historial_movimientos) {
-                finalUpdate.historial_movimientos = admin.firestore.FieldValue.arrayUnion(eventoVideo);
-            } else {
-                // Si ya hay un evento, agregamos este también
-                finalUpdate.historial_movimientos = admin.firestore.FieldValue.arrayUnion(eventoVideo);
-            }
-            
-        } catch (error) {
-            console.error("❌ Error analizando video en PATCH:", error.message);
-            // Si falla el análisis, guardamos el link igual pero con error
-            finalUpdate.video_error = `Error al analizar video: ${error.message}`;
+          } catch (errorProcesamiento) {
+            console.error(`❌ [DEBUG] Error en procesamiento de Drive:`, errorProcesamiento.message);
+            console.log(`⚠️ [DEBUG] Continuando con URL original para análisis...`);
+            // Continuar con la URL original si falla
+          }
         }
+
+        // 1. Generar reseña del video (usando URL procesada si es Drive, o original si no)
+        console.log(`🎥 [DEBUG] Iniciando generación de reseña del video...`);
+        const resultadoVideo = await generarResenaVideo(videoUrlParaAnalizar, datosActuales.puesto || "General");
+
+        let reseñaVideo = null;
+        let videoError = null;
+        let videoLinkPublico = null;
+
+        if (resultadoVideo.reseña) {
+          reseñaVideo = resultadoVideo.reseña;
+          videoLinkPublico = resultadoVideo.linkPublico;
+          console.log("✅ [DEBUG] Reseña del video generada correctamente");
+          console.log(`✅ [DEBUG] Reseña (primeros 100 chars): ${reseñaVideo.substring(0, 100)}...`);
+        } else {
+          videoError = resultadoVideo.error;
+          videoLinkPublico = resultadoVideo.linkPublico;
+          console.log(`⚠️ [DEBUG] Error en video: ${videoError}`);
+        }
+
+        // 2. Re-analizar score con el video incluido
+        if (reseñaVideo) {
+          // Obtener datos existentes para el re-análisis
+          const reseñaCV = datosActuales.reseña_cv || null;
+          const respuestasFiltro = datosActuales.respuestas_filtro || {};
+          const datosFormulario = JSON.stringify(respuestasFiltro);
+
+          console.log(`🤖 [DEBUG] Iniciando re-análisis IA con CV + Video...`);
+          console.log(`🤖 [DEBUG] Tiene reseña CV: ${!!reseñaCV}`);
+          console.log(`🤖 [DEBUG] Tiene reseña Video: ${!!reseñaVideo}`);
+
+          // Re-analizar con CV + Video
+          const scoreAnterior = datosActuales.ia_score || 50;
+          let analisisIA = { score: scoreAnterior, motivos: datosActuales.ia_motivos || "Pendiente", alertas: datosActuales.ia_alertas || [] };
+
+          try {
+            analisisIA = await verificaConocimientosMinimos(
+              datosActuales.puesto || "General",
+              datosFormulario,
+              "", // declaraciones vacío
+              reseñaCV,
+              reseñaVideo
+            );
+
+            console.log(`🤖 [DEBUG] Score DESPUÉS de IA (sin límite): ${analisisIA.score}`);
+
+            // Mantener límite según origen
+            const origen = datosActuales.origen || "";
+            if (origen === "webhook_zoho_passive" || origen.includes("zoho") || origen.includes("mail")) {
+              // Si vino por Zoho, mantener límite de 80
+              analisisIA.score = Math.min(analisisIA.score, 80);
+              console.log(`🤖 [DEBUG] Origen: Zoho → Límite aplicado: 80`);
+            } else if (origen === "carga_manual") {
+              // Si es carga manual CON video agregado, límite de 75 (sin video es 70)
+              analisisIA.score = Math.min(analisisIA.score, 75);
+              console.log(`🤖 [DEBUG] Origen: Carga Manual → Límite aplicado: 75`);
+            }
+
+            console.log(`🤖 [DEBUG] Score FINAL (con límite): ${analisisIA.score}`);
+            console.log(`📊 [DEBUG] Cambio de score: ${scoreAnterior} → ${analisisIA.score} (diferencia: ${analisisIA.score - scoreAnterior})`);
+
+            // Agregar alerta si hay error con el video
+            if (videoError) {
+              if (!Array.isArray(analisisIA.alertas)) {
+                analisisIA.alertas = [];
+              }
+              analisisIA.alertas.push(`Video no procesado: ${videoError}`);
+            }
+
+            // Actualizar score y motivos
+            finalUpdate.ia_score = analisisIA.score;
+            finalUpdate.ia_motivos = analisisIA.motivos;
+            finalUpdate.ia_alertas = analisisIA.alertas || [];
+
+          } catch (e) {
+            console.error("❌ [DEBUG] Error en re-análisis IA con video:", e.message);
+            console.error("❌ [DEBUG] Stack:", e.stack);
+          }
+        } else {
+          console.log(`⚠️ [DEBUG] No se pudo generar reseña del video, no se re-analiza el score`);
+        }
+
+        // 3. Guardar datos del video
+        finalUpdate.reseña_video = reseñaVideo || null;
+        finalUpdate.video_error = videoError || null;
+        finalUpdate.video_link_publico = videoLinkPublico;
+        // Si no se procesó antes (no es Drive o falló), usar el tipo del update o "link" por defecto
+        if (!finalUpdate.video_tipo) {
+          finalUpdate.video_tipo = updates.video_tipo || "link"; // Por defecto "link" si se agrega manualmente
+        }
+
+        // 4. Agregar evento a cronología
+        const eventoVideo = {
+          date: new Date().toISOString(),
+          event: videoUrlAnterior ? 'Video Reemplazado' : 'Video Agregado',
+          detail: videoUrlAnterior
+            ? `Video reemplazado y analizado por: ${nombreAccion}`
+            : `Video agregado y analizado por: ${nombreAccion}`,
+          usuario: nombreAccion
+        };
+
+        if (!finalUpdate.historial_movimientos) {
+          finalUpdate.historial_movimientos = admin.firestore.FieldValue.arrayUnion(eventoVideo);
+        } else {
+          // Si ya hay un evento, agregamos este también
+          finalUpdate.historial_movimientos = admin.firestore.FieldValue.arrayUnion(eventoVideo);
+        }
+
+      } catch (error) {
+        console.error("❌ Error analizando video en PATCH:", error.message);
+        // Si falla el análisis, guardamos el link igual pero con error
+        finalUpdate.video_error = `Error al analizar video: ${error.message}`;
+      }
     }
 
     // Impactar en Firestore
@@ -6188,139 +6301,30 @@ app.post("/candidatos/:id/analizar-entrevista", async (req, res) => {
     // 1. Usamos la colección unificada
     const docRef = firestore.collection(MAIN_COLLECTION).doc(id);
     const docSnap = await docRef.get();
-    
+
     if (!docSnap.exists) return res.status(404).json({ error: "Candidato no encontrado" });
 
     const data = docSnap.data();
 
-    // 2. Prompt de Ingeniería: Fusión de Contextos
-    const prompt = `
-    ACTÚA COMO: Reclutador Senior de Global Talent Connections.
-    OBJETIVO: Recalcular el puntaje del candidato cruzando toda la información previa (CV + Video + Formulario) con la ENTREVISTA recién realizada.
-    
-    --- CONTEXTO HISTÓRICO (FUENTES DE VERDAD PREVIAS) ---
-    
-    PERFIL SOLICITADO: "${data.puesto || 'General'}"
-    
-    ANÁLISIS DEL CV:
-    "${data.reseña_cv || 'Sin análisis de CV disponible'}"
-    
-    ANÁLISIS DEL VIDEO DE PRESENTACIÓN:
-    "${data.reseña_video || 'Sin análisis de video disponible'}"
-    
-    SCORE INICIAL (basado en CV y formulario): ${data.ia_score || 0}
-    MOTIVOS DEL SCORE INICIAL: "${data.ia_motivos || 'Sin análisis previo'}"
-    
-    DATOS DECLARADOS EN FORMULARIO:
-    - Salario aceptado: ${data.respuestasfiltro?.salario || 'No especificado'}
-    - Acepta monitoreo: ${data.respuestasfiltro?.monitoreo || 'No especificado'}
-    - Disponibilidad: ${data.respuestasfiltro?.disponibilidad || 'No especificado'}
-    - Herramientas clave: ${data.respuestasfiltro?.herramientas || 'No especificado'}
-    
-    --- NUEVA EVIDENCIA (ENTREVISTA EN VIVO) ---
-    TRANSCRIPCIÓN:
-    "${transcript.slice(0, 15000)}"
-    
-    --- TAREA DE CONTRASTACIÓN ---
-    
-    1. 📋 VALIDACIÓN DE EXPERIENCIA:
-       - ¿El candidato puede PROFUNDIZAR en la experiencia declarada en el CV con ejemplos concretos, o sus respuestas son vagas?
-       - ¿Los logros/herramientas mencionados en CV se sostienen cuando se le pregunta por detalles específicos?
-       - ¿Demuestra conocimiento real de las herramientas del puesto, o solo las "conoce de nombre"?
-    
-    2. 🔄 CONSISTENCIA ENTRE FUENTES:
-       - ¿Hay CONTRADICCIONES entre CV, video, formulario y lo dicho en entrevista? (ej: años de experiencia, nivel de inglés, disponibilidad)
-       - ¿El nivel de comunicación del video se mantiene en la entrevista, o era un video sobre-ensayado?
-       - ¿Cambió de posición sobre condiciones laborales (salario, monitoreo, horarios) vs lo declarado en el formulario?
-    
-    3. 🎯 AJUSTE DE SCORE:
-       - SUBE (+10 a +20): Si demuestra MÁS conocimiento/experiencia de lo que el CV sugería, con ejemplos sólidos y actitud proactiva.
-       - MANTIENE (±5): Si confirma el nivel del CV sin sorpresas, positivas o negativas.
-       - BAJA (-10 a -30): Si respuestas vagas/inconsistencias revelan que el CV estaba inflado, o detectas banderas rojas nuevas (actitud, nivel técnico inferior, cambios de posición).
-    
-    4. 🚩 DETECCIÓN DE BANDERAS ROJAS:
-       - Genera ALERTAS específicas si detectas: nivel de inglés inferior al declarado, inconsistencias sobre experiencia, cambios en disponibilidad/salario, respuestas evasivas sobre logros, actitud problemática, señales de doble empleo no declarado.
-    
-    --- CALIBRACIÓN DE TONO (usa estos ejemplos como guía) ---
-    
-    VALIDACIÓN POSITIVA (Score sube):
-    - El candidato profundiza con ejemplos concretos que el CV no reflejaba bien
-    - Demuestra dominio técnico real de herramientas clave del puesto
-    - Actitud profesional y preparación evidente
-    → Tono: "La entrevista valida y amplía el perfil. Demuestra [skill específico] con ejemplos detallados de [contexto]. Se eleva el score debido a profundidad técnica superior a lo reflejado en CV."
-    
-    CONFIRMACIÓN (Score mantiene):
-    - La entrevista confirma lo analizado en CV y video
-    - Sin inconsistencias relevantes ni sorpresas
-    - Nivel técnico/actitudinal esperado
-    → Tono: "La entrevista es consistente con el análisis previo. Sostiene el nivel declarado en [áreas clave]. Se mantiene el score."
-    
-    DETECCIÓN DE INFLADO (Score baja):
-    - Respuestas vagas que no sostienen la experiencia del CV
-    - Inconsistencias entre fuentes (CV vs entrevista)
-    - Nivel técnico/inglés inferior al declarado
-    - Banderas rojas nuevas detectadas
-    → Tono: "La entrevista expone discrepancias con el CV. No pudo dar ejemplos concretos sobre [tema declarado]. [Mencionar inconsistencias específicas]. Se reduce el score."
-    
-    --- EJEMPLOS DE OUTPUT POR ÁREA (PATRONES DE REFERENCIA) ---
-    
-    [ÁREA TÉCNICA - Automatización/Desarrollo]
-    {
-      "score": 75,
-      "motivos": "La entrevista supera las expectativas del CV. Aunque el CV presentaba descripciones básicas, demostró dominio avanzado de las herramientas clave del puesto (Make, Zapier) con ejemplos detallados de workflows implementados. Validó métricas del logro declarado (reducción 40% en tiempos) con contexto técnico sólido. El análisis previo del video sobre actitud profesional se confirma con preparación evidente. Score elevado +15 puntos por profundidad técnica demostrada.",
-      "alertas": []
-    }
-    
-    [ÁREA COMUNICACIÓN/GESTIÓN - RRHH/Marketing]
-    {
-      "score": 58,
-      "motivos": "La entrevista confirma el perfil medio-bajo detectado en CV. Sostiene experiencia en procesos de reclutamiento con ejemplos coherentes pero sin métricas específicas de impacto. Las herramientas mencionadas (ATS básico, LinkedIn Recruiter) se validan con uso intermedio, no avanzado. Mantiene la estabilidad actitudinal del video. No hay inconsistencias graves entre fuentes. Score se mantiene como reflejo de un perfil que cumple mínimos sin destacarse.",
-      "alertas": ["Experiencia limitada en estrategias de employer branding"]
-    }
-    
-    [ÁREA ANALÍTICA - Contabilidad/Datos]
-    {
-      "score": 42,
-      "motivos": "La entrevista revela brechas significativas con el CV. Aunque declara experiencia con software contable avanzado (QuickBooks, SAP), no pudo explicar procesos de conciliación bancaria ni elaboración de estados financieros cuando se le solicitó detalle. Las respuestas sobre manejo de cierres contables fueron genéricas sin demostrar conocimiento práctico. Se detecta inconsistencia en nivel de Excel (CV: avanzado, entrevista: intermedio básico). Score reducido -18 puntos por falta de profundidad técnica comprobable.",
-      "alertas": ["Conocimiento superficial de software contable declarado", "Nivel de Excel inferior al declarado"]
-    }
-    
-    --- SALIDA JSON ÚNICAMENTE ---
-    
-    Devuelve SOLO este JSON sin texto adicional:
-    
-    {
-      "score": (0-100, ajustado según entrevista),
-      "motivos": "Párrafo de 4-6 líneas que CONTRASTA las fuentes previas (CV + Video + Formulario) con la entrevista. Menciona: 1) Qué se validó, 2) Qué inconsistencias se detectaron, 3) Por qué el score cambió o se mantuvo, 4) Puntos específicos de la entrevista que fundamentan la decisión. Tono profesional y objetivo.",
-      "alertas": ["Array de strings con banderas rojas específicas. Ejemplos: 'Nivel de inglés B1, no B2 declarado', 'No pudo profundizar en herramienta X del CV', 'Cambió posición sobre disponibilidad', 'Respuestas evasivas sobre logros específicos'"]
-    }
-    `;
+    // 2. Usar cerebro compartido (misma lógica que el webhook)
+    const analisis = await analizarEntrevistaConGemini(data, transcript);
 
-    // 3. Ejecución IA
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text().replace(/```json/g, "").replace(/```/g, "").trim();
-    
-    // Extracción segura de JSON
-    const jsonStart = responseText.indexOf('{');
-    const jsonEnd = responseText.lastIndexOf('}');
-    const analisis = JSON.parse(responseText.substring(jsonStart, jsonEnd + 1));
-
-    // 4. Persistencia (Sobreescribimos para que la ficha quede actualizada)
+    // 3. Persistencia (Sobreescribimos para que la ficha quede actualizada)
     await docRef.update({
-        ia_score: analisis.score,
-        ia_motivos: analisis.motivos,
-        ia_alertas: analisis.alertas || [],
-        interview_analyzed: true,
-        transcripcion_entrevista: transcript, // Guardar transcripción para el informe final
-        actualizado_en: new Date().toISOString(),
-        
-        // HISTORIAL: Transcripción analizada
-        historial_movimientos: admin.firestore.FieldValue.arrayUnion({
-            date: new Date().toISOString(),
-            event: 'Transcripción Analizada',
-            detail: `Análisis post-entrevista completado. Nuevo score: ${analisis.score}/100`,
-            usuario: req.body.responsable || 'Sistema'
-        })
+      ia_score: analisis.score,
+      ia_motivos: analisis.motivos,
+      ia_alertas: analisis.alertas || [],
+      interview_analyzed: true,
+      transcripcion_entrevista: transcript, // Guardar transcripción para el informe final
+      actualizado_en: new Date().toISOString(),
+
+      // HISTORIAL: Transcripción analizada
+      historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+        date: new Date().toISOString(),
+        event: 'Transcripción Analizada',
+        detail: `Análisis post-entrevista completado. Nuevo score: ${analisis.score}/100`,
+        usuario: req.body.responsable || 'Sistema'
+      })
     });
 
     res.json({ ok: true, ...analisis });
@@ -6343,9 +6347,9 @@ app.post("/candidatos/:id/preparar-bot", async (req, res) => {
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
-      return res.status(404).json({ 
-        success: false, 
-        error: "Candidato no encontrado en CVs_staging" 
+      return res.status(404).json({
+        success: false,
+        error: "Candidato no encontrado en CVs_staging"
       });
     }
 
@@ -6353,9 +6357,9 @@ app.post("/candidatos/:id/preparar-bot", async (req, res) => {
 
     // 2. Validar que tenga email
     if (!candidato.email) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "El candidato debe tener un email registrado" 
+      return res.status(400).json({
+        success: false,
+        error: "El candidato debe tener un email registrado"
       });
     }
 
@@ -6416,6 +6420,83 @@ app.post("/candidatos/:id/preparar-bot", async (req, res) => {
   }
 });
 
+// --- WEBHOOK: RECIBIR RESULTADOS DE GTC (usa el mismo cerebro que el análisis manual) ---
+app.post('/webhooks/resultado-entrevista', async (req, res) => {
+  try {
+    const payload = req.body.interview_data || req.body;
+    const { interview_id, transcript, summary, audio_url } = payload;
+
+    console.log(`📨 Recibido resultado de entrevista: ${interview_id}`);
+
+    // 1. Buscar al candidato
+    const snapshot = await firestore.collection("CVs_staging")
+      .where("gtc_interview_id", "==", interview_id)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return res.status(404).json({ error: "Candidato no encontrado para este ID de entrevista" });
+    }
+
+    const doc = snapshot.docs[0];
+    const candidatoData = doc.data();
+
+    // ✅ EL PORTERO (Idempotencia): Si ya fue procesado, no volver a analizar
+    if (candidatoData.estado_entrevista === 'analizada' || candidatoData.interview_analyzed === true) {
+      console.log("✋ [DUPLICADO] Este candidato ya fue procesado. Ignorando request.");
+      return res.status(200).json({ success: true, message: 'Already processed' });
+    }
+
+    // ---------------------------------------------------------
+    // 🧠 2. ANÁLISIS IA EN TIEMPO REAL (Gemini)
+    // ---------------------------------------------------------
+    const transcriptText = transcript || "";
+    console.log(`🧠 Analizando transcripción (${transcriptText.length} caracteres) con Gemini...`);
+    console.log(`📝 Contenido Transcripción: "${transcriptText}"`);
+
+    let analisis;
+    try {
+      analisis = await analizarEntrevistaConGemini(candidatoData, transcriptText);
+    } catch (err) {
+      console.error("Error en análisis IA (webhook):", err);
+      return res.status(500).json({ error: "Error al analizar la entrevista con IA", detail: err.message });
+    }
+
+    console.log(`📊 Resultado IA -> Score: ${analisis.score} | Motivo: ${(analisis.motivos || "").substring(0, 50)}...`);
+
+    // 3. Guardar en Firestore (datos crudos + análisis)
+    await doc.ref.update({
+      transcripcion_entrevista: transcriptText,
+      entrevista_transcripcion: transcriptText,
+      entrevista_resumen: summary || "",
+      entrevista_audio: audio_url || "",
+      entrevista_analisis: analisis,
+      entrevista_analisis_completo: analisis,
+      ia_score: analisis.score,
+      ia_motivos: analisis.motivos,
+      ia_alertas: analisis.alertas || [],
+      interview_analyzed: true,
+      estado_entrevista: 'analizada',
+      status_interno: 'interview_completed',
+      actualizado_en: new Date().toISOString(),
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+        date: new Date().toISOString(),
+        event: 'Transcripción Analizada (Webhook GTC)',
+        detail: `Análisis post-entrevista completado. Score: ${analisis.score}/100`,
+        usuario: 'Sistema'
+      })
+    });
+
+    console.log(`✅ Candidato ${candidatoData.email || doc.id} actualizado con Score: ${analisis.score}`);
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error("❌ Error procesando webhook:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==========================================
 // 🔍 ENDPOINT: ANÁLISIS MANUAL DE CANDIDATO (CARGA MANUAL)
 // ==========================================
@@ -6427,7 +6508,7 @@ app.post("/candidatos/:id/analizar", async (req, res) => {
     // 1. Obtener candidato de Firestore
     const docRef = firestore.collection(MAIN_COLLECTION).doc(id);
     const docSnap = await docRef.get();
-    
+
     if (!docSnap.exists) {
       return res.status(404).json({ error: "Candidato no encontrado" });
     }
@@ -6447,7 +6528,7 @@ app.post("/candidatos/:id/analizar", async (req, res) => {
     }
 
     // 4. Preparar datos para el análisis (incluir respuestas_filtro si existen)
-    const datosParaAnalisis = candidato.respuestas_filtro 
+    const datosParaAnalisis = candidato.respuestas_filtro
       ? JSON.stringify(candidato.respuestas_filtro)
       : "";
 
@@ -6472,7 +6553,7 @@ app.post("/candidatos/:id/analizar", async (req, res) => {
       ia_status: "processed",
       reseña_cv: reseñaCV,
       actualizado_en: admin.firestore.FieldValue.serverTimestamp(),
-      
+
       // HISTORIAL: Análisis manual realizado
       historial_movimientos: admin.firestore.FieldValue.arrayUnion({
         date: new Date().toISOString(),
@@ -6483,8 +6564,8 @@ app.post("/candidatos/:id/analizar", async (req, res) => {
     });
 
     console.log(`✅ Análisis manual completado para candidato ${id} - Score: ${analisisIA.score}`);
-    res.json({ 
-      ok: true, 
+    res.json({
+      ok: true,
       score: analisisIA.score,
       motivos: analisisIA.motivos,
       alertas: analisisIA.alertas || [],
@@ -6507,44 +6588,44 @@ app.post("/webhook-form2", async (req, res) => {
 
     // 1. Normalizar Email (Es la llave que configuramos en Zoho)
     const emailCandidate = (data.email || data.Email || "").trim().toLowerCase();
-    
+
     if (!emailCandidate) {
-        console.error("❌ Form 2 recibido SIN email. Imposible asociar.");
-        return res.status(400).send("Falta el campo email para identificar al candidato.");
+      console.error("❌ Form 2 recibido SIN email. Imposible asociar.");
+      return res.status(400).send("Falta el campo email para identificar al candidato.");
     }
 
     // 2. Buscar al candidato en la base de datos (CVs_staging)
     const snapshot = await firestore.collection(MAIN_COLLECTION)
-        .where('email', '==', emailCandidate)
-        .limit(1)
-        .get();
+      .where('email', '==', emailCandidate)
+      .limit(1)
+      .get();
 
     if (snapshot.empty) {
-        console.warn(`⚠️ Webhook recibido pero no encontré candidato con email: ${emailCandidate}`);
-        // Respondemos 200 a Zoho para que no se quede reintentando infinitamente
-        return res.status(200).send("Candidato no encontrado en DB.");
+      console.warn(`⚠️ Webhook recibido pero no encontré candidato con email: ${emailCandidate}`);
+      // Respondemos 200 a Zoho para que no se quede reintentando infinitamente
+      return res.status(200).send("Candidato no encontrado en DB.");
     }
 
     const doc = snapshot.docs[0];
-    
+
     // 3. Guardar las respuestas
     // Guardamos todo el objeto 'data' porque ya hiciste el trabajo duro de mapear
     // los nombres bonitos (herramienta_1, nivel_1, etc.) en Zoho.
     await doc.ref.update({
-        process_step_2_form: 'received',  // 🔥 Enciende el semáforo VERDE
-        respuestas_form2: {
-            fecha_recepcion: new Date().toISOString(),
-            data: data // Aquí va todo el paquete limpio que configuraste
-        },
-        actualizado_en: new Date().toISOString(),
-        
-        // HISTORIAL: Respuestas del Zoho 2 recibido
-        historial_movimientos: admin.firestore.FieldValue.arrayUnion({
-            date: new Date().toISOString(),
-            event: 'Respuestas del Zoho 2 Recibido',
-            detail: 'El candidato completó la validación técnica (Zoho Form 2)',
-            usuario: 'Sistema (Zoho)'
-        })
+      process_step_2_form: 'received',  // 🔥 Enciende el semáforo VERDE
+      respuestas_form2: {
+        fecha_recepcion: new Date().toISOString(),
+        data: data // Aquí va todo el paquete limpio que configuraste
+      },
+      actualizado_en: new Date().toISOString(),
+
+      // HISTORIAL: Respuestas del Zoho 2 recibido
+      historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+        date: new Date().toISOString(),
+        event: 'Respuestas del Zoho 2 Recibido',
+        detail: 'El candidato completó la validación técnica (Zoho Form 2)',
+        usuario: 'Sistema (Zoho)'
+      })
     });
 
     console.log(`✅ [Webhook Form 2] Respuestas guardadas para: ${emailCandidate}`);
@@ -6590,48 +6671,48 @@ app.listen(PORT, "0.0.0.0", async () => {
 
   // Inicialización global
   try {
-      firestore = admin.firestore();
-      bucket = admin.storage().bucket();
-      console.log(`🪣 Bucket en uso: ${bucket.name}`);
+    firestore = admin.firestore();
+    bucket = admin.storage().bucket();
+    console.log(`🪣 Bucket en uso: ${bucket.name}`);
 
-      // Verificamos conexión
-      STORAGE_READY = await storageProbe();
-      
-      if (!STORAGE_READY) {
-        console.warn("⚠️ Storage no respondió correctamente, pero el servidor seguirá activo.");
-      } else {
-        console.log("✅ Storage OK — sistema operativo");
-      }
-      
+    // Verificamos conexión
+    STORAGE_READY = await storageProbe();
+
+    if (!STORAGE_READY) {
+      console.warn("⚠️ Storage no respondió correctamente, pero el servidor seguirá activo.");
+    } else {
+      console.log("✅ Storage OK — sistema operativo");
+    }
+
   } catch (error) {
-      console.error("❌ Error fatal inicializando servicios de Firebase:", error);
+    console.error("❌ Error fatal inicializando servicios de Firebase:", error);
   }
 
   // 🔥 LA CORRECCIÓN: CICLO INFINITO 🔥
   console.log("🔌 Iniciando servicio de lectura de correos (Ciclo Automático)...");
-  
+
   // SEMÁFORO: Evita que se solapen los procesos si uno tarda mucho
   let isProcessing = false;
 
   // 1. Ejecutar inmediatamente al arrancar para no esperar
-  analizarCorreos(); 
-  
+  analizarCorreos();
+
   // 2. Programar repetición cada 120 segundos (120000 ms)
   setInterval(async () => {
-      if (isProcessing) {
-          console.log("⚠️ Saltando ciclo: El proceso anterior todavía no terminó.");
-          return;
-      }
+    if (isProcessing) {
+      console.log("⚠️ Saltando ciclo: El proceso anterior todavía no terminó.");
+      return;
+    }
 
-      isProcessing = true; // 🔴 Bloquear semáforo
-      console.log("⏰ Ciclo programado: Buscando nuevos correos...");
-      
-      try {
-          await analizarCorreos();
-      } catch (error) {
-          console.error("❌ Error crítico en el ciclo:", error);
-      } finally {
-          isProcessing = false; // 🟢 Liberar semáforo (siempre)
-      }
-  }, 120000); 
+    isProcessing = true; // 🔴 Bloquear semáforo
+    console.log("⏰ Ciclo programado: Buscando nuevos correos...");
+
+    try {
+      await analizarCorreos();
+    } catch (error) {
+      console.error("❌ Error crítico en el ciclo:", error);
+    } finally {
+      isProcessing = false; // 🟢 Liberar semáforo (siempre)
+    }
+  }, 120000);
 });

@@ -658,7 +658,7 @@
                                                 {getStatusLabel(c.status_interno)}
                                             </td>
                                             <td className="p-4 text-right">
-                                                <Button size="sm" variant="secondary" onClick={() => onSelect(c.id)}>
+                                                <Button size="sm" variant="secondary" onClick={() => onSelect(c.id, c)}>
                                                     Ver Ficha
                                                 </Button>
                                             </td>
@@ -1208,7 +1208,7 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
                                 {filtered.map(c => (
                                     <tr 
                                         key={c.id} 
-                                        onClick={() => onSelect(c.id)}
+                                        onClick={() => onSelect(c.id, c)}
                                         className="hover:bg-slate-800/30 cursor-pointer transition-colors group"
                                     >
                                         <td className="p-4">
@@ -1313,7 +1313,7 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
                                                 <button 
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        onSelect(c.id);
+                                                        onSelect(c.id, c);
                                                     }}
                                                     className="px-3 py-1.5 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 hover:border-blue-500/50 text-blue-400 hover:text-blue-300 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 group shadow-sm hover:shadow-blue-500/20"
                                                 >
@@ -1426,7 +1426,7 @@ function ManageView({ candidates, onSelect, currentUser }) {
                                 stage2.map(c => {
                                     const estado = getEstadoReal(c);
                                     return (
-                                        <tr key={c.id} onClick={() => onSelect(c.id)} className="hover:bg-slate-800/60 cursor-pointer transition-colors group">
+                                        <tr key={c.id} onClick={() => onSelect(c.id, c)} className="hover:bg-slate-800/60 cursor-pointer transition-colors group">
                                             <td className="px-6 py-3">
                                                 <div className="flex items-center gap-3">
                                                     <Avatar name={normalizarNombre(c.nombre)} />
@@ -4283,6 +4283,68 @@ Saludos, Equipo de Selección de Global Talent Connections`
    </div>
 </div>
 
+                                    {/* === SECCIÓN DE RESULTADO DE IA === */}
+                                    {(candidate.entrevista_analisis || (candidate.transcripcion_entrevista && candidate.ia_motivos)) && (
+                                        <div className="mt-6 bg-slate-900/50 rounded-xl p-4 border border-slate-800 animate-in fade-in slide-in-from-bottom-4">
+                                            {/* ENCABEZADO: SCORE Y TÍTULO */}
+                                            <div className="flex items-center justify-between mb-4">
+                                                <h3 className="text-indigo-400 font-bold flex items-center gap-2">
+                                                    <LucideIcon name="Bot" size={18} /> ANÁLISIS DEL BOT
+                                                </h3>
+                                                <div className={`px-3 py-1 rounded-full text-sm font-bold border ${
+                                                    (candidate.ia_score ?? candidate.entrevista_analisis?.score ?? 0) >= 70 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                                    (candidate.ia_score ?? candidate.entrevista_analisis?.score ?? 0) >= 50 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                                    'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                                }`}>
+                                                    SCORE: {candidate.ia_score ?? candidate.entrevista_analisis?.score ?? 0}/100
+                                                </div>
+                                            </div>
+
+                                            {/* RESUMEN EJECUTIVO */}
+                                            <div className="mb-4 text-slate-300 text-sm italic border-l-2 border-indigo-500 pl-3">
+                                                "{candidate.entrevista_analisis?.resumen || candidate.entrevista_analisis?.motivos || candidate.entrevista_resumen || candidate.ia_motivos || "Sin resumen disponible"}"
+                                            </div>
+
+                                            {/* PUNTOS FUERTES Y DÉBILES (GRID) */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                {/* Puntos Fuertes */}
+                                                <div className="bg-emerald-950/20 p-3 rounded-lg border border-emerald-900/30">
+                                                    <h4 className="text-emerald-400 text-xs font-bold mb-2 flex items-center gap-1">
+                                                        <CheckCircle size={12}/> PUNTOS FUERTES
+                                                    </h4>
+                                                    <ul className="text-xs text-slate-400 space-y-1">
+                                                        {candidate.entrevista_analisis?.puntos_fuertes?.length > 0 ? candidate.entrevista_analisis.puntos_fuertes.map((punto, i) => (
+                                                            <li key={i} className="flex items-start gap-1">
+                                                                <span>•</span> {punto}
+                                                            </li>
+                                                        )) : <li className="italic text-slate-600">No detectados</li>}
+                                                    </ul>
+                                                </div>
+
+                                                {/* Puntos Débiles / Alertas */}
+                                                <div className="bg-rose-950/20 p-3 rounded-lg border border-rose-900/30">
+                                                    <h4 className="text-rose-400 text-xs font-bold mb-2 flex items-center gap-1">
+                                                        <AlertCircle size={12}/> ÁREAS DE MEJORA
+                                                    </h4>
+                                                    <ul className="text-xs text-slate-400 space-y-1">
+                                                        {(candidate.entrevista_analisis?.puntos_debiles?.length > 0 || candidate.entrevista_analisis?.alertas?.length > 0 || candidate.ia_alertas?.length > 0) ? (candidate.entrevista_analisis?.puntos_debiles || candidate.entrevista_analisis?.alertas || candidate.ia_alertas || []).map((punto, i) => (
+                                                            <li key={i} className="flex items-start gap-1">
+                                                                <span>•</span> {typeof punto === 'string' ? punto : punto}
+                                                            </li>
+                                                        )) : <li className="italic text-slate-600">No detectadas</li>}
+                                                    </ul>
+                                                </div>
+                                            </div>
+
+                                            {/* TRANSCRIPCIÓN (EXPANDIBLE - OPCIONAL) */}
+                                            <details className="text-xs text-slate-500 cursor-pointer">
+                                                <summary className="hover:text-slate-300 transition-colors">Ver transcripción completa</summary>
+                                                <div className="mt-2 p-2 bg-black/30 rounded border border-slate-800 h-32 overflow-y-auto whitespace-pre-wrap font-mono">
+                                                    {candidate.entrevista_transcripcion || candidate.transcripcion_entrevista || candidate.interview_transcript || "Esperando transcripción..."}
+                                                </div>
+                                            </details>
+                                        </div>
+                                    )}
 
                                    {/* BLOQUE MEJORADO: TRANSCRIPCIÓN + IA */}
                                    <div className="border-t border-slate-800 pt-4 mt-4">
@@ -4831,6 +4893,7 @@ function App() {
     const [activeTab, setActiveTab] = useState('dashboard');
     const [currentReport, setCurrentReport] = useState(null);
     const [selectedCandidateId, setSelectedCandidateId] = useState(null);
+    const [selectedCandidate, setSelectedCandidate] = useState(null); // Candidato pasado desde la lista (evita pantalla negra con "cargar más")
     const [candidates, setCandidates] = useState([]);
     const [loading, setLoading] = useState(false);
     const [init, setInit] = useState(false);
@@ -4875,17 +4938,17 @@ function App() {
         }
     }, []);
 
-    // 2. FUNCIÓN DE CARGA
+    // 2. FUNCIÓN DE CARGA (limit alto para que tras refrescar sigan apareciendo candidatos en Gestión/Informes)
     const cargarDatos = async (forceRefresh = false) => {
         if (init && !forceRefresh) return;
         setLoading(true);
         try {
-            const data = await api.candidates.list();
+            const data = await api.candidates.list({ limit: 500 });
             // Manejar nuevo formato con paginación
             const candidatos = data.candidatos || data || [];
             setCandidates(candidatos);
             setInit(true);
-            console.log(`✅ Candidatos cargados: ${candidatos.length} total, ${candidatos.filter(c => c.stage === 'trash').length} en papelera`);
+            console.log(`✅ Candidatos cargados: ${candidatos.length} total, stage_2: ${candidatos.filter(c => c.stage === 'stage_2').length}, stage_3: ${candidatos.filter(c => c.stage === 'stage_3').length}, papelera: ${candidatos.filter(c => c.stage === 'trash').length}`);
         } catch (error) {
             console.error("❌ Error cargando datos:", error);
         } finally {
@@ -4943,6 +5006,7 @@ const handleUpdateCandidate = async (id, updates) => {
 
         if (updates.stage === 'trash' || updates.stage === 'stage_3') {
             setSelectedCandidateId(null);
+            setSelectedCandidate(null);
         }
 
         // 4. LÓGICA DE "VISTO" (Aquí estaba el bug)
@@ -4953,12 +5017,21 @@ const handleUpdateCandidate = async (id, updates) => {
         }
 
         // 5. Actualizamos la PANTALLA (Frontend)
-        setCandidates(prev => prev.map(c => {
-            if (c.id === id) {
-                return { ...c, ...finalUpdates };
+        const updatedCandidate = { ...(currentCandidate || selectedCandidate || {}), ...finalUpdates };
+        setCandidates(prev => {
+            const existing = prev.find(c => c.id === id);
+            if (existing) {
+                return prev.map(c => (c.id === id ? { ...c, ...finalUpdates } : c));
             }
-            return c;
-        }));
+            // Candidato venía de "cargar más" o no estaba en la lista: añadirlo para que aparezca en Gestión/Informes
+            if (selectedCandidate && selectedCandidate.id === id) {
+                return [...prev, updatedCandidate];
+            }
+            return prev;
+        });
+        if (selectedCandidate && selectedCandidate.id === id) {
+            setSelectedCandidate(updatedCandidate);
+        }
 
         // 6. Actualizamos la BASE DE DATOS (Backend)
         // Ahora finalUpdates lleva el dato 'viewed' correcto y los marcadores preservados
@@ -4973,9 +5046,15 @@ const handleUpdateCandidate = async (id, updates) => {
         }
     };
 
-    const handleSelectCandidate = (id) => {
+    const handleSelectCandidate = (id, candidateFromList) => {
         setSelectedCandidateId(id);
+        setSelectedCandidate(candidateFromList || null);
         handleUpdateCandidate(id, {});
+    };
+
+    const handleBackFromDetail = () => {
+        setSelectedCandidateId(null);
+        setSelectedCandidate(null);
     };
 
     // 6. RENDERIZADO DE CONTENIDO (Única declaración)
@@ -4985,13 +5064,22 @@ const handleUpdateCandidate = async (id, updates) => {
         }
 
         if (selectedCandidateId) {
-            const cand = candidates.find(c => c.id === selectedCandidateId);
-            if (!cand) return null;
+            const cand = (selectedCandidate && selectedCandidate.id === selectedCandidateId)
+                ? selectedCandidate
+                : candidates.find(c => c.id === selectedCandidateId);
+            if (!cand) {
+                return (
+                    <div className="p-8 text-center">
+                        <p className="text-slate-400 mb-4">Candidato no encontrado en la lista actual.</p>
+                        <button onClick={handleBackFromDetail} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white text-sm">Volver</button>
+                    </div>
+                );
+            }
             return (
                 <CandidateDetail 
                     key={cand.id} 
                     candidate={cand} 
-                    onBack={() => setSelectedCandidateId(null)} 
+                    onBack={handleBackFromDetail} 
                     onUpdate={handleUpdateCandidate} 
                     loading={loading}
                     currentUser={currentUser} 
@@ -5036,7 +5124,7 @@ const handleUpdateCandidate = async (id, updates) => {
                             if (item.type === 'divider') return <div key={idx} className="px-3 pt-6 pb-2 text-[10px] font-bold text-slate-600 tracking-widest uppercase">{item.label}</div>;
                             const isActive = activeTab === item.id;
                             return (
-                                <button key={item.id} onClick={() => { setActiveTab(item.id); setSelectedCandidateId(null); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all group relative ${isActive ? 'bg-blue-600/10 text-blue-400 border border-blue-600/20' : 'text-slate-400 hover:bg-slate-800 border border-transparent'}`}>
+                                <button key={item.id} onClick={() => { setActiveTab(item.id); setSelectedCandidateId(null); setSelectedCandidate(null); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all group relative ${isActive ? 'bg-blue-600/10 text-blue-400 border border-blue-600/20' : 'text-slate-400 hover:bg-slate-800 border border-transparent'}`}>
                                     <item.icon size={18} className={isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'} />
                                     <div className="flex flex-col items-start text-left"><span className="font-medium leading-none">{item.label}</span>{item.sub && isActive && <span className="text-[10px] opacity-70 font-normal mt-1">{item.sub}</span>}</div>
                                     {isActive && <div className="absolute right-2 w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]" />}
