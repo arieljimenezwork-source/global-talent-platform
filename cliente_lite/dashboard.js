@@ -2845,6 +2845,7 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
     // 🤖 ESTADOS PARA GENERACIÓN DE LINK CON IA (GTC)
     const [localLink, setLocalLink] = React.useState(null);
     const [loadingAI, setLoadingAI] = React.useState(false);
+    const [isSyncing, setIsSyncing] = React.useState(false); // 🔄 Sync Manual
 
     // 🔥 SINCRONIZAR ESTADOS CUANDO CANDIDATE CAMBIA (para que persistan después de F5)
     React.useEffect(() => {
@@ -3103,6 +3104,42 @@ function CandidateDetail({ candidate, onBack, onUpdate, currentUser }) {
             alert(`❌ Error al generar link de entrevista: ${error.message || 'Error desconocido'}`);
         } finally {
             setLoadingAI(false);
+        }
+    };
+
+    // --- NUEVO: Sincronización Manual (Rescue) ---
+    const handleSyncInterview = async () => {
+        const conversationId = prompt("Por favor ingresa el ID de conversación de ElevenLabs (ej: conv_...):");
+        if (!conversationId) return;
+
+        setIsSyncing(true);
+        const API_URL = window.API_URL || 'http://localhost:3004';
+
+        try {
+            // Obtener headers
+            const headers = { 'Content-Type': 'application/json' };
+            const token = localStorage.getItem('firebase_token');
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch(`${API_URL}/candidatos/${candidate.id}/sync-elevenlabs`, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({ conversation_id: conversationId })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                alert("✅ Sincronización exitosa. Los datos se han actualizado.");
+                // Recargar página para asegurar datos frescos
+                window.location.reload();
+            } else {
+                alert("❌ Error: " + (data.error || "Desconocido"));
+            }
+        } catch (e) {
+            console.error(e);
+            alert("❌ Error de conexión al sincronizar.");
+        } finally {
+            setIsSyncing(false);
         }
     };
 
@@ -4273,6 +4310,17 @@ Saludos, Equipo de Selección de Global Talent Connections`
                                                 title="Abrir correo con invitación"
                                             >
                                                 <Mail size={14} /> ENVIAR MAIL
+                                            </button>
+
+                                            {/* BOTÓN: SYNC MANUAL (Rescue) */}
+                                            <button
+                                                onClick={handleSyncInterview}
+                                                disabled={isSyncing}
+                                                className={`px-4 rounded-lg border transition-all flex items-center justify-center gap-2 font-bold text-xs ${isSyncing ? 'bg-slate-800 border-slate-700 text-slate-500' : 'bg-amber-900/40 hover:bg-amber-800/60 text-amber-400 border-amber-500/50 shadow-lg'}`}
+                                                title="Sincronizar manualmente con ID de ElevenLabs"
+                                            >
+                                                {isSyncing ? <Loader2 size={14} className="animate-spin" /> : <CloudDownload size={14} />}
+                                                SYNC
                                             </button>
                                         </div>
                                     </div>
