@@ -6424,7 +6424,11 @@ app.post("/candidatos/:id/preparar-bot", async (req, res) => {
 app.post('/webhooks/resultado-entrevista', async (req, res) => {
   try {
     const payload = req.body.interview_data || req.body;
-    const { interview_id, transcript, summary, audio_url } = payload;
+    // Corregimos la asignaciÃ³n para que coincida con lo que espera el resto del cÃ³digo
+    const interview_id = payload.interview_id || payload.token;
+    const transcriptText = payload.transcript || ""; // IMPORTANTE: AquÃ­ declaramos transcriptText
+    const summary = payload.summary;
+    const audio_url = payload.audio_url;
 
     console.log(`📨 Recibido resultado de entrevista: ${interview_id}`);
 
