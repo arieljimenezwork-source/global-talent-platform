@@ -6450,8 +6450,11 @@ app.post('/webhooks/resultado-entrevista', async (req, res) => {
     // ---------------------------------------------------------
     // 🧠 2. ANÁLISIS IA EN TIEMPO REAL (Gemini)
     // ---------------------------------------------------------
-    const transcriptText = transcript || "";
-    console.log(`🧠 Analizando transcripción (${transcriptText.length} caracteres) con Gemini...`);
+    // ---------------------------------------------------------
+    // 🧠 2. ANÁLISIS IA EN TIEMPO REAL (Gemini)
+    // ---------------------------------------------------------
+    // transcriptText ya fue definido arriba en el Adapter
+    console.log(`🧠 Analizando transcripción (${(transcriptText || "").length} caracteres) con Gemini...`);
     console.log(`📝 Contenido Transcripción: "${transcriptText}"`);
 
     let analisis;
@@ -6492,6 +6495,8 @@ app.post('/webhooks/resultado-entrevista', async (req, res) => {
     res.json({ success: true });
 
   } catch (error) {
+    const fs = require('fs');
+    fs.appendFileSync('webhook_debug.log', `[${new Date().toISOString()}] ❌ ERROR: ${error.stack}\n`);
     console.error("❌ Error procesando webhook:", error);
     res.status(500).json({ error: error.message });
   }
