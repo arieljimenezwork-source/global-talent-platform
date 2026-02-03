@@ -6424,27 +6424,91 @@ app.post("/candidatos/:id/preparar-bot", async (req, res) => {
 // --- WEBHOOK: RECIBIR RESULTADOS DE GTC (usa el mismo cerebro que el análisis manual) ---
 app.post('/webhooks/resultado-entrevista', async (req, res) => {
   try {
-    const payload = req.body.interview_data || req.body;
-    // Corregimos la asignaciÃ³n para que coincida con lo que espera el resto del cÃ³digo
-    const interview_id = payload.interview_id || payload.token;
-    const transcriptText = payload.transcript || ""; // IMPORTANTE: AquÃ­ declaramos transcriptText
-    const summary = payload.summary;
-    const audio_url = payload.audio_url;
+    const body = req.body;
+    const payload = body.data || body; // ElevenLabs envuelve todo en 'data'
 
-    console.log(`📨 Recibido resultado de entrevista: ${interview_id}`);
+    // 🔍 LOGGING EXTENDIDO
+    console.log("📦 WEBHOOK RECEIVED:", JSON.stringify(body, null, 2));
 
-    // 1. Buscar al candidato
-    const snapshot = await firestore.collection("CVs_staging")
-      .where("gtc_interview_id", "==", interview_id)
-      .limit(1)
-      .get();
+    // 1. Extraer ID (ElevenLabs usa 'conversation_id')
+    const interview_id = payload.conversation_id || payload.interview_id || body.conversation_id || payload.token;
 
-    if (snapshot.empty) {
-      return res.status(404).json({ error: "Candidato no encontrado para este ID de entrevista" });
+    // 2. Extraer Transcripción (Es un ARRAY, hay que convertirlo a String)
+    let transcriptText = "";
+    if (Array.isArray(payload.transcript)) {
+      transcriptText = payload.transcript
+        .map(turn => `[${turn.role.toUpperCase()}]: ${turn.message}`)
+        .join("\n");
+    } else {
+      transcriptText = payload.transcript || "";
     }
 
-    const doc = snapshot.docs[0];
-    const candidatoData = doc.data();
+    // 3. Extraer Summary (Está en 'analysis.transcript_summary')
+    const summary = payload.analysis?.transcript_summary || payload.summary || "";
+
+    // 4. Audio (En el webhook de transcripción no viene el audio base64)
+    const audio_url = payload.audio_url || "";
+
+    console.log(`📨 Procesando entrevista ID: ${interview_id}`);
+    console.log(`📝 Transcripción procesada: ${transcriptText.substring(0, 50)}...`);
+
+    if (!interview_id) {
+      console.error("❌ ERROR: No conversation_id found.");
+      if (!payload.email) {
+        return res.status(400).json({ error: "Missing interview_id and email in payload" });
+      }
+    }
+
+    // 1. Buscar al candidato
+    let snapshot;
+    let doc;
+    let candidatoData;
+
+    try {
+      if (interview_id) {
+        snapshot = await firestore.collection("CVs_staging")
+          .where("gtc_interview_id", "==", interview_id)
+          .limit(1)
+          .get();
+      }
+
+      // Si no se encontró por ID o no habia ID, intentamos validar el snapshot
+      if (!snapshot || snapshot.empty) {
+        console.log(`⚠️ No encontrado por ID ${interview_id}. Buscando estrategias alternativas...`);
+        // (El código continuará al fallback de email más abajo)
+      } else {
+        doc = snapshot.docs[0];
+        candidatoData = doc.data();
+      }
+    } catch (queryErr) {
+      console.error("❌ Error en búsqueda inicial por ID:", queryErr);
+      // Continuamos para permitir que el fallback de email actúe
+    }
+
+    // 2. Fallback: Búsqueda por Email si no se encontró por ID
+    if (!candidatoData && payload.email) {
+      console.log(`⚠️ ID no encontrado. Intentando fallback por Email: ${payload.email}`);
+      try {
+        const emailSnapshot = await firestore.collection("CVs_staging")
+          .where("email", "==", payload.email)
+          .limit(1)
+          .get();
+
+        if (!emailSnapshot.empty) {
+          doc = emailSnapshot.docs[0];
+          candidatoData = doc.data();
+          console.log(`✅ ¡Recuperado por Email!`);
+        }
+      } catch (err) {
+        console.error("❌ Error en fallback de email:", err);
+      }
+    }
+
+    // Verificación Final
+    if (!candidatoData) {
+      console.error("❌ CLASIFICADOR: Candidato no encontrado tras todos los intentos.");
+      return res.status(404).json({ error: "Candidato no encontrado (ID/Email inválidos)" });
+    }
 
     // ✅ EL PORTERO (Idempotencia): Si ya fue procesado, no volver a analizar
     if (candidatoData.estado_entrevista === 'analizada' || candidatoData.interview_analyzed === true) {
