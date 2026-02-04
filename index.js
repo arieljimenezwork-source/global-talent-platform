@@ -6503,7 +6503,52 @@ app.post("/candidatos/:id/sync-elevenlabs", async (req, res) => {
 });
 
 
+// --- WEBHOOK: REGISTRAR CONVERSATION ID (desde GTC Tech App al iniciar entrevista) ---
+app.post('/webhooks/registrar-conversation-id', async (req, res) => {
+  try {
+    const { gtc_interview_id, elevenlabs_conversation_id } = req.body;
+
+    console.log(`🔗 [REGISTRO] Recibido: gtc_interview_id=${gtc_interview_id}, elevenlabs_conversation_id=${elevenlabs_conversation_id}`);
+
+    if (!gtc_interview_id || !elevenlabs_conversation_id) {
+      return res.status(400).json({ error: "Faltan campos requeridos: gtc_interview_id y elevenlabs_conversation_id" });
+    }
+
+    // Buscar candidato por gtc_interview_id
+    const snapshot = await firestore.collection("CVs_staging")
+      .where("gtc_interview_id", "==", gtc_interview_id)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      console.warn(`⚠️ [REGISTRO] Candidato no encontrado para gtc_interview_id: ${gtc_interview_id}`);
+      return res.status(404).json({ error: "Candidato no encontrado con ese gtc_interview_id" });
+    }
+
+    // Guardar el conversation_id de ElevenLabs
+    const doc = snapshot.docs[0];
+    await doc.ref.update({
+      elevenlabs_conversation_id: elevenlabs_conversation_id,
+      estado_entrevista: 'en_progreso',
+      historial_movimientos: admin.firestore.FieldValue.arrayUnion({
+        date: new Date().toISOString(),
+        event: 'Conversation ID Registrado',
+        detail: `ElevenLabs conversation_id: ${elevenlabs_conversation_id}`,
+        usuario: 'Sistema (GTC Tech App)'
+      })
+    });
+
+    console.log(`✅ [REGISTRO] Guardado exitosamente para candidato ${doc.id}`);
+    res.json({ success: true, candidato_id: doc.id });
+
+  } catch (error) {
+    console.error("❌ [REGISTRO] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- WEBHOOK: RECIBIR RESULTADOS DE GTC (usa el mismo cerebro que el análisis manual) ---
+
 app.post('/webhooks/resultado-entrevista', async (req, res) => {
   try {
     const body = req.body;
