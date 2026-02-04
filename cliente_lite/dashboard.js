@@ -465,6 +465,7 @@ const PUESTOS_DISPONIBLES = [
     "Asistente de Gestión de Procesos",
     "Asistente Diseñador/a de Productos e Interiores",
     "Asistente Técnico/a de Proyectos Acústicos",
+    "Asistente Virtual de Asistencia Via y Atención al Cliente",
     "Asistente de Atención al Cliente",
     "Asistente de Ventas y Prospección",
     "Asistente de Soporte Técnico/TI",
@@ -1074,16 +1075,17 @@ function ExploreView({ candidates, onSelect, onUpdate, loading, onAddClick }) {
         return dateB - dateA;
     });
 
-    // 2. Filtrado (ÚNICA DECLARACIÓN) - Busca por nombre, email y puesto
+    // 2. Filtrado (ÚNICA DECLARACIÓN)
     const filtered = sortedCandidates.filter(c => {
-        if (c.stage !== 'stage_1') return false;
+        // 🔥 FIX: Permitir stage_1 O si no tiene stage definido (para candidatos legacy/migrados)
+        if (c.stage && c.stage !== 'stage_1') return false;
 
         // Filtro por puesto
         const matchesRole = roleFilter === 'Todos' || c.puesto === roleFilter;
         if (!matchesRole) return false;
 
         // Filtro de búsqueda de texto
-        if (!debouncedFilter.trim()) return true; // Si no hay filtro, mostrar todos
+        if (!debouncedFilter.trim()) return true;
 
         const termino = debouncedFilter.toLowerCase().trim();
         const nombreMatch = c.nombre?.toLowerCase().includes(termino) || false;
