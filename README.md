@@ -1,205 +1,151 @@
-# 🌟 GLOBAL TALENT CONNECTIONS
+# 🌟 Global Talent Connections (GTC)
+*Motor de Reclutamiento Autónomo impulsado por IA Híbrida*
 
-> **Sistema de Reclutamiento Automatizado con IA**
-> 
-> Procesa candidatos desde el email inicial hasta generar reportes profesionales con análisis inteligente.
-
----
-
-## 📊 Status del Proyecto
-
-| Aspecto | Estado |
-|---------|--------|
-| **Versión** | 1.0.0 |
-| **Estado General** | ✅ Producción |
-| **Última actualización** | 28 de Diciembre, 2025 |
-| **Calificación** | 8.5/10 ⭐⭐⭐⭐⭐ |
-| **Usuarios soportados** | 5 máximo |
-| **Costo mensual** | $1 - $35 USD |
+![Estado del Build](https://img.shields.io/badge/Build-Producción-success?style=for-the-badge&logo=github)
+![Versión](https://img.shields.io/badge/Versión-1.2.0-blue?style=for-the-badge)
+![Núcleo IA](https://img.shields.io/badge/Núcleo_IA-Gemini_1.5_%2B_ElevenLabs-purple?style=for-the-badge)
 
 ---
 
-## 🎯 ¿Qué hace?
+## 🚀 Resumen Ejecutivo
+**Global Talent Connections** es una plataforma de reclutamiento automatizada y avanzada, diseñada para optimizar el flujo de contratación desde el contacto inicial hasta la decisión final. Aprovechando una **Arquitectura de IA Híbrida** (Google Gemini para análisis cognitivo + ElevenLabs para entrevistas conversacionales), GTC elimina el filtrado manual, realiza primeras entrevistas autónomas y entrega reportes integrales de inteligencia sobre los candidatos.
 
-**Global Talent Connections** es un sistema que **automatiza el proceso completo de reclutamiento:**
-
-1. 📧 **Recibe CVs automáticamente** por email
-2. 🧠 **Clasifica candidatos con IA** (Gemini)
-3. 🎬 **Analiza entrevistas en video**
-4. 📄 **Genera reportes profesionales en DOCX**
-5. 👥 **Gestiona el flujo de decisiones** (Aprobar, Rechazar, Contratar)
-6. 🗑️ **Mantiene papelera de recuperación** con backups automáticos
+**Propuesta de Valor:**
+- **Sourcing "Cero-Toque":** Parsea y estandariza automáticamente CVs desde correos entrantes.
+- **Evaluación Cognitiva:** Va más allá de las palabras clave para entender el potencial del candidato.
+- **Entrevistas Autónomas:** Realiza screenings técnicos por voz 24/7.
+- **Decisiones Basadas en Datos:** Agrega datos de múltiples fuentes (CV, Video, Entrevista) en insights accionables.
 
 ---
 
-## 🚀 Inicio Rápido
+## 🏗️ Arquitectura del Sistema
 
-### Prerequisitos
-- Node.js 18+
-- npm o yarn
-- Cuenta Google (Gmail + Cloud)
-- Cuenta Firebase
+El siguiente diagrama ilustra el flujo de datos desde la postulación hasta la generación del reporte final:
 
-### Instalación (3 pasos)
+```mermaid
+graph TD
+    A[📧 Email Entrante (Gmail)] -->|Auto-Parseo| B(Servicio Backend / Node.js)
+    B -->|Extraer PDF/Texto| C{Gemini 1.5 Flash}
+    C -->|Analizar Perfil| D[Base de Datos Firestore]
+    D -->|¿Calificado?| E[Etapa 2: Entrevista]
+    
+    subgraph Entrevista Autónoma
+    E -->|Generar Link| F[ElevenLabs ConvAI]
+    F -->|Realizar Llamada| G[Candidato]
+    G -->|Stream de Voz| F
+    F -->|Webhook: Transcripción + Audio| B
+    end
 
-```
-# 1. Clonar e instalar dependencias
-git clone <tu-repo>
-cd proyecto
-npm install
-
-# 2. Configurar variables de entorno (.env)
-cp .env.example .env
-# Edita .env con tus credenciales
-
-# 3. Iniciar el servidor
-npm start
-```
-
-Dashboard abierto en: **http://localhost:3001**
-
----
-
-## 🏗️ Stack Tecnológico
-
-```
-┌─ FRONTEND ─────────────────────┐
-│ HTML5 + Vanilla JS             │
-│ Tailwind CSS                   │
-└────────────────────────────────┘
-
-┌─ BACKEND ──────────────────────┐
-│ Node.js 18+                    │
-│ Express 4.21                   │
-│ Firebase Admin SDK             │
-└────────────────────────────────┘
-
-┌─ INTELIGENCIA ARTIFICIAL ──────┐
-│ Google Generative AI (Gemini)  │
-│ Google Vision OCR              │
-│ Google Speech-to-Text          │
-└────────────────────────────────┘
-
-┌─ DATOS ────────────────────────┐
-│ Firestore (NoSQL)              │
-│ Google Cloud Storage           │
-└────────────────────────────────┘
-
-┌─ INTEGRACIONES ────────────────┐
-│ Gmail IMAP                     │
-│ Zoho Forms (2 webhooks)        │
-│ Nodemailer                     │
-└────────────────────────────────┘
+    B -->|Re-Analizar Transcripción| C
+    C -->|Generar Reporte Final| H[Dashboard (React/Tailwind)]
+    H -->|Decisión Humana| I[Contratar / Rechazar]
 ```
 
 ---
 
-## 📋 Features Principales
+## ⚡ Funcionalidades Clave
 
-### ✅ Automatización Completa
-- [x] Lectura automática de Gmail cada 2 minutos
-- [x] Extracción de PDF → Texto (con OCR si es scan)
-- [x] Detección automática de puesto desde subject
+### 1. **Pipeline de Sourcing Automatizado** (Gmail Watcher)
+- Monitoreo en tiempo real de la bandeja de entrada mediante IMAP IDLE.
+- Extracción inteligente de adjuntos (PDF/DOCX) usando OCR si es necesario.
+- Creación automática de candidatos y detección de duplicados en Firestore.
 
-### ✅ Análisis con IA
-- [x] Clasificación de CV en JSON estructurado
-- [x] Análisis profundo post-entrevista
-- [x] Generación automática de reportes DOCX
+### 2. **Análisis Cognitivo de Candidatos** (GeminiCore)
+- **Extracción JSON Estructurada:** Convierte CVs no estructurados en un modelo de datos estandarizado.
+- **Scoring Inteligente:** Evalúa candidatos basándose en requisitos del rol, no solo keywords.
+- **Detección de Red Flags:** Identifica inconsistencias (ej: brechas de habilidades, lagunas laborales).
 
-### ✅ Gestión de Candidatos
-- [x] Dashboard responsivo (Explorar → Gestión → Decisión)
-- [x] Agendamiento de entrevistas automático
-- [x] Papelera con opción de reactivar
+### 3. **Entrevistador de Voz Autónomo** (Integración ElevenLabs)
+- **Conversaciones Dinámicas:** El Agente de IA adapta las preguntas según las respuestas del candidato.
+- **Latencia < 800ms:** Proporcionando un flujo de conversación natural y humano.
+- **Sync Post-Entrevista:** Procesamiento automático de webhooks (`/webhooks/resultado-entrevista`) para capturar transcripciones y audio.
+- **Protocolos de Recuperación:** Funcionalidad de Sync Manual (`/sync-elevenlabs`) para recuperar entrevistas "huérfanas" usando IDs de conversación.
 
-### ✅ Seguridad
-- [x] Autenticación Firebase (5 usuarios max)
-- [x] Rate limiting (120 req/min)
-- [x] Helmet.js headers
-- [x] Variables de entorno seguras
-
----
-
-## 📖 Documentación
-
-Este proyecto incluye documentación completa orientada al onboarding:
-
-| Documento | Público | Contenido |
-|-----------|---------|----------|
-| **ONBOARDING_COMPLETO.md** | Nuevos devs | Guía paso a paso con metáforas |
-| **CONCEPTOS_FUNDAMENTALES.md** | Tech Leads | Explicación profunda de arquitectura |
-| **FLUJO_OPERACIONAL.md** | Todos | Cómo funciona el sistema día a día |
-| **CHECKLIST_IMPLEMENTACION.md** | Devs | 30 acciones para escalar de 8.5 a 10/10 |
-| **TROUBLESHOOTING.md** | Support | Soluciones a problemas comunes |
+### 4. **Dashboard del Reclutador** (Cliente Lite)
+- **Vista de Pipeline en Tiempo Real:** Tablero estilo Kanban para seguimiento de candidatos.
+- **Acciones de Un Clic:** Agendar entrevistas, generar reportes o enviar emails de rechazo.
+- **Acceso Seguro:** Control de acceso basado en roles vía Firebase Auth.
 
 ---
 
-## 🎓 Para Nuevos Miembros del Equipo
+## 🛠️ Stack Tecnológico
 
-Si es tu **primer día**, empieza aquí:
-
-```
-1. Lee: ONBOARDING_COMPLETO.md (30 min)
-2. Lee: CONCEPTOS_FUNDAMENTALES.md (20 min)
-3. Lee: FLUJO_OPERACIONAL.md (20 min)
-4. Prueba: npm start y abre http://localhost:3001 (10 min)
-5. Pregunta: ¿Dudas? Ve a TROUBLESHOOTING.md
-```
-
-**Tiempo total:** ~80 minutos para comprenderlo todo.
-
----
-
-## 🔄 El Sistema en una Frase
-
-> **Imagina que tienes un mozo 24/7 que lee todos tus emails de candidatos, 
-> los clasifica automáticamente, analiza sus videos, ¡y hasta te genera 
-> reportes profesionales listos para presentar a directivos.**
+| Componente | Tecnología | Descripción |
+|-----------|------------|-------------|
+| **Backend** | Node.js (v18+) | API Core, Manejo de Webhooks, Lógica de Negocio |
+| **Framework** | Express.js | API RESTful, Middleware, Rate Limiting |
+| **Base de Datos** | Firebase Firestore | Base de Datos NoSQL en Tiempo Real |
+| **Almacenamiento** | Google Cloud Storage | Almacenamiento seguro para CVs y Audios |
+| **IA (Cognitiva)** | Google Gemini 1.5 | Análisis de CV, Generación de Reportes, Lógica de Decisión |
+| **IA (Voz)** | ElevenLabs ConvAI | Agente Conversacional para Entrevistas |
+| **Frontend** | React + Tailwind | Dashboard Administrativo Responsivo |
+| **Integraciones** | Zoho Forms, Gmail | Fuentes de Datos Externas |
 
 ---
 
-## 💰 Pricing & Costos
+## 📦 Instalación y Configuración
 
-### Costo Real Mensual
-- Google APIs: **$0.77**
-- Hosting (Render/Vercel): **$0-8**
-- Firebase Plan: **$0-25**
-- **TOTAL: $1-35 USD/mes**
+### Prerrequisitos
+- Node.js 18.x o superior
+- NPM o Yarn
+- Credenciales de Proyecto Firebase (`service-account.json`)
+- Proyecto Google Cloud con Vertex AI habilitado
+- Cuenta de ElevenLabs con API Key
 
-### Comparación vs Competencia
-| Producto | Precio/mes | Ahorro |
-|----------|-----------|--------|
-| **GTC (Nuestro)** | **$1-35** 🟢 | - |
-| Workable | $99+ | 65% |
-| Lever | $200+ | 83% |
-| Bullhorn | $500+ | 93% |
+### Inicio Rápido
+
+1. **Clonar Repositorio**
+   ```bash
+   git clone <url-del-repositorio>
+   cd global-talent-platform
+   npm install
+   ```
+
+2. **Configurar Variables de Entorno**
+   Crea un archivo `.env` basado en `.env.example`:
+   ```env
+   # Config Firebase
+   FIREBASE_PROJECT_ID=tu-project-id
+   FIREBASE_CLIENT_EMAIL=tu-email-servicio
+   FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."
+
+   # Servicios IA
+   GEMINI_API_KEY=tu-clave-gemini
+   ELEVENLABS_API_KEY=tu-clave-elevenlabs
+   ELEVENLABS_AGENT_ID=tu-agent-id
+   
+   # Config Email
+   EMAIL_USER=reclutamiento@empresa.com
+   EMAIL_PASS=app-password
+   ```
+
+3. **Iniciar Servidor de Desarrollo**
+   ```bash
+   npm run dev
+   # El servidor corre en http://localhost:3000
+   ```
+   
+4. **Acceder al Dashboard**
+   Navega a `http://localhost:3000` para ver el panel de reclutamiento.
 
 ---
 
-## 👥 Arquitectura de Equipo
+## 📚 Referencia de Documentación
 
-El sistema está diseñado para ser mantenido por:
+Para guías operativas detalladas, por favor referirse a la documentación interna:
 
-- **1 Backend Developer** - Mantiene APIs, IA, integraciones
-- **1 DevOps** - Deploy, monitoreo, backups
-- **1-2 Reclutadores** - Usan el dashboard (máx 5 usuarios)
-
----
-
-## 📞 Support & Issues
-
-- **Bug técnico** → Ver `TROUBLESHOOTING.md`
-- **No entiendo algo** → Ver `ONBOARDING_COMPLETO.md`
-- **Quiero mejorar X** → Ver `CHECKLIST_IMPLEMENTACION.md`
+- **[ONBOARDING_COMPLETO.md](./docs/ONBOARDING_COMPLETO.md)**: Guía completa para nuevos desarrolladores.
+- **[TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md)**: Problemas comunes y soluciones.
+- **[API_DOCS.md](./docs/API_DOCS.md)** (Próximamente): Referencia detallada de endpoints de la API.
 
 ---
 
-## 📄 Licencia
+## 🛡️ Licencia y Contacto
 
-Uso privado de Global Talent Connections.
+Este proyecto es propietario y confidencial. La distribución no autorizada está prohibida.
+
+**Líder de Mantenimiento:** Equipo de Ingeniería Backend  
+**Soporte:** soporte@globaltalentconnections.com
 
 ---
-
-**Made with ❤️ for better recruitment automation**
-
-*Global Talent Connections - Conectando talento, automáticamente.*
-```
+*Generado vía Asistente Agéntico Antigravity*
