@@ -1235,11 +1235,11 @@ app.get("/buscar", async (req, res) => {
 
   try {
 
-    const { q = "", desde = null, hasta = null, limit = 100, startAfter = null } = req.query;
+    const { q = "", stage = null, desde = null, hasta = null, limit = 100, startAfter = null } = req.query;
 
 
 
-    console.log(`📡 Solicitud de búsqueda recibida. Query: "${q}", Limit: ${limit}, StartAfter: ${startAfter ? 'Sí' : 'No'}`);
+    console.log(`📡 Solicitud de búsqueda recibida. Query: "${q}", Stage: "${stage || 'Todos'}", Limit: ${limit}, StartAfter: ${startAfter ? 'Sí' : 'No'}`);
 
 
 
@@ -1253,6 +1253,11 @@ app.get("/buscar", async (req, res) => {
     // 🔥 MEJORA: Si hay término de búsqueda, buscar en Firestore directamente
     // Firestore no soporta búsqueda full-text nativa, pero podemos hacer queries por campos
     let query = ref.orderBy('creado_en', 'desc');
+
+    // 🔥 FILTRAR POR STAGE SI VIENE EN EL QUERY
+    if (stage) {
+      query = query.where('stage', '==', stage);
+    }
 
     // Si hay un cursor (startAfter), usarlo para paginación
     if (startAfter) {
