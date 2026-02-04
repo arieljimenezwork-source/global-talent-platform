@@ -6515,6 +6515,9 @@ app.post('/webhooks/resultado-entrevista', async (req, res) => {
     // 1. Extraer ID (ElevenLabs usa 'conversation_id')
     const interview_id = payload.conversation_id || payload.interview_id || body.conversation_id || payload.token;
 
+    // 🔗 Capturar conversation_id de ElevenLabs específicamente (para guardar en Firestore)
+    const elevenlabs_conv_id = payload.conversation_id || body.data?.conversation_id || null;
+
     // 2. Extraer Transcripción (Es un ARRAY, hay que convertirlo a String)
     let transcriptText = "";
     if (Array.isArray(payload.transcript)) {
@@ -6548,16 +6551,29 @@ app.post('/webhooks/resultado-entrevista', async (req, res) => {
 
     try {
       if (interview_id) {
+        // 🔍 BÚSQUEDA PRIMARIA: Por gtc_interview_id (UUID de Supabase)
         snapshot = await firestore.collection("CVs_staging")
           .where("gtc_interview_id", "==", interview_id)
           .limit(1)
           .get();
       }
 
-      // Si no se encontró por ID o no habia ID, intentamos validar el snapshot
+      // Si no se encontró por gtc_interview_id, intentar por elevenlabs_conversation_id
+      if ((!snapshot || snapshot.empty) && interview_id) {
+        console.log(`⚠️ No encontrado por gtc_interview_id. Probando elevenlabs_conversation_id...`);
+        snapshot = await firestore.collection("CVs_staging")
+          .where("elevenlabs_conversation_id", "==", interview_id)
+          .limit(1)
+          .get();
+
+        if (!snapshot.empty) {
+          console.log(`✅ ¡Encontrado por elevenlabs_conversation_id!`);
+        }
+      }
+
+      // Si aún no se encontró, log para continuar al fallback
       if (!snapshot || snapshot.empty) {
         console.log(`⚠️ No encontrado por ID ${interview_id}. Buscando estrategias alternativas...`);
-        // (El código continuará al fallback de email más abajo)
       } else {
         doc = snapshot.docs[0];
         candidatoData = doc.data();
@@ -6592,11 +6608,23 @@ app.post('/webhooks/resultado-entrevista', async (req, res) => {
       return res.status(404).json({ error: "Candidato no encontrado (ID/Email inválidos)" });
     }
 
-    // ✅ EL PORTERO (Idempotencia): Si ya fue procesado, no volver a analizar
-    if (candidatoData.estado_entrevista === 'analizada' || candidatoData.interview_analyzed === true) {
-      console.log("✋ [DUPLICADO] Este candidato ya fue procesado. Ignorando request.");
-      return res.status(200).json({ success: true, message: 'Already processed' });
+    // ✅ EL PORTERO (Idempotencia): Lógica inteligente para webhooks múltiples
+    const yaAnalizado = candidatoData.estado_entrevista === 'analizada' || candidatoData.interview_analyzed === true;
+    const transcripcionActualEsPendiente = (candidatoData.transcripcion_entrevista || "").includes("pendiente") ||
+      (candidatoData.transcripcion_entrevista || "").includes("Modo Local");
+    const nuevaTranscripcionEsReal = Array.isArray(payload.transcript) && payload.transcript.length > 0;
+
+    if (yaAnalizado) {
+      // Si ya está analizado pero con transcripción pendiente, Y esta nueva es real → permitir re-análisis
+      if (transcripcionActualEsPendiente && nuevaTranscripcionEsReal) {
+        console.log("🔄 [RE-ANÁLISIS] Transcripción placeholder detectada. Sobrescribiendo con datos reales de ElevenLabs...");
+        // Continuar con el análisis (no hacer return)
+      } else {
+        console.log("✋ [DUPLICADO] Este candidato ya fue procesado con transcripción real. Ignorando request.");
+        return res.status(200).json({ success: true, message: 'Already processed with real transcript' });
+      }
     }
+
 
     // ---------------------------------------------------------
     // 🧠 2. ANÁLISIS IA EN TIEMPO REAL (Gemini)
@@ -6619,7 +6647,7 @@ app.post('/webhooks/resultado-entrevista', async (req, res) => {
     console.log(`📊 Resultado IA -> Score: ${analisis.score} | Motivo: ${(analisis.motivos || "").substring(0, 50)}...`);
 
     // 3. Guardar en Firestore (datos crudos + análisis)
-    await doc.ref.update({
+    const updatePayload = {
       transcripcion_entrevista: transcriptText,
       entrevista_transcripcion: transcriptText,
       entrevista_resumen: summary || "",
@@ -6640,7 +6668,16 @@ app.post('/webhooks/resultado-entrevista', async (req, res) => {
         detail: `Análisis post-entrevista completado. Score: ${analisis.score}/100`,
         usuario: 'Sistema'
       })
-    });
+    };
+
+    // 🔗 Guardar el conversation_id de ElevenLabs si viene (para futuros webhooks)
+    if (elevenlabs_conv_id && elevenlabs_conv_id.startsWith('conv_')) {
+      updatePayload.elevenlabs_conversation_id = elevenlabs_conv_id;
+      console.log(`🔗 Guardando elevenlabs_conversation_id: ${elevenlabs_conv_id}`);
+    }
+
+    await doc.ref.update(updatePayload);
+
 
     console.log(`✅ Candidato ${candidatoData.email || doc.id} actualizado con Score: ${analisis.score}`);
     res.json({ success: true });
