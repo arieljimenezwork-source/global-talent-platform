@@ -1273,8 +1273,11 @@ app.get("/buscar", async (req, res) => {
       }
     }
 
-    // Aplicar límite (aumentamos a 100 por defecto, pero permitimos más)
-    query = query.limit(limitNum + 1); // Traemos uno más para saber si hay más resultados
+    // Aplicar límite
+    // 🔥 FIX: Si hay búsqueda (q), traemos MÁS candidatos de la DB para filtrar en memoria
+    // Si no, traemos el límite solicitado + 1 para paginación
+    const limitParaDB = termino ? 1000 : (limitNum + 1);
+    query = query.limit(limitParaDB);
 
     const snap = await query.get();
 
