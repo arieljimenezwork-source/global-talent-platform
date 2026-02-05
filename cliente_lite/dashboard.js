@@ -484,7 +484,7 @@ const PUESTOS_DISPONIBLES = [
     "Asistente Financiero",
     "Asistente Desarrollador/a de Automatizaciones Zoho",
     "Asistente Aparejador / Arquitecto Técnico",
-    "Asistente Comercial - Remodelaciones, Reformas y Construcción",
+    "Asistente Comercial",
     "Asistente Desarrollador Odoo + Shopify",
     "Asistente Programador web (Power BI + Integración ERP/CRM",
     "Asistente de Seguridad y Salud Laboral",
